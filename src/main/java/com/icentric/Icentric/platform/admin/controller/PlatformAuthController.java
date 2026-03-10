@@ -1,0 +1,43 @@
+package com.icentric.Icentric.platform.admin.controller;
+
+import com.icentric.Icentric.platform.admin.dto.PlatformLoginRequest;
+import com.icentric.Icentric.platform.admin.dto.PlatformLoginResponse;
+import com.icentric.Icentric.platform.admin.entity.PlatformAdmin;
+import com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository;
+import com.icentric.Icentric.platform.admin.service.PlatformAuthService;
+import com.icentric.Icentric.security.MfaService;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/platform/auth")
+public class PlatformAuthController {
+
+    private final PlatformAuthService authService;
+    private final PlatformAdminRepository repository;
+    private final MfaService mfaService;
+
+    public PlatformAuthController(PlatformAuthService authService, PlatformAdminRepository repository,MfaService mfaService) {
+        this.authService = authService;
+        this.repository = repository;
+        this.mfaService = mfaService;
+    }
+
+    @PostMapping("/login")
+    public PlatformLoginResponse login(
+            @RequestBody PlatformLoginRequest request
+    ) {
+        return authService.login(request);
+    }
+    @PostMapping("/mfa/enroll")
+    public byte[] enrollMfa(@RequestParam String email) throws Exception {
+
+        PlatformAdmin admin = repository.findByEmail(email)
+                .orElseThrow();
+
+        String secret = mfaService.generateSecret();
+        admin.setMfaSecret(secret);
+        admin.setMfaEnabled(true);
+        repository.save(admin);
+        return mfaService.generateQrCode(email, secret);
+    }
+}
