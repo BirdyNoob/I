@@ -21,8 +21,7 @@ public class PlatformAuthService {
             PlatformAdminRepository repository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            MfaService mfaService
-    ) {
+            MfaService mfaService) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -32,21 +31,20 @@ public class PlatformAuthService {
     public PlatformLoginResponse login(PlatformLoginRequest request) {
 
         PlatformAdmin admin = repository.findByEmail(request.email())
-                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
 
         if (!passwordEncoder.matches(request.password(), admin.getPasswordHash())) {
-            throw new RuntimeException("Invalid credentials");
+            throw new IllegalArgumentException("Invalid credentials");
         }
 
         if (admin.getMfaEnabled()) {
 
             boolean valid = mfaService.verifyCode(
                     admin.getMfaSecret(),
-                    request.mfaCode()
-            );
+                    request.mfaCode());
 
             if (!valid) {
-                throw new RuntimeException("Invalid MFA code");
+                throw new IllegalArgumentException("Invalid MFA code");
             }
         }
 
@@ -54,8 +52,7 @@ public class PlatformAuthService {
                 admin.getEmail(),
                 admin.getId(),
                 "ROLE_PLATFORM_ADMIN",
-                "system"
-        );
+                "system");
 
         return new PlatformLoginResponse(token);
     }

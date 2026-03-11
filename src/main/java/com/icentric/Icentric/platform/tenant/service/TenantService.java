@@ -1,4 +1,5 @@
 package com.icentric.Icentric.platform.tenant.service;
+
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import org.springframework.stereotype.Service;
@@ -13,8 +14,7 @@ public class TenantService {
     public TenantService(
             TenantRepository tenantRepository,
             TenantProvisioningService provisioningService,
-            TenantUserBootstrapService bootstrapService
-    ) {
+            TenantUserBootstrapService bootstrapService) {
         this.tenantRepository = tenantRepository;
         this.provisioningService = provisioningService;
         this.bootstrapService = bootstrapService;
@@ -23,7 +23,7 @@ public class TenantService {
     public Tenant createTenant(String slug, String companyName, String adminEmail) {
 
         if (tenantRepository.findBySlug(slug).isPresent()) {
-            throw new RuntimeException("Tenant slug already exists");
+            throw new IllegalStateException("Tenant slug already exists: " + slug);
         }
 
         Tenant tenant = new Tenant(slug, companyName);

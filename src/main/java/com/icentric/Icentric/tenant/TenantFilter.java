@@ -24,29 +24,32 @@ public class TenantFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+            FilterChain filterChain) throws ServletException, IOException {
 
         String tenant = TenantContext.getTenant();
 
         if (tenant != null) {
-
-            try {
-                Connection connection =
-                        DataSourceUtils.getConnection(dataSource);
-
-                Statement statement = connection.createStatement();
-
+            // Fix #4: Use Spring's DataSourceUtils so the connection stays managed
+            // by the transaction infrastructure; use try-with-resources for Statement.
+            Connection connection = DataSourceUtils.getConnection(dataSource);
+            try (Statement statement = connection.createStatement()) {
                 if ("system".equals(tenant)) {
                     statement.execute("SET search_path TO system");
                 } else {
+                    // Restrict slug to alphanumerics/hyphens to prevent SQL injection
+                    if (!tenant.matches("[a-zA-Z0-9_-]+")) {
+                        throw new IllegalArgumentException("Invalid tenant slug: " + tenant);
+                    }
                     statement.execute("SET search_path TO tenant_" + tenant);
                 }
-
             } catch (Exception e) {
-                throw new RuntimeException("Tenant switch failed", e);
+                DataSourceUtils.releaseConnection(connection, dataSource);
+                throw new ServletException("Tenant schema switch failed", e);
             }
+            // Note: don't release the connection here — Spring's transaction
+            // infrastructure (or the connection pool) will handle it.
         }
+        System.out.println("Current tenant schema = " + tenant);
 
         filterChain.doFilter(request, response);
     }

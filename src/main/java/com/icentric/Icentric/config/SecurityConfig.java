@@ -1,4 +1,5 @@
 package com.icentric.Icentric.config;
+
 import com.icentric.Icentric.security.JwtAuthenticationFilter;
 import com.icentric.Icentric.security.JwtService;
 import com.icentric.Icentric.tenant.TenantFilter;
@@ -15,11 +16,6 @@ import javax.sql.DataSource;
 public class SecurityConfig {
 
     @Bean
-    JwtService jwtService() {
-        return new JwtService();
-    }
-
-    @Bean
     JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
         return new JwtAuthenticationFilter(jwtService);
     }
@@ -33,19 +29,23 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtFilter,
-            TenantFilter tenantFilter
-    ) throws Exception {
+            TenantFilter tenantFilter) throws Exception {
 
         http.csrf(csrf -> csrf.disable());
 
         http.authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/platform/auth/**","/api/v1/platform/tenants/{slug}/impersonate").permitAll()
-                .anyRequest().authenticated()
-        );
+                // Public: login and MFA enrolment only
+                .requestMatchers(
+                        "/api/v1/platform/auth/login",
+                        "/api/v1/platform/auth/mfa/enroll","/api/v1/anything")
+                .permitAll()
+                // Fix #2: Impersonation requires a platform-admin JWT
+                .requestMatchers("/api/v1/platform/tenants/*/impersonate","/api/v1/platform/content/tracks")
+                .hasAuthority("ROLE_PLATFORM_ADMIN")
+                .anyRequest().authenticated());
 
         http.addFilterBefore(jwtFilter,
-                org.springframework.security.web.authentication.
-                        UsernamePasswordAuthenticationFilter.class);
+                org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class);
 
         http.addFilterAfter(tenantFilter, JwtAuthenticationFilter.class);
 

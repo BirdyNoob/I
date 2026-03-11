@@ -6,6 +6,7 @@ import com.icentric.Icentric.platform.admin.entity.PlatformAdmin;
 import com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository;
 import com.icentric.Icentric.platform.admin.service.PlatformAuthService;
 import com.icentric.Icentric.security.MfaService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,23 +17,23 @@ public class PlatformAuthController {
     private final PlatformAdminRepository repository;
     private final MfaService mfaService;
 
-    public PlatformAuthController(PlatformAuthService authService, PlatformAdminRepository repository,MfaService mfaService) {
+    public PlatformAuthController(PlatformAuthService authService, PlatformAdminRepository repository,
+            MfaService mfaService) {
         this.authService = authService;
         this.repository = repository;
         this.mfaService = mfaService;
     }
 
     @PostMapping("/login")
-    public PlatformLoginResponse login(
-            @RequestBody PlatformLoginRequest request
-    ) {
+    public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request) { // Fix #5: @Valid
         return authService.login(request);
     }
+
     @PostMapping("/mfa/enroll")
     public byte[] enrollMfa(@RequestParam String email) throws Exception {
 
         PlatformAdmin admin = repository.findByEmail(email)
-                .orElseThrow();
+                .orElseThrow(() -> new IllegalArgumentException("No admin found with email: " + email));
 
         String secret = mfaService.generateSecret();
         admin.setMfaSecret(secret);
