@@ -40,7 +40,7 @@ public class SecurityConfig {
                         "/api/v1/platform/auth/mfa/enroll","/api/v1/anything")
                 .permitAll()
                 // Fix #2: Impersonation requires a platform-admin JWT
-                .requestMatchers("/api/v1/platform/tenants/*/impersonate","/api/v1/platform/content/tracks")
+                .requestMatchers("/api/v1/platform/tenants/*/impersonate","/api/v1/platform/content/tracks","/api/v1/platform/content/**")
                 .hasAuthority("ROLE_PLATFORM_ADMIN")
                 .anyRequest().authenticated());
 
