@@ -1,5 +1,6 @@
 package com.icentric.Icentric.content.service;
 import com.icentric.Icentric.content.dto.CreateLessonRequest;
+import com.icentric.Icentric.content.dto.LessonDetailResponse;
 import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import org.springframework.stereotype.Service;
@@ -32,5 +33,19 @@ public class LessonService {
         lesson.setCreatedAt(Instant.now());
 
         return repository.save(lesson);
+    }
+    public LessonDetailResponse getLesson(UUID lessonId) {
+
+        Lesson lesson = repository.findById(lessonId)
+                .orElseThrow(() -> new RuntimeException("Lesson not found"));
+
+        return new LessonDetailResponse(
+                lesson.getId(),
+                lesson.getTitle(),
+                lesson.getLessonType(),
+                lesson.getContentJson(),
+                lesson.getVideoUrl(),
+                lesson.getResourceUrl()
+        );
     }
 }

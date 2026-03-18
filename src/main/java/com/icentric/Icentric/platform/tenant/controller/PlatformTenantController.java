@@ -51,8 +51,4 @@ public class PlatformTenantController {
                 "ROLE_ADMIN",
                 request.reason());
     }
-    @GetMapping
-    public String anything() {
-        return "Anything is accessible without authentication!";
-    }
 }

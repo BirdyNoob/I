@@ -11,5 +11,6 @@ import java.util.UUID;
 public interface ModuleRepository extends JpaRepository<CourseModule, UUID> {
 
     List<CourseModule> findByTrackId(UUID trackId);
+    List<CourseModule> findByTrackIdOrderBySortOrder(UUID trackId);
 
 }

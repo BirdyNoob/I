@@ -42,6 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String tenant = claims.get("tenant", String.class);
         String role = claims.get("role", String.class);
         String email = claims.getSubject();
+        Object userIdClaim = claims.get("userId");
 
         TenantContext.setTenant(tenant);
         String impersonatedBy = claims.get("impersonatedBy", String.class);
@@ -52,6 +53,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         null,
                         List.of(new SimpleGrantedAuthority(role))
                 );
+
+        if (userIdClaim != null) {
+            auth.setDetails(userIdClaim.toString());
+        }
 
         org.springframework.security.core.context.SecurityContextHolder
                 .getContext()

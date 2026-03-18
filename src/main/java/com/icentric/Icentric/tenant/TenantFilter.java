@@ -29,27 +29,36 @@ public class TenantFilter extends OncePerRequestFilter {
         String tenant = TenantContext.getTenant();
 
         if (tenant != null) {
-            // Fix #4: Use Spring's DataSourceUtils so the connection stays managed
-            // by the transaction infrastructure; use try-with-resources for Statement.
-            Connection connection = DataSourceUtils.getConnection(dataSource);
-            try (Statement statement = connection.createStatement()) {
-                if ("system".equals(tenant)) {
-                    statement.execute("SET search_path TO system");
-                } else {
-                    // Restrict slug to alphanumerics/hyphens to prevent SQL injection
-                    if (!tenant.matches("[a-zA-Z0-9_-]+")) {
-                        throw new IllegalArgumentException("Invalid tenant slug: " + tenant);
-                    }
-                    statement.execute("SET search_path TO tenant_" + tenant);
+
+            // Convert slug → schema
+            String schema;
+            if ("system".equals(tenant)) {
+                schema = "system";
+            } else {
+                if (!tenant.matches("[a-zA-Z0-9_-]+")) {
+                    throw new IllegalArgumentException("Invalid tenant slug: " + tenant);
                 }
-            } catch (Exception e) {
-                DataSourceUtils.releaseConnection(connection, dataSource);
-                throw new ServletException("Tenant schema switch failed", e);
+                schema = "tenant_" + tenant;
             }
-            // Note: don't release the connection here — Spring's transaction
-            // infrastructure (or the connection pool) will handle it.
+
+            Connection connection = DataSourceUtils.getConnection(dataSource);
+
+            try (Statement statement = connection.createStatement()) {
+
+                statement.execute("SET search_path TO " + schema);
+
+                // Debug log
+                System.out.println("Current tenant schema = " + schema);
+
+            } catch (Exception e) {
+
+                throw new ServletException("Tenant schema switch failed", e);
+
+            } finally {
+                // Important: release connection back to Spring
+                DataSourceUtils.releaseConnection(connection, dataSource);
+            }
         }
-        System.out.println("Current tenant schema = " + tenant);
 
         filterChain.doFilter(request, response);
     }
