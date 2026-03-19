@@ -12,5 +12,6 @@ public interface UserAssignmentRepository
     List<UserAssignment> findByUserId(UUID userId);
     long count();
     long countByStatus(String status);
+    List<UserAssignment> findAll();
 
 }

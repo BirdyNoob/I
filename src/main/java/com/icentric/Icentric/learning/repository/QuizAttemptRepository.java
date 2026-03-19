@@ -15,4 +15,10 @@ SELECT AVG(CAST(q.score AS double) / q.totalQuestions)
 FROM QuizAttempt q
 """)
     Double getAverageScore();
+    @Query("""
+SELECT AVG(CAST(q.score AS double) / q.totalQuestions)
+FROM QuizAttempt q
+WHERE q.userId = :userId
+""")
+    Double getAverageScoreByUser(UUID userId);
 }

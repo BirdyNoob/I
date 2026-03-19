@@ -32,5 +32,12 @@ AND m.trackId = :trackId
 AND lp.status = 'COMPLETED'
 """)
     long countCompletedLessons(UUID userId, UUID trackId);
+    @Query("""
+SELECT COUNT(lp)
+FROM LessonProgress lp
+WHERE lp.userId = :userId
+AND lp.status = 'COMPLETED'
+""")
+    long countCompletedByUser(UUID userId);
 
 }
