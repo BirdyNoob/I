@@ -39,5 +39,6 @@ WHERE lp.userId = :userId
 AND lp.status = 'COMPLETED'
 """)
     long countCompletedByUser(UUID userId);
+    
 
 }

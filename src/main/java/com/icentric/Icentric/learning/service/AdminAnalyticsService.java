@@ -1,8 +1,12 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.content.repository.LessonRepository;
+import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.dto.AdminAnalyticsResponse;
+import com.icentric.Icentric.learning.dto.DepartmentPerformanceResponse;
 import com.icentric.Icentric.learning.dto.RiskUserResponse;
+import com.icentric.Icentric.learning.dto.WeakLessonResponse;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
@@ -23,17 +27,20 @@ public class AdminAnalyticsService {
     private final UserAssignmentRepository assignmentRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final LessonProgressRepository progressRepository;
+    private final LessonRepository lessonRepository;
 
     public AdminAnalyticsService(
             UserRepository userRepository,
             UserAssignmentRepository assignmentRepository,
             QuizAttemptRepository quizAttemptRepository,
-            LessonProgressRepository progressRepository
+            LessonProgressRepository progressRepository,
+            LessonRepository lessonRepository
     ) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.quizAttemptRepository = quizAttemptRepository;
         this.progressRepository=progressRepository;
+        this.lessonRepository=lessonRepository;
     }
 
     public AdminAnalyticsResponse getOverview() {
@@ -109,6 +116,102 @@ public class AdminAnalyticsService {
                         overdue
                 ));
             }
+        }
+
+        return result;
+    }
+    public List<WeakLessonResponse> getWeakLessons() {
+
+        List<Object[]> stats = quizAttemptRepository.getLessonStats();
+
+        List<WeakLessonResponse> result = new ArrayList<>();
+
+        for (Object[] row : stats) {
+
+            UUID lessonId = (UUID) row[0];
+            Double avgScore = (Double) row[1];
+            Long attempts = (Long) row[2];
+
+            double score = avgScore == null ? 0 : avgScore * 100;
+
+            // 🔥 Weak threshold
+            if (score < 50) {
+
+                var lesson = lessonRepository.findById(lessonId)
+                        .orElseThrow();
+
+                result.add(new WeakLessonResponse(
+                        lessonId,
+                        lesson.getTitle(),
+                        score,
+                        attempts
+                ));
+            }
+        }
+
+        return result;
+    }
+    public List<DepartmentPerformanceResponse> getDepartmentPerformance() {
+
+        List<User> users = userRepository.findAll();
+
+        Map<String, List<User>> byDept =
+                users.stream()
+                        .collect(Collectors.groupingBy(u ->
+                                u.getDepartment() == null ? "UNKNOWN" : u.getDepartment()
+                        ));
+
+        List<DepartmentPerformanceResponse> result = new ArrayList<>();
+
+        for (var entry : byDept.entrySet()) {
+
+            String department = entry.getKey();
+            List<User> deptUsers = entry.getValue();
+
+            long totalUsers = deptUsers.size();
+
+            long totalCompleted = 0;
+            long totalAssignments = 0;
+
+            double totalScore = 0;
+            int scoredUsers = 0;
+
+            for (User user : deptUsers) {
+
+                UUID userId = user.getId();
+
+                long completed =
+                        progressRepository.countCompletedByUser(userId);
+
+                totalCompleted += completed;
+
+                totalAssignments += assignmentRepository
+                        .findByUserId(userId)
+                        .size();
+
+                Double avg =
+                        quizAttemptRepository.getAverageScoreByUser(userId);
+
+                if (avg != null) {
+                    totalScore += avg;
+                    scoredUsers++;
+                }
+            }
+
+            double completionRate =
+                    totalAssignments == 0 ? 0 :
+                            (totalCompleted * 100.0) / totalAssignments;
+
+            double avgScore =
+                    scoredUsers == 0 ? 0 :
+                            (totalScore / scoredUsers) * 100;
+
+            result.add(new DepartmentPerformanceResponse(
+                    department,
+                    totalUsers,
+                    completionRate,
+                    avgScore
+            ));
         }
 
         return result;
