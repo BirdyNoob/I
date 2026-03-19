@@ -2,6 +2,7 @@ package com.icentric.Icentric.learning.repository;
 import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.learning.entity.LessonProgress;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -21,5 +22,15 @@ public interface LessonProgressRepository
             UUID lessonId,
             String status
     );
+    @Query("""
+SELECT COUNT(lp)
+FROM LessonProgress lp
+JOIN Lesson l ON lp.lessonId = l.id
+JOIN CourseModule m ON l.moduleId = m.id
+WHERE lp.userId = :userId
+AND m.trackId = :trackId
+AND lp.status = 'COMPLETED'
+""")
+    long countCompletedLessons(UUID userId, UUID trackId);
 
 }
