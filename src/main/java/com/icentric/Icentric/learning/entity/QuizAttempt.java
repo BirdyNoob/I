@@ -23,4 +23,6 @@ public class QuizAttempt {
     private int totalQuestions;
 
     private Instant attemptedAt;
+    private Boolean passed;
+    private Integer attemptNumber;
 }

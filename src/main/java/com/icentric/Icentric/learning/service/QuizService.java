@@ -3,6 +3,7 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.AnswerRepository;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
+import com.icentric.Icentric.learning.dto.QuizResultResponse;
 import com.icentric.Icentric.learning.dto.QuizSubmissionRequest;
 import com.icentric.Icentric.learning.entity.QuizAnswer;
 import com.icentric.Icentric.learning.entity.QuizAttempt;
@@ -46,12 +47,24 @@ public class QuizService {
 
     }
 
-    public int submitQuiz(UUID userId, QuizSubmissionRequest request) {
+    private static final double PASS_THRESHOLD = 0.7; // 70%
+    private static final int MAX_ATTEMPTS = 3;
+
+    public QuizResultResponse submitQuiz(UUID userId, QuizSubmissionRequest request) {
+
+        long attemptCount =
+                attemptRepository.countByUserIdAndLessonId(
+                        userId,
+                        request.lessonId()
+                );
+
+        if (attemptCount >= MAX_ATTEMPTS) {
+            throw new RuntimeException("Max attempts reached");
+        }
 
         UUID attemptId = UUID.randomUUID();
         int correct = 0;
 
-        // 🔹 Evaluate answers
         for (var answer : request.answers()) {
 
             var correctAnswer =
@@ -72,33 +85,47 @@ public class QuizService {
             quizAnswerRepository.save(qa);
         }
 
-        // 🔹 Save attempt
+        int total = request.answers().size();
+
+        double scorePercent = total == 0 ? 0 : (correct * 1.0 / total);
+
+        boolean passed = scorePercent >= PASS_THRESHOLD;
+
         QuizAttempt attempt = new QuizAttempt();
         attempt.setId(attemptId);
         attempt.setUserId(userId);
         attempt.setLessonId(request.lessonId());
         attempt.setScore(correct);
-        attempt.setTotalQuestions(request.answers().size());
+        attempt.setTotalQuestions(total);
+        attempt.setAttemptNumber((int) attemptCount + 1);
+        attempt.setPassed(passed);
         attempt.setAttemptedAt(Instant.now());
 
         attemptRepository.save(attempt);
 
-        // 🔥 NEW: Resolve trackId
-        var lesson = lessonRepository.findById(request.lessonId())
-                .orElseThrow();
+        // 🔥 Only trigger certificate if PASSED
+        if (passed) {
 
-        var module = moduleRepository.findById(lesson.getModuleId())
-                .orElseThrow();
+            var lesson = lessonRepository.findById(request.lessonId())
+                    .orElseThrow();
 
-        UUID trackId = module.getTrackId();
+            var module = moduleRepository.findById(lesson.getModuleId())
+                    .orElseThrow();
 
-        // 🔥 Trigger certificate check
-        boolean alreadyIssued =
-                issuedRepository.existsByUserIdAndTrackId(userId, trackId);
+            UUID trackId = module.getTrackId();
 
-        if (alreadyIssued) return correct;
-        certificateService.checkAndIssue(userId, trackId);
+            certificateService.checkAndIssue(userId, trackId);
+        }
 
-        return correct;
+        int attemptNumber = (int) attemptCount + 1;
+        int remainingAttempts = Math.max(0, MAX_ATTEMPTS - attemptNumber);
+
+        return new QuizResultResponse(
+                correct,
+                total,
+                passed,
+                attemptNumber,
+                remainingAttempts
+        );
     }
 }

@@ -30,5 +30,5 @@ FROM QuizAttempt q
 GROUP BY q.lessonId
 """)
     List<Object[]> getLessonStats();
-
+    long countByUserIdAndLessonId(UUID userId, UUID lessonId);
 }

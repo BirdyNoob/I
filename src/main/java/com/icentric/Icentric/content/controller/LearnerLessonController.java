@@ -2,6 +2,7 @@ package com.icentric.Icentric.content.controller;
 
 import com.icentric.Icentric.content.dto.LessonDetailResponse;
 import com.icentric.Icentric.content.service.LessonService;
+import com.icentric.Icentric.learning.dto.QuizResultResponse;
 import com.icentric.Icentric.learning.dto.QuizSubmissionRequest;
 import com.icentric.Icentric.learning.service.QuizService;
 import org.springframework.security.core.Authentication;
@@ -29,7 +30,7 @@ public class LearnerLessonController {
         return service.getLesson(lessonId);
     }
     @PostMapping("/{lessonId}/quiz-attempt")
-    public Map<String, Integer> submitQuiz(
+    public QuizResultResponse submitQuiz(
 
             @PathVariable UUID lessonId,
             @RequestBody QuizSubmissionRequest request,
@@ -41,8 +42,6 @@ public class LearnerLessonController {
         }
         UUID userId = UUID.fromString(userIdRaw.toString());
 
-        int score = quizService.submitQuiz(userId, request);
-
-        return Map.of("score", score);
+        return quizService.submitQuiz(userId, request);
     }
 }
