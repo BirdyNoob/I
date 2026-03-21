@@ -1,15 +1,16 @@
 package com.icentric.Icentric.content.service;
 
-import com.icentric.Icentric.content.dto.CreateTrackRequest;
-import com.icentric.Icentric.content.dto.LessonResponse;
-import com.icentric.Icentric.content.dto.ModuleResponse;
-import com.icentric.Icentric.content.dto.TrackDetailResponse;
+import com.icentric.Icentric.content.dto.*;
 import com.icentric.Icentric.content.entity.CourseModule;
 import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
+import com.icentric.Icentric.learning.service.AssignmentService;
+import com.icentric.Icentric.learning.service.RetrainingService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -22,11 +23,15 @@ public class TrackService {
     private final TrackRepository repository;
     private final ModuleRepository moduleRepository;
     private final LessonRepository lessonRepository;
+    private final UserAssignmentRepository assignmentRepository;
+    private final RetrainingService retrainingService;
 
-    public TrackService(TrackRepository repository, ModuleRepository moduleRepository, LessonRepository lessonRepository) {
+    public TrackService(TrackRepository repository, ModuleRepository moduleRepository, LessonRepository lessonRepository, UserAssignmentRepository assignmentRepository, RetrainingService retrainingService) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
         this.lessonRepository = lessonRepository;
+        this.assignmentRepository = assignmentRepository;
+        this.retrainingService = retrainingService;
     }
 
     public Track createTrack(CreateTrackRequest request) {
@@ -83,5 +88,38 @@ public class TrackService {
                 track.getTitle(),
                 moduleResponses
         );
+    }
+    public Track updateTrack(UUID trackId, UpdateTrackRequest request) {
+
+        var track = repository.findById(trackId)
+                .orElseThrow(() -> new RuntimeException("Track not found"));
+
+        // update fields
+        if (request.title() != null) {
+            track.setTitle(request.title());
+        }
+
+        if (request.description() != null) {
+            track.setDescription(request.description());
+        }
+
+        // 🔥 IMPORTANT: increment version
+        track.setVersion(track.getVersion() + 1);
+
+        Track saved = repository.save(track);
+
+        // 🔥 trigger retraining
+        List<UserAssignment> assignments =
+                assignmentRepository.findByTrackId(trackId);
+
+        for (var assignment : assignments) {
+
+            retrainingService.checkRetraining(
+                    assignment.getUserId(),
+                    trackId
+            );
+        }
+
+        return saved;
     }
 }

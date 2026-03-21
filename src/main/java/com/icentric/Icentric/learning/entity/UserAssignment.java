@@ -30,6 +30,7 @@ public class UserAssignment {
     private String status;
 
     private Integer contentVersionAtAssignment;
+    private Boolean requiresRetraining;
 
     public UserAssignment() {}
 

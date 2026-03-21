@@ -5,6 +5,8 @@ import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import com.icentric.Icentric.tenant.TenantSchemaService;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -14,16 +16,21 @@ public class UserService {
 
     private final UserRepository repository;
     private final PasswordEncoder passwordEncoder;
+    private final TenantSchemaService tenantSchemaService;
 
     public UserService(
             UserRepository repository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            TenantSchemaService tenantSchemaService
     ) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
+        this.tenantSchemaService = tenantSchemaService;
     }
 
+    @Transactional
     public User createUser(CreateUserRequest request) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
 
         User user = new User();
 

@@ -11,7 +11,9 @@ import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
+import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -28,22 +30,27 @@ public class AdminAnalyticsService {
     private final QuizAttemptRepository quizAttemptRepository;
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
+    private final TenantSchemaService tenantSchemaService;
 
     public AdminAnalyticsService(
             UserRepository userRepository,
             UserAssignmentRepository assignmentRepository,
             QuizAttemptRepository quizAttemptRepository,
             LessonProgressRepository progressRepository,
-            LessonRepository lessonRepository
+            LessonRepository lessonRepository,
+            TenantSchemaService tenantSchemaService
     ) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.quizAttemptRepository = quizAttemptRepository;
         this.progressRepository=progressRepository;
         this.lessonRepository=lessonRepository;
+        this.tenantSchemaService = tenantSchemaService;
     }
 
+    @Transactional(readOnly = true)
     public AdminAnalyticsResponse getOverview() {
+        tenantSchemaService.applyCurrentTenantSearchPath();
 
         long totalUsers = userRepository.count();
 
@@ -66,7 +73,9 @@ public class AdminAnalyticsService {
                 avgScore == null ? 0 : avgScore * 100
         );
     }
+    @Transactional(readOnly = true)
     public List<RiskUserResponse> getRiskUsers() {
+        tenantSchemaService.applyCurrentTenantSearchPath();
 
         List<UserAssignment> assignments = assignmentRepository.findAll();
 
@@ -120,7 +129,9 @@ public class AdminAnalyticsService {
 
         return result;
     }
+    @Transactional(readOnly = true)
     public List<WeakLessonResponse> getWeakLessons() {
+        tenantSchemaService.applyCurrentTenantSearchPath();
 
         List<Object[]> stats = quizAttemptRepository.getLessonStats();
 
@@ -151,7 +162,9 @@ public class AdminAnalyticsService {
 
         return result;
     }
+    @Transactional(readOnly = true)
     public List<DepartmentPerformanceResponse> getDepartmentPerformance() {
+        tenantSchemaService.applyCurrentTenantSearchPath();
 
         List<User> users = userRepository.findAll();
 

@@ -2,6 +2,7 @@ package com.icentric.Icentric.content.controller;
 
 import com.icentric.Icentric.content.dto.CreateTrackRequest;
 import com.icentric.Icentric.content.dto.TrackDetailResponse;
+import com.icentric.Icentric.content.dto.UpdateTrackRequest;
 import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.service.TrackService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,5 +39,12 @@ public class TrackController {
             @PathVariable UUID trackId
     ) {
         return service.getTrack(trackId);
+    }
+    @PutMapping("/tracks/{trackId}")
+    public Track updateTrack(
+            @PathVariable UUID trackId,
+            @RequestBody UpdateTrackRequest request
+    ) {
+        return service.updateTrack(trackId, request);
     }
 }

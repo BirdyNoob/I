@@ -3,6 +3,7 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.AnswerRepository;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.QuizResultResponse;
 import com.icentric.Icentric.learning.dto.QuizSubmissionRequest;
 import com.icentric.Icentric.learning.entity.QuizAnswer;
@@ -10,6 +11,7 @@ import com.icentric.Icentric.learning.entity.QuizAttempt;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.QuizAnswerRepository;
 import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
+import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -27,6 +29,8 @@ public class QuizService {
     private final ModuleRepository moduleRepository;
     private final CertificateService certificateService;
     private final IssuedCertificateRepository issuedRepository;
+    private final UserAssignmentRepository assignmentRepository;
+    private final NotificationService notificationService;
 
     public QuizService(
             AnswerRepository answerRepository,
@@ -35,7 +39,9 @@ public class QuizService {
             LessonRepository lessonRepository,
             ModuleRepository moduleRepository,
             CertificateService certificateService,
-            IssuedCertificateRepository issuedRepository
+            IssuedCertificateRepository issuedRepository,
+            UserAssignmentRepository assignmentRepository,
+            NotificationService notificationService
     ) {
         this.answerRepository = answerRepository;
         this.attemptRepository = attemptRepository;
@@ -44,6 +50,8 @@ public class QuizService {
         this.moduleRepository = moduleRepository;
         this.certificateService = certificateService;
         this.issuedRepository = issuedRepository;
+        this.assignmentRepository = assignmentRepository;
+        this.notificationService = notificationService;
 
     }
 
@@ -102,6 +110,32 @@ public class QuizService {
         attempt.setAttemptedAt(Instant.now());
 
         attemptRepository.save(attempt);
+
+// 🔥 ADD FAILED LOGIC HERE
+        if (!passed && attemptCount + 1 >= MAX_ATTEMPTS) {
+
+            var lesson = lessonRepository.findById(request.lessonId())
+                    .orElseThrow();
+
+            var module = moduleRepository.findById(lesson.getModuleId())
+                    .orElseThrow();
+
+            UUID trackId = module.getTrackId();
+
+            var assignment = assignmentRepository
+                    .findByUserIdAndTrackId(userId, trackId)
+                    .orElseThrow();
+
+            assignment.setStatus(AssignmentStatus.FAILED);
+            assignmentRepository.save(assignment);
+
+            notificationService.createNotification(
+                    userId,
+                    "FAILED",
+                    "You have failed the training after maximum attempts."
+            );
+        }
+
 
         // 🔥 Only trigger certificate if PASSED
         if (passed) {

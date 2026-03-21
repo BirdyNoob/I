@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 @Repository
 public interface UserAssignmentRepository
@@ -13,5 +14,7 @@ public interface UserAssignmentRepository
     long count();
     long countByStatus(String status);
     List<UserAssignment> findAll();
+    Optional<UserAssignment> findByUserIdAndTrackId(UUID userId, UUID trackId);
+    List<UserAssignment> findByTrackId(UUID trackId);
 
 }

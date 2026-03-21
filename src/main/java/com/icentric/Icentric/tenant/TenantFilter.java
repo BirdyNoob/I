@@ -50,14 +50,22 @@ public class TenantFilter extends OncePerRequestFilter {
                 // Debug log
                 System.out.println("Current tenant schema = " + schema);
 
+                filterChain.doFilter(request, response);
+
             } catch (Exception e) {
 
                 throw new ServletException("Tenant schema switch failed", e);
 
             } finally {
-                // Important: release connection back to Spring
+                try (Statement reset = connection.createStatement()) {
+                    reset.execute("SET search_path TO public");
+                } catch (Exception ignored) {
+                    // Ignore reset failures and still release the connection.
+                }
+
                 DataSourceUtils.releaseConnection(connection, dataSource);
             }
+            return;
         }
 
         filterChain.doFilter(request, response);

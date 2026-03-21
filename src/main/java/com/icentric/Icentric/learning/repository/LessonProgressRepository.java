@@ -1,7 +1,9 @@
 package com.icentric.Icentric.learning.repository;
 import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.learning.entity.LessonProgress;
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
@@ -39,6 +41,19 @@ WHERE lp.userId = :userId
 AND lp.status = 'COMPLETED'
 """)
     long countCompletedByUser(UUID userId);
-    
+    @Modifying
+    @Transactional
+    @Query("""
+DELETE FROM LessonProgress lp
+WHERE lp.userId = :userId
+AND lp.lessonId IN (
+    SELECT l.id FROM Lesson l
+    WHERE l.moduleId IN (
+        SELECT m.id FROM CourseModule m
+        WHERE m.trackId = :trackId
+    )
+)
+""")
+    void deleteByUserIdAndTrackId(UUID userId, UUID trackId);
 
 }

@@ -70,6 +70,8 @@ public class SecurityConfig {
                 .hasAuthority("ROLE_LEARNER")
                 .requestMatchers("/api/v1/admin/**")
                 .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+                .requestMatchers("/api/v1/admin/**")
+                .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
 
                 .anyRequest().authenticated()
         );
