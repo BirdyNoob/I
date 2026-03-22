@@ -33,6 +33,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.icentric.Icentric.audit.service.AuditService;
+
 @ExtendWith(MockitoExtension.class)
 class QuizServiceTest {
 
@@ -54,6 +56,8 @@ class QuizServiceTest {
     UserAssignmentRepository assignmentRepository;
     @Mock
     NotificationService notificationService;
+    @Mock
+    AuditService auditService;
 
     @InjectMocks
     QuizService quizService;

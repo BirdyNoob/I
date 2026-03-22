@@ -5,6 +5,8 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.jdbc.datasource.DataSourceUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.sql.DataSource;
@@ -13,6 +15,8 @@ import java.sql.Connection;
 import java.sql.Statement;
 
 public class TenantFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(TenantFilter.class);
 
     private final DataSource dataSource;
 
@@ -47,8 +51,7 @@ public class TenantFilter extends OncePerRequestFilter {
 
                 statement.execute("SET search_path TO " + schema);
 
-                // Debug log
-                System.out.println("Current tenant schema = " + schema);
+                log.debug("Tenant schema set to: {}", schema);
 
                 filterChain.doFilter(request, response);
 

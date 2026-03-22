@@ -12,6 +12,7 @@ import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.QuizAnswerRepository;
 import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
+import com.icentric.Icentric.audit.service.AuditService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -31,6 +32,7 @@ public class QuizService {
     private final IssuedCertificateRepository issuedRepository;
     private final UserAssignmentRepository assignmentRepository;
     private final NotificationService notificationService;
+    private final AuditService auditService;
 
     public QuizService(
             AnswerRepository answerRepository,
@@ -41,7 +43,8 @@ public class QuizService {
             CertificateService certificateService,
             IssuedCertificateRepository issuedRepository,
             UserAssignmentRepository assignmentRepository,
-            NotificationService notificationService
+            NotificationService notificationService,
+            AuditService auditService
     ) {
         this.answerRepository = answerRepository;
         this.attemptRepository = attemptRepository;
@@ -52,7 +55,7 @@ public class QuizService {
         this.issuedRepository = issuedRepository;
         this.assignmentRepository = assignmentRepository;
         this.notificationService = notificationService;
-
+        this.auditService = auditService;
     }
 
     private static final double PASS_THRESHOLD = 0.7; // 70%
@@ -110,6 +113,8 @@ public class QuizService {
         attempt.setAttemptedAt(Instant.now());
 
         attemptRepository.save(attempt);
+
+        auditService.log(userId, "QUIZ_ATTEMPT", "QUIZ", request.lessonId().toString(), "Quiz attempt " + attempt.getAttemptNumber() + " with score " + scorePercent);
 
 // 🔥 ADD FAILED LOGIC HERE
         if (!passed && attemptCount + 1 >= MAX_ATTEMPTS) {

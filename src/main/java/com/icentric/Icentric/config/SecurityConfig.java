@@ -1,6 +1,5 @@
 package com.icentric.Icentric.config;
 
-import com.icentric.Icentric.identity.TenantHeaderFilter;
 import com.icentric.Icentric.security.JwtAuthenticationFilter;
 import com.icentric.Icentric.security.JwtService;
 import com.icentric.Icentric.tenant.TenantFilter;
@@ -18,11 +17,6 @@ import javax.sql.DataSource;
 public class SecurityConfig {
 
     @Bean
-    public TenantHeaderFilter tenantHeaderFilter() {
-        return new TenantHeaderFilter();
-    }
-
-    @Bean
     JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
         return new JwtAuthenticationFilter(jwtService);
     }
@@ -36,63 +30,58 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtFilter,
-            TenantFilter tenantFilter,
-            TenantHeaderFilter tenantHeaderFilter
+            TenantFilter tenantFilter
     ) throws Exception {
 
         http.csrf(csrf -> csrf.disable());
 
         http.authorizeHttpRequests(auth -> auth
+                // Public endpoints (no JWT required)
                 .requestMatchers(
                         "/api/v1/platform/auth/login",
                         "/api/v1/platform/auth/mfa/enroll",
                         "/api/v1/auth/login",
+                        "/api/v1/auth/refresh",
+                        "/api/v1/auth/logout",
                         "/swagger-ui/**",
                         "/v3/api-docs/**"
                 ).permitAll()
 
+                // Platform Admin only
                 .requestMatchers("/api/v1/platform/tenants/*/impersonate")
                 .hasAuthority("ROLE_PLATFORM_ADMIN")
 
                 .requestMatchers("/api/v1/platform/content/**")
                 .hasAuthority("ROLE_PLATFORM_ADMIN")
 
-                .requestMatchers("/api/v1/admin/**")
-                .hasAnyAuthority("ROLE_ADMIN","ROLE_SUPER_ADMIN")
+                .requestMatchers("/api/v1/platform/**")
+                .hasAuthority("ROLE_PLATFORM_ADMIN")
 
+                // Tenant Admin
+                .requestMatchers("/api/v1/admin/**")
+                .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+
+                // Learner
                 .requestMatchers("/api/v1/lessons/**")
                 .hasAuthority("ROLE_LEARNER")
 
                 .requestMatchers("/api/v1/learner/**")
                 .hasAuthority("ROLE_LEARNER")
 
-                .requestMatchers("/api/v1/lessons/**")
-                .hasAuthority("ROLE_LEARNER")
-                .requestMatchers("/api/v1/admin/**")
-                .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
-                .requestMatchers("/api/v1/admin/**")
-                .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
-
+                // Everything else requires authentication
                 .anyRequest().authenticated()
         );
 
         /*
-         FILTER ORDER
+         * FILTER ORDER (simplified — TenantHeaderFilter removed)
+         * 1️⃣ Parse JWT → sets SecurityContext + TenantContext
+         * 2️⃣ Switch DB schema based on TenantContext
          */
-
-        // 1️⃣ Resolve tenant from header
         http.addFilterBefore(
-                tenantHeaderFilter,
+                jwtFilter,
                 UsernamePasswordAuthenticationFilter.class
         );
 
-        // 2️⃣ Parse JWT
-        http.addFilterAfter(
-                jwtFilter,
-                TenantHeaderFilter.class
-        );
-
-        // 3️⃣ Switch schema
         http.addFilterAfter(
                 tenantFilter,
                 JwtAuthenticationFilter.class

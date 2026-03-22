@@ -11,6 +11,7 @@ import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.learning.service.AssignmentService;
 import com.icentric.Icentric.learning.service.RetrainingService;
+import com.icentric.Icentric.audit.service.AuditService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -25,13 +26,15 @@ public class TrackService {
     private final LessonRepository lessonRepository;
     private final UserAssignmentRepository assignmentRepository;
     private final RetrainingService retrainingService;
+    private final AuditService auditService;
 
-    public TrackService(TrackRepository repository, ModuleRepository moduleRepository, LessonRepository lessonRepository, UserAssignmentRepository assignmentRepository, RetrainingService retrainingService) {
+    public TrackService(TrackRepository repository, ModuleRepository moduleRepository, LessonRepository lessonRepository, UserAssignmentRepository assignmentRepository, RetrainingService retrainingService, AuditService auditService) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
         this.lessonRepository = lessonRepository;
         this.assignmentRepository = assignmentRepository;
         this.retrainingService = retrainingService;
+        this.auditService = auditService;
     }
 
     public Track createTrack(CreateTrackRequest request) {
@@ -107,6 +110,12 @@ public class TrackService {
         track.setVersion(track.getVersion() + 1);
 
         Track saved = repository.save(track);
+
+        Object userIdRaw = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() != null ? org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getDetails() : null;
+        UUID adminUserId = userIdRaw != null ? (userIdRaw instanceof String ? UUID.fromString((String) userIdRaw) : UUID.fromString(userIdRaw.toString())) : null;
+        if (adminUserId != null) {
+            auditService.log(adminUserId, "UPDATE_TRACK", "TRACK", trackId.toString(), "Track updated and version incremented");
+        }
 
         // 🔥 trigger retraining
         List<UserAssignment> assignments =

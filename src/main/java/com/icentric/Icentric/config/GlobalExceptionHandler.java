@@ -3,6 +3,7 @@ package com.icentric.Icentric.config;
 import io.jsonwebtoken.JwtException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -14,6 +15,15 @@ import java.util.stream.Collectors;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /** Spring Security bad credentials (login failures) */
+    @ExceptionHandler(BadCredentialsException.class)
+    ProblemDetail handleBadCredentials(BadCredentialsException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
+        pd.setTitle("Authentication failed");
+        pd.setDetail(ex.getMessage());
+        return pd;
+    }
 
     /** Invalid credentials or MFA code — previously returned 500 */
     @ExceptionHandler(IllegalArgumentException.class)

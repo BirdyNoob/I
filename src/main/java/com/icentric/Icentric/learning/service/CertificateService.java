@@ -9,6 +9,7 @@ import com.icentric.Icentric.learning.repository.CertificateRepository;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
+import com.icentric.Icentric.audit.service.AuditService;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -24,6 +25,7 @@ public class CertificateService {
     private final LessonRepository lessonRepository;
     private final UserAssignmentRepository assignmentRepository;
     private final TrackRepository trackRepository;
+    private final AuditService auditService;
 
     public CertificateService(
             CertificateRepository certificateRepository,
@@ -31,7 +33,8 @@ public class CertificateService {
             LessonProgressRepository progressRepository,
             LessonRepository lessonRepository,
             UserAssignmentRepository assignmentRepository,
-            TrackRepository trackRepository
+            TrackRepository trackRepository,
+            AuditService auditService
     ) {
         this.certificateRepository = certificateRepository;
         this.issuedRepository = issuedRepository;
@@ -39,6 +42,7 @@ public class CertificateService {
         this.lessonRepository = lessonRepository;
         this.assignmentRepository = assignmentRepository;
         this.trackRepository = trackRepository;
+        this.auditService = auditService;
     }
 
     public void checkAndIssue(UUID userId, UUID trackId) {
@@ -70,6 +74,8 @@ public class CertificateService {
             issued.setIssuedAt(Instant.now());
 
             issuedRepository.save(issued);
+
+            auditService.log(userId, "CERTIFICATE_ISSUED", "CERTIFICATE", certificate.getId().toString(), "Certificate issued for track " + trackId);
             var assignment = assignmentRepository
                     .findByUserIdAndTrackId(userId, trackId)
                     .orElseThrow();
