@@ -1,5 +1,6 @@
 package com.icentric.Icentric.config;
 
+import com.icentric.Icentric.identity.exception.UserNotFoundException;
 import io.jsonwebtoken.JwtException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -61,6 +62,15 @@ public class GlobalExceptionHandler {
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
         pd.setTitle("Validation failed");
         pd.setDetail(errors);
+        return pd;
+    }
+
+    /** User not found → 404 */
+    @ExceptionHandler(UserNotFoundException.class)
+    ProblemDetail handleUserNotFound(UserNotFoundException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+        pd.setTitle("User not found");
+        pd.setDetail(ex.getMessage());
         return pd;
     }
 

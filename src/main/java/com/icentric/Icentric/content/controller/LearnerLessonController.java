@@ -7,8 +7,6 @@ import com.icentric.Icentric.learning.dto.QuizSubmissionRequest;
 import com.icentric.Icentric.learning.service.QuizService;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
