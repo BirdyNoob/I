@@ -1,9 +1,12 @@
 package com.icentric.Icentric.learning.controller;
+import com.icentric.Icentric.learning.dto.BulkAssignmentRequest;
 import com.icentric.Icentric.learning.dto.CreateAssignmentRequest;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.service.AssignmentService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/admin")
@@ -23,5 +26,11 @@ public class AssignmentController {
             @RequestBody CreateAssignmentRequest request
     ) {
         return service.assignTrack(request);
+    }
+    @PostMapping("/bulk")
+    public Map<String, Object> bulkAssign(
+            @RequestBody BulkAssignmentRequest request
+    ) {
+        return service.bulkAssign(request);
     }
 }
