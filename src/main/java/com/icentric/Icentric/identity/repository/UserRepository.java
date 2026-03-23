@@ -4,13 +4,18 @@ import com.icentric.Icentric.identity.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
+    @Query("SELECT u FROM User u WHERE lower(u.email) IN :emails")
+    List<User> findAllByEmailLowerIn(Collection<String> emails);
 
     // Single-filter queries
     Page<User> findByDepartment(String department, Pageable pageable);

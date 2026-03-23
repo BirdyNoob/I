@@ -1,6 +1,7 @@
 package com.icentric.Icentric.learning.repository;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -16,5 +17,30 @@ public interface UserAssignmentRepository
     List<UserAssignment> findAll();
     Optional<UserAssignment> findByUserIdAndTrackId(UUID userId, UUID trackId);
     List<UserAssignment> findByTrackId(UUID trackId);
+    @Query("""
+SELECT ua, u.email, u.department
+FROM UserAssignment ua
+JOIN User u ON ua.userId = u.id
+WHERE (:department IS NULL OR u.department = :department)
+AND (:status IS NULL OR ua.status = :status)
+AND (:trackId IS NULL OR ua.trackId = :trackId)
+""")
+    List<Object[]> fetchCompletionData(
+            String department,
+            String status,
+            UUID trackId
+    );
+    @Query("""
+SELECT ua, u.email, u.department
+FROM UserAssignment ua
+JOIN User u ON ua.userId = u.id
+WHERE ua.status IN ('FAILED', 'OVERDUE')
+AND (:department IS NULL OR u.department = :department)
+AND (:trackId IS NULL OR ua.trackId = :trackId)
+""")
+    List<Object[]> fetchRiskData(
+            String department,
+            UUID trackId
+    );
 
 }

@@ -1,5 +1,6 @@
 package com.icentric.Icentric.identity.controller;
 
+import com.icentric.Icentric.identity.dto.BulkUploadResponse;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
 import com.icentric.Icentric.identity.dto.UserResponse;
@@ -8,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -49,5 +51,11 @@ public class UserController {
     @PatchMapping("/users/{id}/deactivate")
     public void deactivateUser(@PathVariable UUID id) {
         service.deactivateUser(id);
+    }
+    @PostMapping("/bulk-upload")
+    public BulkUploadResponse uploadUsers(
+            @RequestParam("file") MultipartFile file
+    ) {
+        return service.bulkUploadUsers(file);
     }
 }

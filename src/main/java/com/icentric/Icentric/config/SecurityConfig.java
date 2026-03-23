@@ -3,6 +3,7 @@ package com.icentric.Icentric.config;
 import com.icentric.Icentric.security.JwtAuthenticationFilter;
 import com.icentric.Icentric.security.JwtService;
 import com.icentric.Icentric.tenant.TenantFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -36,6 +37,8 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable());
 
         http.authorizeHttpRequests(auth -> auth
+                .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
+
                 // Public endpoints (no JWT required)
                 .requestMatchers(
                         "/api/v1/platform/auth/login",
