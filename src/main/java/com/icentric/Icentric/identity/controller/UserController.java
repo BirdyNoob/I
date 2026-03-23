@@ -5,6 +5,9 @@ import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
 import com.icentric.Icentric.identity.dto.UserResponse;
 import com.icentric.Icentric.identity.service.UserService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -57,5 +60,13 @@ public class UserController {
             @RequestParam("file") MultipartFile file
     ) {
         return service.bulkUploadUsers(file);
+    }
+
+    @GetMapping("/users/bulk-upload-template")
+    public ResponseEntity<String> getBulkUploadTemplate() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=tenant-user-bulk-upload-template.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(service.getBulkUploadTemplateCsv());
     }
 }

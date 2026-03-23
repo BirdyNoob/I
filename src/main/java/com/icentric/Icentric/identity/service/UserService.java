@@ -37,6 +37,7 @@ public class UserService {
     private static final long MAX_BULK_UPLOAD_BYTES = 2L * 1024 * 1024;
     private static final int BATCH_SIZE = 100;
     private static final Set<String> ALLOWED_BULK_ROLES = Set.of("LEARNER", "ADMIN", "SUPER_ADMIN");
+    private static final String BULK_UPLOAD_TEMPLATE_HEADER = "email,role,department";
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$",
             Pattern.CASE_INSENSITIVE
@@ -160,6 +161,11 @@ public class UserService {
                 u.getCreatedAt()
         );
     }
+
+    public String getBulkUploadTemplateCsv() {
+        return BULK_UPLOAD_TEMPLATE_HEADER + "\n";
+    }
+
     @Transactional
     public BulkUploadResponse bulkUploadUsers(MultipartFile file) {
         tenantSchemaService.applyCurrentTenantSearchPath();
