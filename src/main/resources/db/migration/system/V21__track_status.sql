@@ -1,0 +1,2 @@
+ALTER TABLE system.tracks
+    ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'DRAFT';

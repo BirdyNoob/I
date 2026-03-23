@@ -50,6 +50,7 @@ public class TrackService {
         track.setEstimatedMins(request.estimatedMins());
         track.setVersion(1);
         track.setIsPublished(false);
+        track.setStatus("DRAFT");
         track.setCreatedAt(Instant.now());
 
         return repository.save(track);
@@ -97,6 +98,9 @@ public class TrackService {
         var track = repository.findById(trackId)
                 .orElseThrow(() -> new RuntimeException("Track not found"));
 
+        if ("PUBLISHED".equals(track.getStatus())) {
+            throw new RuntimeException("Cannot edit published track. Create new version.");
+        }
         // update fields
         if (request.title() != null) {
             track.setTitle(request.title());
@@ -105,9 +109,6 @@ public class TrackService {
         if (request.description() != null) {
             track.setDescription(request.description());
         }
-
-        // 🔥 IMPORTANT: increment version
-        track.setVersion(track.getVersion() + 1);
 
         Track saved = repository.save(track);
 
@@ -123,6 +124,36 @@ public class TrackService {
 
         for (var assignment : assignments) {
 
+            retrainingService.checkRetraining(
+                    assignment.getUserId(),
+                    trackId
+            );
+        }
+
+        return saved;
+    }
+    public Track publishTrack(UUID trackId) {
+
+        var track = repository.findById(trackId)
+                .orElseThrow();
+
+        if ("PUBLISHED".equals(track.getStatus())) {
+            return track; // already published
+        }
+
+        // 🔥 mark published
+        track.setStatus("PUBLISHED");
+
+        // 🔥 increment version
+        track.setVersion(track.getVersion() + 1);
+
+        Track saved = repository.save(track);
+
+        // 🔥 trigger retraining
+        List<UserAssignment> assignments =
+                assignmentRepository.findByTrackId(trackId);
+
+        for (var assignment : assignments) {
             retrainingService.checkRetraining(
                     assignment.getUserId(),
                     trackId

@@ -33,5 +33,6 @@ public class Track {
     private Boolean isPublished;
 
     private Instant createdAt;
+    private String status;
 
 }

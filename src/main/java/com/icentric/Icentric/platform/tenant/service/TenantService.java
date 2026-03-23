@@ -1,8 +1,11 @@
 package com.icentric.Icentric.platform.tenant.service;
 
+import com.icentric.Icentric.platform.dto.TenantResponse;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class TenantService {
@@ -10,6 +13,7 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final TenantProvisioningService provisioningService;
     private final TenantUserBootstrapService bootstrapService;
+
 
     public TenantService(
             TenantRepository tenantRepository,
@@ -35,5 +39,17 @@ public class TenantService {
         bootstrapService.createSuperAdmin(slug, adminEmail);
 
         return tenant;
+    }
+    public List<TenantResponse> getAllTenants() {
+
+        return tenantRepository.findAll()
+                .stream()
+                .map(t -> new TenantResponse(
+                        t.getId(),
+                        t.getCompanyName(),
+                        t.getSlug(),
+                        t.getCreatedAt()
+                ))
+                .toList();
     }
 }

@@ -47,4 +47,8 @@ public class TrackController {
     ) {
         return service.updateTrack(trackId, request);
     }
+    @PatchMapping("/tracks/{id}/publish")
+    public Track publishTrack(@PathVariable UUID id) {
+        return service.publishTrack(id);
+    }
 }
