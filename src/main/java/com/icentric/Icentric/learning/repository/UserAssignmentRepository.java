@@ -42,5 +42,18 @@ AND (:trackId IS NULL OR ua.trackId = :trackId)
             String department,
             UUID trackId
     );
+    @Query("""
+SELECT ua FROM UserAssignment ua
+WHERE ua.status IN ('ASSIGNED','IN_PROGRESS')
+AND ua.dueDate IS NOT NULL
+""")
+    List<UserAssignment> findActiveAssignments();
+
+    @Query("""
+SELECT ua FROM UserAssignment ua
+WHERE ua.status = 'OVERDUE'
+AND ua.dueDate IS NOT NULL
+""")
+    List<UserAssignment> findOverdueAssignments();
 
 }
