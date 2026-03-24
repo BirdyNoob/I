@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,6 +43,17 @@ WHERE lp.userId = :userId
 AND lp.status = 'COMPLETED'
 """)
     long countCompletedByUser(UUID userId);
+    @Query("""
+SELECT m.trackId, COUNT(lp)
+FROM LessonProgress lp
+JOIN Lesson l ON lp.lessonId = l.id
+JOIN CourseModule m ON l.moduleId = m.id
+WHERE lp.userId = :userId
+AND lp.status = 'COMPLETED'
+AND m.trackId IN :trackIds
+GROUP BY m.trackId
+""")
+    List<Object[]> countCompletedLessonsByTrack(UUID userId, Collection<UUID> trackIds);
     @Modifying
     @Transactional
     @Query("""

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 @Repository
@@ -21,5 +22,14 @@ JOIN CourseModule m ON l.moduleId = m.id
 WHERE m.trackId = :trackId
 """)
     long countLessonsInTrack(UUID trackId);
+
+    @Query("""
+SELECT m.trackId, COUNT(l)
+FROM Lesson l
+JOIN CourseModule m ON l.moduleId = m.id
+WHERE m.trackId IN :trackIds
+GROUP BY m.trackId
+""")
+    List<Object[]> countLessonsInTracks(Collection<UUID> trackIds);
 
 }
