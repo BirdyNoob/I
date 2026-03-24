@@ -70,7 +70,7 @@ public class QuizService {
                 );
 
         if (attemptCount >= MAX_ATTEMPTS) {
-            throw new RuntimeException("Max attempts reached");
+            throw new IllegalStateException("Max attempts reached");
         }
 
         UUID attemptId = UUID.randomUUID();

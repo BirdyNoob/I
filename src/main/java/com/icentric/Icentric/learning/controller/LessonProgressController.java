@@ -3,6 +3,7 @@ import com.icentric.Icentric.learning.dto.LessonProgressRequest;
 import com.icentric.Icentric.learning.entity.LessonProgress;
 import com.icentric.Icentric.learning.service.LessonProgressService;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,7 +32,7 @@ public class LessonProgressController {
                 .getAuthentication();
         Object userIdRaw = authentication != null ? authentication.getDetails() : null;
         if (userIdRaw == null) {
-            throw new IllegalArgumentException("Missing userId in authentication token");
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
         }
         UUID userId = UUID.fromString(userIdRaw.toString());
 

@@ -6,6 +6,7 @@ import com.icentric.Icentric.platform.admin.entity.PlatformAdmin;
 import com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository;
 import com.icentric.Icentric.security.JwtService;
 import com.icentric.Icentric.security.MfaService;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -31,10 +32,10 @@ public class PlatformAuthService {
     public PlatformLoginResponse login(PlatformLoginRequest request) {
 
         PlatformAdmin admin = repository.findByEmail(request.email())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         if (!passwordEncoder.matches(request.password(), admin.getPasswordHash())) {
-            throw new IllegalArgumentException("Invalid credentials");
+            throw new BadCredentialsException("Invalid credentials");
         }
 
         if (admin.getMfaEnabled()) {
@@ -44,7 +45,7 @@ public class PlatformAuthService {
                     request.mfaCode());
 
             if (!valid) {
-                throw new IllegalArgumentException("Invalid MFA code");
+                throw new BadCredentialsException("Invalid MFA code");
             }
         }
 

@@ -3,10 +3,7 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.UserRepository;
-import com.icentric.Icentric.learning.dto.AdminAnalyticsResponse;
-import com.icentric.Icentric.learning.dto.DepartmentPerformanceResponse;
-import com.icentric.Icentric.learning.dto.RiskUserResponse;
-import com.icentric.Icentric.learning.dto.WeakLessonResponse;
+import com.icentric.Icentric.learning.dto.*;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
@@ -17,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -228,5 +226,134 @@ public class AdminAnalyticsService {
         }
 
         return result;
+    }
+    @Transactional(readOnly = true)
+    public AdminDashboardResponse getDashboard() {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        long totalUsers = userRepository.count();
+
+        long totalAssignments = assignmentRepository.count();
+
+        long completed = assignmentRepository.countByStatus("COMPLETED");
+
+        long overdue = assignmentRepository.countByStatus("OVERDUE");
+
+        long failed = assignmentRepository.countByStatus("FAILED");
+
+        long riskUsersCount = countRiskUsers();
+
+        double completionRate = totalAssignments == 0 ? 0 :
+                (completed * 100.0) / totalAssignments;
+
+        Instant now = Instant.now();
+        Instant sevenDaysAgo = now.minusSeconds(7L * 24 * 60 * 60);
+        Instant sevenDaysFromNow = now.plusSeconds(7L * 24 * 60 * 60);
+
+        DashboardTimeInsights timeInsights = new DashboardTimeInsights(
+                assignmentRepository.countByAssignedAtAfter(sevenDaysAgo),
+                quizAttemptRepository.countByAttemptedAtAfter(sevenDaysAgo),
+                assignmentRepository.countByDueDateBetweenAndStatusIn(
+                        now,
+                        sevenDaysFromNow,
+                        List.of("ASSIGNED", "IN_PROGRESS")
+                )
+        );
+
+        // 🔥 Department stats
+        List<DepartmentStat> deptStats = rankDepartmentStats(
+                assignmentRepository.fetchDepartmentStats()
+                        .stream()
+                        .map(r -> new DepartmentAggregate(
+                                (String) r[0],
+                                ((Number) r[1]).longValue(),
+                                ((Number) r[2]).longValue()
+                        ))
+                        .toList()
+        );
+
+        return new AdminDashboardResponse(
+                totalUsers,
+                totalAssignments,
+                completed,
+                overdue,
+                failed,
+                riskUsersCount,
+                completionRate,
+                timeInsights,
+                deptStats
+        );
+    }
+
+    private long countRiskUsers() {
+        List<UserAssignment> assignments = assignmentRepository.findAll();
+
+        Map<UUID, List<UserAssignment>> userAssignments =
+                assignments.stream().collect(Collectors.groupingBy(UserAssignment::getUserId));
+
+        long riskUsersCount = 0;
+
+        for (var entry : userAssignments.entrySet()) {
+            UUID userId = entry.getKey();
+            List<UserAssignment> userAssgn = entry.getValue();
+
+            long completed = progressRepository.countCompletedByUser(userId);
+            long total = userAssgn.size();
+
+            double completionPercent = total == 0 ? 0 : (completed * 100.0) / total;
+            Double avgScore = quizAttemptRepository.getAverageScoreByUser(userId);
+            double score = avgScore == null ? 0 : avgScore * 100;
+
+            boolean overdue =
+                    userAssgn.stream().anyMatch(a ->
+                            a.getDueDate() != null &&
+                                    a.getDueDate().isBefore(Instant.now()) &&
+                                    !"COMPLETED".equals(a.getStatus())
+                    );
+
+            if (overdue || completionPercent < 50 || score < 50) {
+                riskUsersCount++;
+            }
+        }
+
+        return riskUsersCount;
+    }
+
+    private List<DepartmentStat> rankDepartmentStats(List<DepartmentAggregate> aggregates) {
+        List<DepartmentAggregate> sorted = aggregates.stream()
+                .sorted(
+                        Comparator.comparingDouble(DepartmentAggregate::completionRate).reversed()
+                                .thenComparing(DepartmentAggregate::completed, Comparator.reverseOrder())
+                                .thenComparing(DepartmentAggregate::total, Comparator.reverseOrder())
+                                .thenComparing(
+                                        aggregate -> aggregate.department() == null ? "UNKNOWN" : aggregate.department(),
+                                        String.CASE_INSENSITIVE_ORDER
+                                )
+                )
+                .toList();
+
+        List<DepartmentStat> ranked = new ArrayList<>(sorted.size());
+        for (int i = 0; i < sorted.size(); i++) {
+            DepartmentAggregate aggregate = sorted.get(i);
+            ranked.add(new DepartmentStat(
+                    i + 1,
+                    aggregate.department() == null ? "UNKNOWN" : aggregate.department(),
+                    aggregate.total(),
+                    aggregate.completed(),
+                    aggregate.completionRate()
+            ));
+        }
+
+        return ranked;
+    }
+
+    private record DepartmentAggregate(
+            String department,
+            long total,
+            long completed
+    ) {
+        double completionRate() {
+            return total == 0 ? 0 : (completed * 100.0) / total;
+        }
     }
 }

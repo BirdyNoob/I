@@ -70,7 +70,7 @@ public class AssignmentService {
             users = userRepository.findByDepartment(request.department());
 
         } else {
-            throw new RuntimeException("Provide userIds or department");
+            throw new IllegalArgumentException("Provide userIds or department");
         }
 
         int total = users.size();

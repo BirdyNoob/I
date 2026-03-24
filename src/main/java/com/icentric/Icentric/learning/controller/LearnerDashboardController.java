@@ -8,6 +8,7 @@ import com.icentric.Icentric.learning.dto.NextLessonResponse;
 import com.icentric.Icentric.learning.service.CertificateService;
 import com.icentric.Icentric.learning.service.LearnerDashboardService;
 
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,7 +32,7 @@ public class LearnerDashboardController {
 
         Object userIdRaw = authentication != null ? authentication.getDetails() : null;
         if (userIdRaw == null) {
-            throw new IllegalArgumentException("Missing userId in authentication token");
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
         }
         UUID userId = UUID.fromString(userIdRaw.toString());
 
@@ -42,7 +43,7 @@ public class LearnerDashboardController {
 
         Object userIdRaw = authentication != null ? authentication.getDetails() : null;
         if (userIdRaw == null) {
-            throw new IllegalArgumentException("Missing userId in authentication token");
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
         }
         UUID userId = UUID.fromString(userIdRaw.toString());
 
@@ -53,7 +54,7 @@ public class LearnerDashboardController {
 
         Object userIdRaw = auth != null ? auth.getDetails() : null;
         if (userIdRaw == null) {
-            throw new IllegalArgumentException("Missing userId in authentication token");
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
         }
         UUID userId = UUID.fromString(userIdRaw.toString());
 
@@ -66,7 +67,7 @@ public class LearnerDashboardController {
 
         Object userIdRaw = auth != null ? auth.getDetails() : null;
         if (userIdRaw == null) {
-            throw new IllegalArgumentException("Missing userId in authentication token");
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
         }
         UUID userId = UUID.fromString(userIdRaw.toString());
 

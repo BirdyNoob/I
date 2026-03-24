@@ -1,6 +1,7 @@
 package com.icentric.Icentric.security;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,10 +49,10 @@ public class RefreshTokenService {
     @Transactional(readOnly = true)
     public RefreshToken validate(String token) {
         RefreshToken stored = repository.findByTokenAndRevokedFalse(token)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired refresh token"));
+                .orElseThrow(() -> new BadCredentialsException("Invalid or expired refresh token"));
 
         if (stored.getExpiresAt().isBefore(Instant.now())) {
-            throw new IllegalArgumentException("Refresh token expired");
+            throw new BadCredentialsException("Refresh token expired");
         }
         return stored;
     }

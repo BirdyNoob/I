@@ -5,6 +5,7 @@ import com.icentric.Icentric.content.service.LessonService;
 import com.icentric.Icentric.learning.dto.QuizResultResponse;
 import com.icentric.Icentric.learning.dto.QuizSubmissionRequest;
 import com.icentric.Icentric.learning.service.QuizService;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
@@ -36,7 +37,7 @@ public class LearnerLessonController {
     ) {
         Object userIdRaw = authentication != null ? authentication.getDetails() : null;
         if (userIdRaw == null) {
-            throw new IllegalArgumentException("Missing userId in authentication token");
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
         }
         UUID userId = UUID.fromString(userIdRaw.toString());
 

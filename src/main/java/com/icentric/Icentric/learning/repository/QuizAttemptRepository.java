@@ -31,4 +31,5 @@ GROUP BY q.lessonId
 """)
     List<Object[]> getLessonStats();
     long countByUserIdAndLessonId(UUID userId, UUID lessonId);
+    long countByAttemptedAtAfter(java.time.Instant attemptedAt);
 }

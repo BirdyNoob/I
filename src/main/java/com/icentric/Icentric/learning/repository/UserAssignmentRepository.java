@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 @Repository
 public interface UserAssignmentRepository
         extends JpaRepository<UserAssignment, UUID> {
@@ -55,5 +56,22 @@ WHERE ua.status = 'OVERDUE'
 AND ua.dueDate IS NOT NULL
 """)
     List<UserAssignment> findOverdueAssignments();
+    @Query("""
+SELECT COUNT(ua)
+FROM UserAssignment ua
+WHERE ua.status = 'COMPLETED'
+""")
+    long countCompleted();
+    @Query("""
+SELECT u.department, COUNT(ua), 
+SUM(CASE WHEN ua.status = 'COMPLETED' THEN 1 ELSE 0 END)
+FROM UserAssignment ua
+JOIN User u ON ua.userId = u.id
+GROUP BY u.department
+""")
+    List<Object[]> fetchDepartmentStats();
 
+    long countByAssignedAtAfter(Instant assignedAt);
+
+    long countByDueDateBetweenAndStatusIn(Instant dueDateFrom, Instant dueDateTo, List<String> statuses);
 }

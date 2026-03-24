@@ -96,10 +96,10 @@ public class TrackService {
     public Track updateTrack(UUID trackId, UpdateTrackRequest request) {
 
         var track = repository.findById(trackId)
-                .orElseThrow(() -> new RuntimeException("Track not found"));
+                .orElseThrow(() -> new java.util.NoSuchElementException("Track not found"));
 
         if ("PUBLISHED".equals(track.getStatus())) {
-            throw new RuntimeException("Cannot edit published track. Create new version.");
+            throw new IllegalStateException("Cannot edit published track. Create new version.");
         }
         // update fields
         if (request.title() != null) {

@@ -33,4 +33,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     );
     List<User> findByDepartment(String department);
     List<User> findByIdIn(List<UUID> ids);
+    long count();
 }
