@@ -1,6 +1,7 @@
 package com.icentric.Icentric.learning.controller;
 
 import com.icentric.Icentric.learning.dto.NotificationResponse;
+import com.icentric.Icentric.learning.dto.UnreadNotificationCountResponse;
 import com.icentric.Icentric.learning.service.NotificationService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
@@ -63,11 +64,13 @@ public class NotificationController {
         service.markAllAsRead(userId);
     }
     @GetMapping("/unread-count")
-    public long unreadCount(Authentication auth) {
+    public UnreadNotificationCountResponse unreadCount(Authentication auth) {
 
         UUID userId = extractUserId(auth);
 
-        return service.getUnreadCount(userId);
+        return new UnreadNotificationCountResponse(
+                service.getUnreadCount(userId)
+        );
     }
 
     private UUID extractUserId(Authentication auth) {
