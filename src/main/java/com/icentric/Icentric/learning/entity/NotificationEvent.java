@@ -1,7 +1,10 @@
 package com.icentric.Icentric.learning.entity;
 
+import com.icentric.Icentric.learning.constants.NotificationType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.Data;
 
@@ -15,7 +18,8 @@ public class NotificationEvent {
     @Id
     private UUID id;
     private UUID userId;
-    private String type; // OVERDUE, FAILED
+    @Enumerated(EnumType.STRING)
+    private NotificationType type;
     private String message;
     private Boolean sent;
     private Boolean isRead = false;

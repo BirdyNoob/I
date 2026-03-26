@@ -3,6 +3,7 @@ package com.icentric.Icentric.learning.scheduler;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
+import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.NotificationRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
@@ -22,6 +23,8 @@ import java.util.UUID;
 
 @Service
 public class AssignmentNotificationScheduler {
+    private static final Duration REMINDER_COOLDOWN = Duration.ofHours(24);
+    private static final Duration ESCALATION_COOLDOWN = Duration.ofHours(24);
 
     private final UserAssignmentRepository assignmentRepository;
     private final NotificationService notificationService;
@@ -62,7 +65,7 @@ public class AssignmentNotificationScheduler {
         try {
             tenantSchemaService.applyCurrentTenantSearchPath();
             processReminders(now);
-            processEscalations();
+            processEscalations(now);
         } finally {
             TenantContext.clear();
         }
@@ -81,12 +84,15 @@ public class AssignmentNotificationScheduler {
             long hoursLeft = Duration.between(now, assignment.getDueDate()).toHours();
 
             if (hoursLeft > 0 && hoursLeft <= 48) {
-                if (!notificationRepository.existsByUserIdAndTypeAndSentFalse(
-                        assignment.getUserId(), "REMINDER")) {
+                Instant cooldownStart = now.minus(REMINDER_COOLDOWN);
+                if (!notificationRepository.existsByUserIdAndTypeAndCreatedAtAfter(
+                        assignment.getUserId(),
+                        NotificationType.REMINDER,
+                        cooldownStart)) {
 
                     notificationService.createNotification(
                             assignment.getUserId(),
-                            "REMINDER",
+                            NotificationType.REMINDER,
                             "Training is due soon"
                     );
                 }
@@ -94,7 +100,7 @@ public class AssignmentNotificationScheduler {
         }
     }
 
-    private void processEscalations() {
+    private void processEscalations(Instant now) {
         List<UserAssignment> overdueAssignments = assignmentRepository.findByStatusAndDueDateIsNotNull(
                 AssignmentStatus.OVERDUE
         );
@@ -113,16 +119,22 @@ public class AssignmentNotificationScheduler {
 
         UUID adminUserId = admins.get(0).getId();
 
-        if (notificationRepository.existsByUserIdAndTypeAndSentFalse(
-                adminUserId, "ESCALATION")) {
+        UserAssignment firstOverdue = overdueAssignments.get(0);
+        String message = "User " + firstOverdue.getUserId() + " has overdue training";
+        Instant cooldownStart = now.minus(ESCALATION_COOLDOWN);
+
+        if (notificationRepository.existsByUserIdAndTypeAndMessageAndCreatedAtAfter(
+                adminUserId,
+                NotificationType.ESCALATION,
+                message,
+                cooldownStart)) {
             return;
         }
 
-        UserAssignment firstOverdue = overdueAssignments.get(0);
         notificationService.createNotification(
                 adminUserId,
-                "ESCALATION",
-                "User " + firstOverdue.getUserId() + " has overdue training"
+                NotificationType.ESCALATION,
+                message
         );
     }
 }

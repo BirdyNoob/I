@@ -3,6 +3,7 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.dto.AdminNotificationResponse;
 import com.icentric.Icentric.learning.dto.NotificationResponse;
+import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.entity.NotificationEvent;
 import com.icentric.Icentric.learning.repository.NotificationRepository;
 import com.icentric.Icentric.tenant.TenantSchemaService;
@@ -34,7 +35,7 @@ public class NotificationService {
     }
 
     @Transactional
-    public void createNotification(UUID userId, String type, String message) {
+    public void createNotification(UUID userId, NotificationType type, String message) {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         boolean alreadyQueued =
@@ -95,7 +96,7 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public Page<NotificationResponse> getNotifications(
             UUID userId,
-            String type,
+            NotificationType type,
             Pageable pageable
     ) {
         tenantSchemaService.applyCurrentTenantSearchPath();

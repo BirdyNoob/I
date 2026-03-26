@@ -4,6 +4,7 @@ import com.icentric.Icentric.content.repository.AnswerRepository;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
+import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.dto.QuizResultResponse;
 import com.icentric.Icentric.learning.dto.QuizSubmissionRequest;
 import com.icentric.Icentric.learning.entity.QuizAnswer;
@@ -136,7 +137,7 @@ public class QuizService {
 
             notificationService.createNotification(
                     userId,
-                    "FAILED",
+                    NotificationType.FAILED,
                     "You have failed the training after maximum attempts."
             );
         }

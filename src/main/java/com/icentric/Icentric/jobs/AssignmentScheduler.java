@@ -1,6 +1,7 @@
 package com.icentric.Icentric.jobs;
 
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
+import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.learning.service.NotificationService;
@@ -64,7 +65,7 @@ public class AssignmentScheduler {
                     assignmentRepository.save(a);
                     notificationService.createNotification(
                             a.getUserId(),
-                            "OVERDUE",
+                            NotificationType.OVERDUE,
                             "Your training is overdue. Please complete it."
                     );
                 }

@@ -1,5 +1,6 @@
 package com.icentric.Icentric.learning.repository;
 
+import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.entity.NotificationEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,13 +20,15 @@ public interface NotificationRepository
 
     List<NotificationEvent> findBySentFalse();
 
-    boolean existsByUserIdAndTypeAndSentFalse(UUID userId, String type);
+    boolean existsByUserIdAndTypeAndSentFalse(UUID userId, NotificationType type);
+    boolean existsByUserIdAndTypeAndCreatedAtAfter(UUID userId, NotificationType type, java.time.Instant createdAt);
+    boolean existsByUserIdAndTypeAndMessageAndCreatedAtAfter(UUID userId, NotificationType type, String message, java.time.Instant createdAt);
     Page<NotificationEvent> findAll(Pageable pageable);
     Page<NotificationEvent> findByUserId(UUID userId, Pageable pageable);
 
     Page<NotificationEvent> findByUserIdAndType(
             UUID userId,
-            String type,
+            NotificationType type,
             Pageable pageable
     );
 

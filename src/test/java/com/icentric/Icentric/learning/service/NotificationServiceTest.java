@@ -1,5 +1,6 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.dto.NotificationResponse;
 import com.icentric.Icentric.learning.entity.NotificationEvent;
 import com.icentric.Icentric.learning.repository.NotificationRepository;
@@ -52,24 +53,24 @@ class NotificationServiceTest {
         NotificationEvent event = new NotificationEvent();
         event.setId(UUID.randomUUID());
         event.setUserId(userId);
-        event.setType("REMINDER");
+        event.setType(NotificationType.REMINDER);
         event.setMessage("Due soon");
         event.setIsRead(false);
         event.setCreatedAt(createdAt);
 
-        when(repository.findByUserIdAndType(userId, "REMINDER", PageRequest.of(0, 10)))
+        when(repository.findByUserIdAndType(userId, NotificationType.REMINDER, PageRequest.of(0, 10)))
                 .thenReturn(new PageImpl<>(List.of(event)));
 
         Page<NotificationResponse> result = notificationService.getNotifications(
                 userId,
-                "REMINDER",
+                NotificationType.REMINDER,
                 PageRequest.of(0, 10)
         );
 
         verify(tenantSchemaService).applyCurrentTenantSearchPath();
         assertThat(result.getContent()).singleElement().satisfies(notification -> {
             assertThat(notification.id()).isEqualTo(event.getId());
-            assertThat(notification.type()).isEqualTo("REMINDER");
+            assertThat(notification.type()).isEqualTo(NotificationType.REMINDER);
             assertThat(notification.message()).isEqualTo("Due soon");
             assertThat(notification.isRead()).isFalse();
             assertThat(notification.createdAt()).isEqualTo(createdAt);

@@ -1,5 +1,6 @@
 package com.icentric.Icentric.learning.controller;
 
+import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.dto.NotificationResponse;
 import com.icentric.Icentric.learning.dto.UnreadNotificationCountResponse;
 import com.icentric.Icentric.learning.service.NotificationService;
@@ -32,7 +33,7 @@ public class NotificationController {
     public Page<NotificationResponse> getNotifications(
 
             Authentication auth,
-            @RequestParam(required = false) String type,
+            @RequestParam(required = false) NotificationType type,
             @RequestParam(defaultValue = "0") @PositiveOrZero int page,
             @RequestParam(defaultValue = "10") @Positive @Max(100) int size
 
