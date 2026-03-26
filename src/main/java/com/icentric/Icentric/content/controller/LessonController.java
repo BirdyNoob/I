@@ -2,6 +2,7 @@ package com.icentric.Icentric.content.controller;
 import com.icentric.Icentric.content.dto.CreateLessonRequest;
 import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.content.service.LessonService;
+import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,7 +22,7 @@ public class LessonController {
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     public Lesson createLesson(
             @PathVariable UUID moduleId,
-            @RequestBody CreateLessonRequest request
+            @Valid @RequestBody CreateLessonRequest request
     ) {
         return service.createLesson(moduleId, request);
     }

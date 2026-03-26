@@ -6,11 +6,15 @@ import com.icentric.Icentric.platform.admin.entity.PlatformAdmin;
 import com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository;
 import com.icentric.Icentric.platform.admin.service.PlatformAuthService;
 import com.icentric.Icentric.security.MfaService;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/platform/auth")
+@Validated
 public class PlatformAuthController {
 
     private final PlatformAuthService authService;
@@ -30,7 +34,7 @@ public class PlatformAuthController {
     }
 
     @PostMapping("/mfa/enroll")
-    public byte[] enrollMfa(@RequestParam String email) throws Exception {
+    public byte[] enrollMfa(@RequestParam @NotBlank @Email String email) throws Exception {
 
         PlatformAdmin admin = repository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("No admin found with email: " + email));

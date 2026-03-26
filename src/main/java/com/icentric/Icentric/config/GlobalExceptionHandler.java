@@ -12,7 +12,9 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -110,6 +112,21 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    ProblemDetail handleHandlerMethodValidation(HandlerMethodValidationException ex, HttpServletRequest request) {
+        String errors = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> result.getMethodParameter().getParameterName() + ": " + defaultMessage(error)))
+                .collect(Collectors.joining(", "));
+
+        return buildProblem(
+                HttpStatus.BAD_REQUEST,
+                "Validation failed",
+                errors.isBlank() ? ex.getMessage() : errors,
+                request
+        );
+    }
+
     @ExceptionHandler({
             MissingServletRequestParameterException.class,
             MethodArgumentTypeMismatchException.class,
@@ -190,5 +207,9 @@ public class GlobalExceptionHandler {
             pd.setInstance(URI.create(request.getRequestURI()));
         }
         return pd;
+    }
+
+    private String defaultMessage(MessageSourceResolvable error) {
+        return error.getDefaultMessage() != null ? error.getDefaultMessage() : "Validation error";
     }
 }

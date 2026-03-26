@@ -5,6 +5,7 @@ import com.icentric.Icentric.content.service.LessonService;
 import com.icentric.Icentric.learning.dto.QuizResultResponse;
 import com.icentric.Icentric.learning.dto.QuizSubmissionRequest;
 import com.icentric.Icentric.learning.service.QuizService;
+import jakarta.validation.Valid;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -32,7 +33,7 @@ public class LearnerLessonController {
     public QuizResultResponse submitQuiz(
 
             @PathVariable UUID lessonId,
-            @RequestBody QuizSubmissionRequest request,
+            @Valid @RequestBody QuizSubmissionRequest request,
             Authentication authentication
     ) {
         Object userIdRaw = authentication != null ? authentication.getDetails() : null;

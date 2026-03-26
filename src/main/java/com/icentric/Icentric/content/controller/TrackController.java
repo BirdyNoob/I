@@ -5,6 +5,7 @@ import com.icentric.Icentric.content.dto.TrackDetailResponse;
 import com.icentric.Icentric.content.dto.UpdateTrackRequest;
 import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.service.TrackService;
+import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,7 +25,7 @@ public class TrackController {
     @PostMapping
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     public Track createTrack(
-            @RequestBody CreateTrackRequest request
+            @Valid @RequestBody CreateTrackRequest request
     ) {
         return service.createTrack(request);
     }
@@ -43,7 +44,7 @@ public class TrackController {
     @PutMapping("/tracks/{trackId}")
     public Track updateTrack(
             @PathVariable UUID trackId,
-            @RequestBody UpdateTrackRequest request
+            @Valid @RequestBody UpdateTrackRequest request
     ) {
         return service.updateTrack(trackId, request);
     }

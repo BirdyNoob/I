@@ -2,6 +2,7 @@ package com.icentric.Icentric.learning.controller;
 import com.icentric.Icentric.learning.dto.LessonProgressRequest;
 import com.icentric.Icentric.learning.entity.LessonProgress;
 import com.icentric.Icentric.learning.service.LessonProgressService;
+import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
@@ -24,7 +25,7 @@ public class LessonProgressController {
     @PostMapping("/progress")
     @PreAuthorize("hasRole('LEARNER')")
     public LessonProgress updateProgress(
-            @RequestBody LessonProgressRequest request
+            @Valid @RequestBody LessonProgressRequest request
     ) {
         Authentication authentication = org.springframework.security.core.context
                 .SecurityContextHolder
