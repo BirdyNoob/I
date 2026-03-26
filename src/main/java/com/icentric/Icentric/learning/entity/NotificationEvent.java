@@ -14,13 +14,10 @@ public class NotificationEvent {
 
     @Id
     private UUID id;
-
     private UUID userId;
     private String type; // OVERDUE, FAILED
-
     private String message;
-
     private Boolean sent;
-
+    private Boolean isRead = false;
     private Instant createdAt;
 }

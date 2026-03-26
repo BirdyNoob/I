@@ -71,6 +71,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/learner/**")
                 .hasAuthority("ROLE_LEARNER")
 
+                .requestMatchers("/api/v1/notifications/**")
+                .hasAuthority("ROLE_LEARNER")
+
                 // Everything else requires authentication
                 .anyRequest().authenticated()
         );

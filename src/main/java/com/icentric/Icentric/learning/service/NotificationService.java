@@ -2,15 +2,18 @@ package com.icentric.Icentric.learning.service;
 
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.dto.AdminNotificationResponse;
+import com.icentric.Icentric.learning.dto.NotificationResponse;
 import com.icentric.Icentric.learning.entity.NotificationEvent;
 import com.icentric.Icentric.learning.repository.NotificationRepository;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @Service
@@ -88,6 +91,56 @@ public class NotificationService {
                             event.getCreatedAt()
                     );
                 });
+    }
+    @Transactional(readOnly = true)
+    public Page<NotificationResponse> getNotifications(
+            UUID userId,
+            String type,
+            Pageable pageable
+    ) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        Page<NotificationEvent> page;
+
+        if (type != null) {
+            page = repository.findByUserIdAndType(userId, type, pageable);
+        } else {
+            page = repository.findByUserId(userId, pageable);
+        }
+
+        return page.map(n -> new NotificationResponse(
+                n.getId(),
+                n.getType(),
+                n.getMessage(),
+                n.getIsRead(),
+                n.getCreatedAt()
+        ));
+    }
+    @Transactional
+    public void markAsRead(UUID notificationId, UUID userId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        var n = repository.findById(notificationId)
+                .orElseThrow(() -> new NoSuchElementException("Notification not found"));
+
+        if (!n.getUserId().equals(userId)) {
+            throw new AccessDeniedException("Unauthorized access");
+        }
+
+        if (!Boolean.TRUE.equals(n.getIsRead())) {
+            n.setIsRead(true);
+            repository.save(n);
+        }
+    }
+    @Transactional
+    public void markAllAsRead(UUID userId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        repository.markAllAsRead(userId);
+    }
+    @Transactional(readOnly = true)
+    public long getUnreadCount(UUID userId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        return repository.countByUserIdAndIsReadFalse(userId);
     }
 
 }

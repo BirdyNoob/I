@@ -1,0 +1,2 @@
+ALTER TABLE notification_events
+    ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
