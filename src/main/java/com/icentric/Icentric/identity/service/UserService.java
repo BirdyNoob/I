@@ -362,4 +362,34 @@ public class UserService {
             String role,
             String department
     ) {}
+    @Transactional(readOnly = true)
+    public Page<UserResponse> searchUsers(
+            String email,
+            String department,
+            String role,
+            Boolean isActive,
+            Pageable pageable
+    ) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        String normalizedEmail = normalizeSearchEmail(email);
+
+        return repository.searchUsers(
+                normalizedEmail, department, role, isActive, pageable
+        ).map(u -> new UserResponse(
+                u.getId(),
+                u.getEmail(),
+                u.getRole(),
+                u.getDepartment(),
+                u.getIsActive(),
+                u.getCreatedAt()
+        ));
+    }
+
+    private String normalizeSearchEmail(String email) {
+        if (email == null) {
+            return null;
+        }
+        String trimmed = email.trim().toLowerCase(Locale.ROOT);
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 }

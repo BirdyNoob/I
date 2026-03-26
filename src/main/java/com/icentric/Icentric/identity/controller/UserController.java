@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -75,5 +76,25 @@ public class UserController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=tenant-user-bulk-upload-template.csv")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(service.getBulkUploadTemplateCsv());
+    }
+    @GetMapping("/search")
+    public Page<UserResponse> searchUsers(
+
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(defaultValue = "0") @PositiveOrZero int page,
+            @RequestParam(defaultValue = "10") @Positive @Max(100) int size
+
+    ) {
+
+        return service.searchUsers(
+                email,
+                department,
+                role,
+                isActive,
+                PageRequest.of(page, size, Sort.by("createdAt").descending())
+        );
     }
 }

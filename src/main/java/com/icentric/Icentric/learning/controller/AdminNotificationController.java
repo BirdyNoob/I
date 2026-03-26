@@ -26,8 +26,8 @@ public class AdminNotificationController {
 
     @GetMapping
     public Page<AdminNotificationResponse> getNotifications(
-            @RequestParam(defaultValue = "0") @PositiveOrZero int page,
-            @RequestParam(defaultValue = "10") @Positive @Max(100) int size
+            @RequestParam(defaultValue = "0") @PositiveOrZero Integer page,
+            @RequestParam(defaultValue = "10") @Positive @Max(100) Integer size
     ) {
         return service.getAdminNotifications(
                 PageRequest.of(page, size)

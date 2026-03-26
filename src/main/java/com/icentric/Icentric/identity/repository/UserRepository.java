@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -34,4 +35,18 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<User> findByDepartment(String department);
     List<User> findByIdIn(List<UUID> ids);
     long count();
+    @Query("""
+SELECT u FROM User u
+WHERE (:email IS NULL OR LOWER(u.email) LIKE CONCAT(LOWER(:email), '%'))
+AND (:department IS NULL OR u.department = :department)
+AND (:role IS NULL OR u.role = :role)
+AND (:isActive IS NULL OR u.isActive = :isActive)
+""")
+    Page<User> searchUsers(
+            @Param("email") String email,
+            @Param("department") String department,
+            @Param("role") String role,
+            @Param("isActive") Boolean isActive,
+            Pageable pageable
+    );
 }
