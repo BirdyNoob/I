@@ -2,6 +2,7 @@ package com.icentric.Icentric.learning.scheduler;
 
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.NotificationRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
@@ -68,7 +69,9 @@ public class AssignmentNotificationScheduler {
     }
 
     private void processReminders(Instant now) {
-        List<UserAssignment> assignments = assignmentRepository.findActiveAssignments();
+        List<UserAssignment> assignments = assignmentRepository.findByStatusInAndDueDateIsNotNull(
+                List.of(AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS)
+        );
 
         for (UserAssignment assignment : assignments) {
             if (assignment.getDueDate() == null) {
@@ -92,7 +95,9 @@ public class AssignmentNotificationScheduler {
     }
 
     private void processEscalations() {
-        List<UserAssignment> overdueAssignments = assignmentRepository.findOverdueAssignments();
+        List<UserAssignment> overdueAssignments = assignmentRepository.findByStatusAndDueDateIsNotNull(
+                AssignmentStatus.OVERDUE
+        );
 
         if (overdueAssignments.isEmpty()) {
             return;

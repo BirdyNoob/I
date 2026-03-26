@@ -3,6 +3,7 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.*;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
@@ -55,7 +56,7 @@ public class AdminAnalyticsService {
         long totalAssignments = assignmentRepository.count();
 
         long completedAssignments =
-                assignmentRepository.countByStatus("COMPLETED");
+                assignmentRepository.countByStatus(AssignmentStatus.COMPLETED);
 
         double completionRate =
                 totalAssignments == 0 ? 0 :
@@ -106,7 +107,7 @@ public class AdminAnalyticsService {
                     userAssgn.stream().anyMatch(a ->
                             a.getDueDate() != null &&
                                     a.getDueDate().isBefore(Instant.now()) &&
-                                    !"COMPLETED".equals(a.getStatus())
+                                    a.getStatus() != AssignmentStatus.COMPLETED
                     );
 
             boolean isRisk =
@@ -235,11 +236,11 @@ public class AdminAnalyticsService {
 
         long totalAssignments = assignmentRepository.count();
 
-        long completed = assignmentRepository.countByStatus("COMPLETED");
+        long completed = assignmentRepository.countByStatus(AssignmentStatus.COMPLETED);
 
-        long overdue = assignmentRepository.countByStatus("OVERDUE");
+        long overdue = assignmentRepository.countByStatus(AssignmentStatus.OVERDUE);
 
-        long failed = assignmentRepository.countByStatus("FAILED");
+        long failed = assignmentRepository.countByStatus(AssignmentStatus.FAILED);
 
         long riskUsersCount = countRiskUsers();
 
@@ -256,13 +257,13 @@ public class AdminAnalyticsService {
                 assignmentRepository.countByDueDateBetweenAndStatusIn(
                         now,
                         sevenDaysFromNow,
-                        List.of("ASSIGNED", "IN_PROGRESS")
+                        List.of(AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS)
                 )
         );
 
         // 🔥 Department stats
         List<DepartmentStat> deptStats = rankDepartmentStats(
-                assignmentRepository.fetchDepartmentStats()
+                assignmentRepository.fetchDepartmentStats(AssignmentStatus.COMPLETED)
                         .stream()
                         .map(r -> new DepartmentAggregate(
                                 (String) r[0],
@@ -308,7 +309,7 @@ public class AdminAnalyticsService {
                     userAssgn.stream().anyMatch(a ->
                             a.getDueDate() != null &&
                                     a.getDueDate().isBefore(Instant.now()) &&
-                                    !"COMPLETED".equals(a.getStatus())
+                                    a.getStatus() != AssignmentStatus.COMPLETED
                     );
 
             if (overdue || completionPercent < 50 || score < 50) {

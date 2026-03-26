@@ -4,6 +4,7 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.entity.CourseModule;
 import com.icentric.Icentric.content.repository.ModuleRepository;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.*;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
@@ -221,11 +222,11 @@ public class LearnerDashboardService {
 
     private int priorityRank(TrainingItem item) {
         return switch (item.status()) {
-            case "OVERDUE" -> 0;
-            case "IN_PROGRESS" -> 1;
-            case "ASSIGNED" -> 2;
-            case "FAILED" -> 3;
-            case "COMPLETED" -> 4;
+            case OVERDUE -> 0;
+            case IN_PROGRESS -> 1;
+            case ASSIGNED -> 2;
+            case FAILED -> 3;
+            case COMPLETED -> 4;
             default -> 5;
         };
     }

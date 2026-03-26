@@ -1,5 +1,6 @@
 package com.icentric.Icentric.learning.controller;
 
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.service.ReportService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -26,7 +27,7 @@ public class ReportController {
     public ResponseEntity<StreamingResponseBody> completionReport(
 
             @RequestParam(required = false) String department,
-            @RequestParam(required = false) String status,
+            @RequestParam(required = false) AssignmentStatus status,
             @RequestParam(required = false) UUID trackId
 
     ) {

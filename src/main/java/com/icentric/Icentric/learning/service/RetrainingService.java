@@ -1,6 +1,7 @@
 package com.icentric.Icentric.learning.service;
 
 import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import org.springframework.stereotype.Service;
@@ -37,7 +38,7 @@ public class RetrainingService {
 
             // 🔥 mark retraining
             assignment.setRequiresRetraining(true);
-            assignment.setStatus("ASSIGNED");
+            assignment.setStatus(AssignmentStatus.ASSIGNED);
 
             assignmentRepository.save(assignment);
 

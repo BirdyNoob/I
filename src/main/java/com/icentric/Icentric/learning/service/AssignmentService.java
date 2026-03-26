@@ -3,12 +3,17 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.BulkAssignmentRequest;
 import com.icentric.Icentric.learning.dto.CreateAssignmentRequest;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.tenant.TenantSchemaService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,14 +28,20 @@ public class AssignmentService {
     private final TrackRepository trackRepository;
     private final AuditService auditService;
     private final UserRepository userRepository;
+    private final TenantSchemaService tenantSchemaService;
 
     public AssignmentService(
-            UserAssignmentRepository repository, TrackRepository trackRepository, AuditService auditService, UserRepository userRepository
+            UserAssignmentRepository repository,
+            TrackRepository trackRepository,
+            AuditService auditService,
+            UserRepository userRepository,
+            TenantSchemaService tenantSchemaService
     ) {
         this.repository = repository;
         this.trackRepository = trackRepository;
         this.auditService = auditService;
         this.userRepository = userRepository;
+        this.tenantSchemaService = tenantSchemaService;
     }
 
     public UserAssignment assignTrack(CreateAssignmentRequest request) {
@@ -43,7 +54,7 @@ public class AssignmentService {
         assignment.setTrackId(request.trackId());
         assignment.setAssignedAt(Instant.now());
         assignment.setDueDate(request.dueDate());
-        assignment.setStatus("ASSIGNED");
+        assignment.setStatus(AssignmentStatus.ASSIGNED);
         assignment.setContentVersionAtAssignment(track.getVersion());
 
         UserAssignment saved = repository.save(assignment);
@@ -102,7 +113,7 @@ public class AssignmentService {
                 assignment.setTrackId(request.trackId());
                 assignment.setAssignedAt(Instant.now());
                 assignment.setDueDate(request.dueDate());
-                assignment.setStatus("ASSIGNED");
+                assignment.setStatus(AssignmentStatus.ASSIGNED);
 
                 assignment.setContentVersionAtAssignment(track.getVersion());
                 assignment.setRequiresRetraining(false);
@@ -121,6 +132,22 @@ public class AssignmentService {
                 "success", success,
                 "skipped", skipped,
                 "errors", errors
+        );
+    }
+    @Transactional(readOnly = true)
+    public Page<UserAssignment> searchAssignments(
+            AssignmentStatus status,
+            UUID trackId,
+            UUID userId,
+            Pageable pageable
+    ) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        return repository.searchAssignments(
+                status,
+                trackId,
+                userId,
+                pageable
         );
     }
 

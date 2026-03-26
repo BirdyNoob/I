@@ -1,5 +1,6 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import org.springframework.stereotype.Service;
@@ -37,14 +38,18 @@ public class ReportService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         List<String[]> rows = new ArrayList<>();
-        var data = repository.fetchRiskData(department, trackId);
+        var data = repository.fetchRiskData(
+                List.of(AssignmentStatus.FAILED, AssignmentStatus.OVERDUE),
+                department,
+                trackId
+        );
 
         for (Object[] row : data) {
             UserAssignment ua = (UserAssignment) row[0];
             rows.add(new String[] {
                     (String) row[1],
                     ua.getTrackId().toString(),
-                    ua.getStatus(),
+                    ua.getStatus().name(),
                     (String) row[2]
             });
         }
@@ -67,7 +72,7 @@ public class ReportService {
     @Transactional(readOnly = true)
     public StreamingResponseBody streamCompletionReport(
             String department,
-            String status,
+            AssignmentStatus status,
             UUID trackId
     ) {
         tenantSchemaService.applyCurrentTenantSearchPath();
@@ -80,7 +85,7 @@ public class ReportService {
             rows.add(new String[] {
                     (String) row[1],
                     ua.getTrackId().toString(),
-                    ua.getStatus(),
+                    ua.getStatus().name(),
                     (String) row[2]
             });
         }

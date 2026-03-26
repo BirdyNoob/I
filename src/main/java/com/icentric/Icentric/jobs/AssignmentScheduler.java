@@ -58,7 +58,7 @@ public class AssignmentScheduler {
 
                 if (a.getDueDate() != null &&
                         a.getDueDate().isBefore(Instant.now()) &&
-                        !AssignmentStatus.COMPLETED.equals(a.getStatus())) {
+                        a.getStatus() != AssignmentStatus.COMPLETED) {
 
                     a.setStatus(AssignmentStatus.OVERDUE);
                     assignmentRepository.save(a);

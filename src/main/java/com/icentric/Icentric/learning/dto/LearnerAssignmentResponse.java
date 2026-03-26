@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.dto;
 
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -10,7 +12,7 @@ public record LearnerAssignmentResponse(
         String trackTitle,
         Instant assignedAt,
         Instant dueDate,
-        String status,
+        AssignmentStatus status,
         int totalLessons,
         int completedLessons,
         double completionPercent

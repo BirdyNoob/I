@@ -1,8 +1,11 @@
 package com.icentric.Icentric.learning.entity;
 
 
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Data;
@@ -27,7 +30,8 @@ public class UserAssignment {
 
     private Instant dueDate;
 
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private AssignmentStatus status;
 
     private Integer contentVersionAtAssignment;
     private Boolean requiresRetraining;
