@@ -1,8 +1,11 @@
 package com.icentric.Icentric.learning.dto;
 
+import java.util.UUID;
 import java.time.Instant;
 
 public record CertificateDownloadData(
+        UUID certificateId,
+        UUID learnerId,
         String userEmail,
         String trackTitle,
         Instant issuedAt

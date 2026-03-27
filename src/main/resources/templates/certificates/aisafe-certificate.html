@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AISafe Premium Certificate</title>
+    <style>
+        /* Instructs the PDF engine to use A4 Landscape */
+        @page {
+            size: A4 landscape;
+            margin: 0;
+        }
+
+        :root {
+            --gold: #B8860B;
+            --gold-light: #DAA520;
+            --gold-line: rgba(184, 134, 11, 0.4);
+            --bg: #FFFFFF;
+            --text: #0F172A;
+            --text-dim: #475569;
+            --accent: #E2E8F0;
+
+            --font-serif: "Times New Roman", Georgia, serif;
+            --font-display: "Times New Roman", Georgia, serif;
+            --font-mono: "Courier New", Courier, monospace;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            /* Added a dark browser background so the white A4 page stands out */
+            background: #cbd5e1;
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        body {
+            font-family: var(--font-serif);
+        }
+
+        /* Locked to exact A4 Landscape dimensions */
+        .page {
+            position: relative;
+            width: 297mm;
+            height: 210mm;
+            padding: 22mm 20mm;
+            box-sizing: border-box;
+            background: #FFFFFF;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); /* Drop shadow for screen preview */
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .cert-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            border: 1px solid #CBD5E1;
+            overflow: hidden;
+        }
+
+        .bg-glow {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0.06;
+        }
+
+        .glow-1 {
+            width: 170mm;
+            height: 170mm;
+            top: -65mm;
+            left: -55mm;
+            background: var(--gold);
+        }
+
+        .glow-2 {
+            width: 185mm;
+            height: 185mm;
+            right: -70mm;
+            bottom: -75mm;
+            background: var(--text-dim);
+        }
+
+        .frame-main {
+            position: absolute;
+            top: 8mm;
+            right: 8mm;
+            bottom: 8mm;
+            left: 8mm;
+            border: 1.5px solid var(--gold-line);
+        }
+
+        .cert-content {
+            position: relative;
+            z-index: 2;
+            height: 100%;
+            padding: 20mm 25mm 16mm;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .logo-text {
+            font-family: var(--font-display);
+            font-size: 15pt;
+            letter-spacing: 3pt;
+            margin-bottom: 14mm;
+            font-weight: bold;
+        }
+
+        .logo-text .gold {
+            color: var(--gold);
+        }
+
+        .cert-title {
+            font-family: var(--font-display);
+            font-size: 31pt;
+            color: var(--gold);
+            margin: 0 0 5mm;
+            font-weight: bold;
+            letter-spacing: 1pt;
+        }
+
+        .presented-to {
+            font-size: 16pt;
+            color: var(--text-dim);
+            font-style: italic;
+            margin: 0 0 4mm;
+        }
+
+        .recipient-name {
+            font-family: var(--font-display);
+            font-size: 36pt;
+            margin: 0 0 8mm;
+            color: var(--text);
+            font-weight: bold;
+        }
+
+        .course-info {
+            max-width: 180mm;
+            margin: 0 auto;
+            font-size: 18pt;
+            line-height: 1.45;
+            color: var(--text-dim);
+        }
+
+        .course-info strong {
+            color: var(--text);
+        }
+
+        .meta-row {
+            margin: 11mm auto 0;
+            max-width: 200mm;
+            border-top: 1px solid rgba(15, 23, 42, 0.1);
+            border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+            padding: 4mm 0;
+            font-family: var(--font-mono);
+            font-size: 10pt;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .meta-col {
+            display: inline-block;
+            width: 32%;
+            vertical-align: top;
+        }
+
+        .meta-label {
+            color: var(--gold);
+            display: block;
+            margin-bottom: 2mm;
+            font-weight: bold;
+        }
+
+        .footer {
+            position: absolute;
+            left: 25mm;
+            right: 25mm;
+            bottom: 16mm;
+            font-size: 0;
+        }
+
+        .sig-box,
+        .seal-box {
+            display: inline-block;
+            vertical-align: bottom;
+        }
+
+        .sig-box {
+            width: 30%;
+            text-align: center;
+        }
+
+        .seal-box {
+            width: 40%;
+            text-align: center;
+        }
+
+        .sig-line {
+            border-top: 1px solid var(--text-dim);
+            margin: 0 12mm 3mm;
+        }
+
+        .sig-name {
+            font-family: var(--font-mono);
+            font-size: 10pt;
+            color: var(--text);
+            letter-spacing: 0.6pt;
+            font-weight: bold;
+        }
+
+        .seal {
+            width: 28mm;
+            height: 28mm;
+            margin: 0 auto 3mm;
+            border: 1.5px dashed var(--gold);
+            border-radius: 50%;
+            color: var(--gold);
+            font-family: var(--font-display);
+            font-size: 9pt;
+            line-height: 28mm;
+            letter-spacing: 1pt;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .seal-caption {
+            font-family: var(--font-mono);
+            font-size: 10pt;
+            color: var(--text-dim);
+            letter-spacing: 0.8pt;
+        }
+
+        /* Strips the background and shadow for the actual PDF generation */
+        @media print {
+            body {
+                background: none;
+                display: block;
+            }
+            .page {
+                box-shadow: none;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="cert-wrapper">
+        <div class="bg-glow glow-1"></div>
+        <div class="bg-glow glow-2"></div>
+        <div class="frame-main"></div>
+
+        <div class="cert-content">
+            <div class="logo-text">{{platformNameStart}}<span class="gold">{{platformNameHighlight}}</span>{{platformNameEnd}}</div>
+
+            <h1 class="cert-title">CERTIFICATE OF EXCELLENCE</h1>
+            <p class="presented-to">This recognition is officially conferred upon</p>
+
+            <div class="recipient-name">{{recipientName}}</div>
+
+            <div class="course-info">
+                For the masterful completion of the <strong>{{trackTitle}}</strong> specialization,
+                demonstrating proficiency in scalable systems and AI safety principles.
+            </div>
+
+            <div class="meta-row">
+                <div class="meta-col">
+                    <span class="meta-label">Certificate ID</span>
+                    <span>{{certificateId}}</span>
+                </div>
+                <div class="meta-col">
+                    <span class="meta-label">Learner ID</span>
+                    <span>{{learnerId}}</span>
+                </div>
+                <div class="meta-col">
+                    <span class="meta-label">Issued On</span>
+                    <span>{{issuedDate}}</span>
+                </div>
+            </div>
+
+            <div class="footer">
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    <div class="sig-name">SYSTEM ARCHITECT</div>
+                </div>
+
+                <div class="seal-box">
+                    <div class="seal">VERIFIED</div>
+                    <div class="seal-caption">{{tenantName}}</div>
+                </div>
+
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    <div class="sig-name">DIRECTOR OF SECURITY</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

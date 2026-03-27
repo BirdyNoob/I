@@ -138,11 +138,7 @@ public class CertificateService {
 
         return new CertificateDownloadResult(
                 buildCertificateFilename(data),
-                pdfService.generateCertificate(
-                        data.userEmail(),
-                        data.trackTitle(),
-                        data.issuedAt()
-                )
+                pdfService.generateCertificate(data)
         );
     }
 

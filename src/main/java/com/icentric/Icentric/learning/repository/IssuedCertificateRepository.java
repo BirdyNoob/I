@@ -20,6 +20,8 @@ public interface IssuedCertificateRepository
 
     @Query("""
 SELECT new com.icentric.Icentric.learning.dto.CertificateDownloadData(
+    ic.id,
+    ic.userId,
     u.email,
     t.title,
     ic.issuedAt
