@@ -2,12 +2,16 @@ package com.icentric.Icentric.learning.controller;
 
 
 import com.icentric.Icentric.learning.dto.CertificateResponse;
+import com.icentric.Icentric.learning.dto.CertificateDownloadResult;
 import com.icentric.Icentric.learning.dto.LearnerAssignmentResponse;
 import com.icentric.Icentric.learning.dto.LearnerDashboardResponse;
 import com.icentric.Icentric.learning.dto.NextLessonResponse;
 import com.icentric.Icentric.learning.service.CertificateService;
 import com.icentric.Icentric.learning.service.LearnerDashboardService;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -72,5 +76,26 @@ public class LearnerDashboardController {
         UUID userId = UUID.fromString(userIdRaw.toString());
 
         return service.getDashboard(userId);
+    }
+    @GetMapping("/certificates/{trackId}/download")
+    public ResponseEntity<byte[]> download(
+
+            @PathVariable UUID trackId,
+            Authentication auth
+
+    ) {
+        Object userIdRaw = auth != null ? auth.getDetails() : null;
+        if (userIdRaw == null) {
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
+        }
+        UUID userId = UUID.fromString(userIdRaw.toString());
+
+        CertificateDownloadResult certificate = certificateService.downloadCertificate(userId, trackId);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + certificate.filename() + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(certificate.pdf());
     }
 }

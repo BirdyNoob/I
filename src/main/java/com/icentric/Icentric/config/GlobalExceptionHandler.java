@@ -1,6 +1,7 @@
 package com.icentric.Icentric.config;
 
 import com.icentric.Icentric.identity.exception.UserNotFoundException;
+import com.icentric.Icentric.learning.exception.CertificateGenerationException;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -178,6 +179,16 @@ public class GlobalExceptionHandler {
         return buildProblem(
                 HttpStatus.PAYLOAD_TOO_LARGE,
                 "Payload too large",
+                ex.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(CertificateGenerationException.class)
+    ProblemDetail handleCertificateGeneration(CertificateGenerationException ex, HttpServletRequest request) {
+        return buildProblem(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Certificate generation failed",
                 ex.getMessage(),
                 request
         );

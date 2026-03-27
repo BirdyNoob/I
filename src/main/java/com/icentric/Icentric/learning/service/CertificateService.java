@@ -3,6 +3,8 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
+import com.icentric.Icentric.learning.dto.CertificateDownloadData;
+import com.icentric.Icentric.learning.dto.CertificateDownloadResult;
 import com.icentric.Icentric.learning.dto.CertificateResponse;
 import com.icentric.Icentric.learning.entity.IssuedCertificate;
 import com.icentric.Icentric.learning.repository.CertificateRepository;
@@ -10,10 +12,13 @@ import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @Service
@@ -26,6 +31,8 @@ public class CertificateService {
     private final UserAssignmentRepository assignmentRepository;
     private final TrackRepository trackRepository;
     private final AuditService auditService;
+    private final CertificatePdfService pdfService;
+    private final TenantSchemaService tenantSchemaService;
 
     public CertificateService(
             CertificateRepository certificateRepository,
@@ -34,7 +41,9 @@ public class CertificateService {
             LessonRepository lessonRepository,
             UserAssignmentRepository assignmentRepository,
             TrackRepository trackRepository,
-            AuditService auditService
+            AuditService auditService,
+            CertificatePdfService pdfService,
+            TenantSchemaService tenantSchemaService
     ) {
         this.certificateRepository = certificateRepository;
         this.issuedRepository = issuedRepository;
@@ -43,9 +52,13 @@ public class CertificateService {
         this.assignmentRepository = assignmentRepository;
         this.trackRepository = trackRepository;
         this.auditService = auditService;
+        this.pdfService = pdfService;
+        this.tenantSchemaService = tenantSchemaService;
     }
 
+    @Transactional
     public void checkAndIssue(UUID userId, UUID trackId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
 
         boolean alreadyIssued =
                 issuedRepository.existsByUserIdAndTrackId(userId, trackId);
@@ -92,7 +105,9 @@ public class CertificateService {
         }
 
     }
+    @Transactional(readOnly = true)
     public List<CertificateResponse> getCertificates(UUID userId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
 
         return issuedRepository.findByUserId(userId)
                 .stream()
@@ -100,7 +115,9 @@ public class CertificateService {
 
                     var cert = certificateRepository
                             .findById(ic.getCertificateId())
-                            .orElseThrow();
+                            .orElseThrow(() -> new NoSuchElementException(
+                                    "Certificate definition not found with id: " + ic.getCertificateId()
+                            ));
 
                     return new CertificateResponse(
                             cert.getTitle(),
@@ -109,5 +126,39 @@ public class CertificateService {
                     );
 
                 }).toList();
+    }
+    @Transactional(readOnly = true)
+    public CertificateDownloadResult downloadCertificate(UUID userId, UUID trackId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        CertificateDownloadData data = issuedRepository.findCertificateDownloadData(userId, trackId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Issued certificate not found for userId: " + userId + " and trackId: " + trackId
+                ));
+
+        return new CertificateDownloadResult(
+                buildCertificateFilename(data),
+                pdfService.generateCertificate(
+                        data.userEmail(),
+                        data.trackTitle(),
+                        data.issuedAt()
+                )
+        );
+    }
+
+    private String buildCertificateFilename(CertificateDownloadData data) {
+        return "certificate-" + sanitizeFilenamePart(data.userEmail()) + "-" + sanitizeFilenamePart(data.trackTitle()) + ".pdf";
+    }
+
+    private String sanitizeFilenamePart(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+
+        String sanitized = value.trim().toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+
+        return sanitized.isEmpty() ? "unknown" : sanitized;
     }
 }
