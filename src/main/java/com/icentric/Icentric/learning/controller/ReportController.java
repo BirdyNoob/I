@@ -2,6 +2,11 @@ package com.icentric.Icentric.learning.controller;
 
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.service.ReportService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +20,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/admin/reports")
+@Tag(name = "Reports (Admin)", description = "APIs for generating and downloading administrative reports (CSV)")
 public class ReportController {
 
     private final ReportService service;
@@ -23,13 +29,17 @@ public class ReportController {
         this.service = service;
     }
 
+    @Operation(summary = "Download Completion Report", description = "Generates and streams a CSV report showing track completion status for users. Can be filtered by department, status, and track.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully generated completion report CSV"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
     @GetMapping("/completion")
     public ResponseEntity<StreamingResponseBody> completionReport(
-
-            @RequestParam(required = false) String department,
-            @RequestParam(required = false) AssignmentStatus status,
-            @RequestParam(required = false) UUID trackId
-
+            @Parameter(description = "Filter by department") @RequestParam(required = false) String department,
+            @Parameter(description = "Filter by assignment status") @RequestParam(required = false) AssignmentStatus status,
+            @Parameter(description = "Filter by track ID") @RequestParam(required = false) UUID trackId
     ) {
 
         StreamingResponseBody stream =
@@ -42,12 +52,16 @@ public class ReportController {
                 .body(stream);
     }
 
+    @Operation(summary = "Download Risk Report", description = "Generates and streams a CSV report identifying users at risk (e.g. falling behind). Can be filtered by department and track.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully generated risk report CSV"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
     @GetMapping("/risk")
     public ResponseEntity<StreamingResponseBody> riskReport(
-
-            @RequestParam(required = false) String department,
-            @RequestParam(required = false) UUID trackId
-
+            @Parameter(description = "Filter by department") @RequestParam(required = false) String department,
+            @Parameter(description = "Filter by track ID") @RequestParam(required = false) UUID trackId
     ) {
 
         var stream = service.streamRiskReport(department, trackId);
