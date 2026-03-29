@@ -1,7 +1,14 @@
 package com.icentric.Icentric.learning.scheduler;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
+import com.icentric.Icentric.content.entity.Track;
+import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.identity.entity.User;
+import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
+import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.entity.UserAssignment;
@@ -33,6 +40,10 @@ public class AssignmentNotificationScheduler {
     private final TenantUserRepository tenantUserRepository;
     private final TenantRepository tenantRepository;
     private final TenantSchemaService tenantSchemaService;
+    private final AuditService auditService;
+    private final AuditMetadataService auditMetadataService;
+    private final UserRepository userRepository;
+    private final TrackRepository trackRepository;
 
     public AssignmentNotificationScheduler(
             UserAssignmentRepository assignmentRepository,
@@ -40,7 +51,11 @@ public class AssignmentNotificationScheduler {
             NotificationRepository notificationRepository,
             TenantUserRepository tenantUserRepository,
             TenantRepository tenantRepository,
-            TenantSchemaService tenantSchemaService
+            TenantSchemaService tenantSchemaService,
+            AuditService auditService,
+            AuditMetadataService auditMetadataService,
+            UserRepository userRepository,
+            TrackRepository trackRepository
     ) {
         this.assignmentRepository = assignmentRepository;
         this.notificationService = notificationService;
@@ -48,6 +63,10 @@ public class AssignmentNotificationScheduler {
         this.tenantUserRepository = tenantUserRepository;
         this.tenantRepository = tenantRepository;
         this.tenantSchemaService = tenantSchemaService;
+        this.auditService = auditService;
+        this.auditMetadataService = auditMetadataService;
+        this.userRepository = userRepository;
+        this.trackRepository = trackRepository;
     }
 
     @Scheduled(fixedRate = 60000) // every 1 min (for testing)
@@ -96,6 +115,17 @@ public class AssignmentNotificationScheduler {
                             NotificationType.REMINDER,
                             "Training is due soon"
                     );
+                    auditService.log(
+                            assignment.getUserId(),
+                            AuditAction.ASSIGNMENT_REMINDER_SENT,
+                            "ASSIGNMENT",
+                            assignment.getId().toString(),
+                            "Due-soon reminder sent to "
+                                    + auditMetadataService.describeUserInCurrentTenant(assignment.getUserId())
+                                    + " for "
+                                    + auditMetadataService.describeTrack(assignment.getTrackId())
+                                    + " with " + hoursLeft + " hours remaining"
+                    );
                 }
             }
         }
@@ -130,7 +160,7 @@ public class AssignmentNotificationScheduler {
         UUID adminUserId = admin.get().getUserId();
 
         UserAssignment firstOverdue = overdueAssignments.get(0);
-        String message = "User " + firstOverdue.getUserId() + " has overdue training";
+        String message = buildAdminEscalationMessage(firstOverdue);
         Instant cooldownStart = now.minus(ESCALATION_COOLDOWN);
 
         if (notificationRepository.existsByUserIdAndTypeAndMessageAndCreatedAtAfter(
@@ -146,6 +176,35 @@ public class AssignmentNotificationScheduler {
                 NotificationType.ESCALATION,
                 message
         );
+        auditService.log(
+                adminUserId,
+                AuditAction.ASSIGNMENT_ESCALATION_SENT,
+                "ASSIGNMENT",
+                firstOverdue.getId().toString(),
+                "Escalation sent to "
+                        + auditMetadataService.describeUserInCurrentTenant(adminUserId)
+                        + " about overdue learner "
+                        + auditMetadataService.describeUserInCurrentTenant(firstOverdue.getUserId())
+                        + " on " + auditMetadataService.describeTrack(firstOverdue.getTrackId())
+        );
+    }
+
+    private String buildAdminEscalationMessage(UserAssignment assignment) {
+        User learner = userRepository.findById(assignment.getUserId()).orElse(null);
+        Track track = trackRepository.findById(assignment.getTrackId()).orElse(null);
+
+        String learnerName = learner != null && learner.getName() != null && !learner.getName().isBlank()
+                ? learner.getName()
+                : "Unknown user";
+        String learnerEmail = learner != null && learner.getEmail() != null && !learner.getEmail().isBlank()
+                ? " (" + learner.getEmail() + ")"
+                : "";
+        String trackTitle = track != null && track.getTitle() != null && !track.getTitle().isBlank()
+                ? track.getTitle()
+                : assignment.getTrackId().toString();
+        String dueDate = assignment.getDueDate() != null ? assignment.getDueDate().toString() : "unknown due date";
+
+        return "Overdue training alert: " + learnerName + learnerEmail
+                + " has not completed '" + trackTitle + "' due on " + dueDate + ".";
     }
 }
-

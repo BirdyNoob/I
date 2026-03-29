@@ -1,11 +1,15 @@
 package com.icentric.Icentric.platform.tenant.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.platform.dto.TenantResponse;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class TenantService {
@@ -13,15 +17,18 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final TenantProvisioningService provisioningService;
     private final TenantUserBootstrapService bootstrapService;
+    private final AuditService auditService;
 
 
     public TenantService(
             TenantRepository tenantRepository,
             TenantProvisioningService provisioningService,
-            TenantUserBootstrapService bootstrapService) {
+            TenantUserBootstrapService bootstrapService,
+            AuditService auditService) {
         this.tenantRepository = tenantRepository;
         this.provisioningService = provisioningService;
         this.bootstrapService = bootstrapService;
+        this.auditService = auditService;
     }
 
     public Tenant createTenant(String slug, String companyName, String adminEmail, String adminPassword) {
@@ -38,6 +45,18 @@ public class TenantService {
 
         bootstrapService.createSuperAdmin(slug, adminEmail, adminPassword);
 
+        UUID actorId = currentActorUserId();
+        if (actorId != null) {
+            auditService.log(
+                    actorId,
+                    AuditAction.TENANT_CREATED,
+                    "TENANT",
+                    tenant.getId().toString(),
+                    "Platform admin " + actorId + " created tenant " + tenant.getCompanyName()
+                            + " [" + tenant.getSlug() + "] with bootstrap admin " + adminEmail
+            );
+        }
+
         return tenant;
     }
     public List<TenantResponse> getAllTenants() {
@@ -51,5 +70,11 @@ public class TenantService {
                         t.getCreatedAt()
                 ))
                 .toList();
+    }
+
+    private UUID currentActorUserId() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
+        return userIdRaw == null ? null : UUID.fromString(userIdRaw.toString());
     }
 }

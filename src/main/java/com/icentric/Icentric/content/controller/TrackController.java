@@ -1,7 +1,10 @@
 package com.icentric.Icentric.content.controller;
 
 import com.icentric.Icentric.content.dto.CreateTrackRequest;
+import com.icentric.Icentric.content.dto.CreateTrackVersionRequest;
+import com.icentric.Icentric.content.dto.RollbackTrackVersionRequest;
 import com.icentric.Icentric.content.dto.TrackDetailResponse;
+import com.icentric.Icentric.content.dto.TrackVersionResponse;
 import com.icentric.Icentric.content.dto.UpdateTrackRequest;
 import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.service.TrackService;
@@ -83,6 +86,15 @@ public class TrackController {
         return service.getTrack(trackId);
     }
 
+    @Operation(summary = "Get track version history", description = "Returns all versions of the selected track ordered from latest to oldest.")
+    @GetMapping("/{trackId}/versions")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public List<TrackVersionResponse> getTrackVersions(
+            @Parameter(description = "UUID of the track") @PathVariable UUID trackId
+    ) {
+        return service.getTrackVersions(trackId);
+    }
+
     // ── PUT /tracks/{trackId} ──────────────────────────────────────────────────
 
     @Operation(
@@ -103,6 +115,16 @@ public class TrackController {
             @Valid @RequestBody UpdateTrackRequest request
     ) {
         return service.updateTrack(trackId, request);
+    }
+
+    @Operation(summary = "Create a new draft version", description = "Clones an existing track version into a new DRAFT version with copied modules, lessons, questions, and answers.")
+    @PostMapping("/{trackId}/versions")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public Track createTrackVersion(
+            @Parameter(description = "UUID of the source track version") @PathVariable UUID trackId,
+            @RequestBody(required = false) CreateTrackVersionRequest request
+    ) {
+        return service.createTrackVersion(trackId, request == null ? new CreateTrackVersionRequest(null) : request);
     }
 
     // ── PATCH /tracks/{trackId}/publish ───────────────────────────────────────
@@ -143,5 +165,15 @@ public class TrackController {
             @Parameter(description = "UUID of the track") @PathVariable UUID trackId
     ) {
         return service.archiveTrack(trackId);
+    }
+
+    @Operation(summary = "Rollback to an older version", description = "Clones the selected historical version into a new latest version, publishes it, archives the previous published version, and retriggers retraining.")
+    @PostMapping("/{trackId}/rollback")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public Track rollbackTrack(
+            @Parameter(description = "UUID of the historical version to restore") @PathVariable UUID trackId,
+            @RequestBody(required = false) RollbackTrackVersionRequest request
+    ) {
+        return service.rollbackTrack(trackId, request == null ? new RollbackTrackVersionRequest(null) : request);
     }
 }

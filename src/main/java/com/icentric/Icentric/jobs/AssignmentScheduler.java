@@ -1,5 +1,8 @@
 package com.icentric.Icentric.jobs;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
+import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.entity.UserAssignment;
@@ -22,17 +25,23 @@ public class AssignmentScheduler {
     private final TenantRepository tenantRepository;
     private final EntityManager entityManager;
     private final NotificationService notificationService;
+    private final AuditService auditService;
+    private final AuditMetadataService auditMetadataService;
 
     public AssignmentScheduler(
             UserAssignmentRepository assignmentRepository,
             TenantRepository tenantRepository,
             EntityManager entityManager,
-            NotificationService notificationService
+            NotificationService notificationService,
+            AuditService auditService,
+            AuditMetadataService auditMetadataService
     ) {
         this.assignmentRepository = assignmentRepository;
         this.tenantRepository = tenantRepository;
         this.entityManager = entityManager;
         this.notificationService = notificationService;
+        this.auditService = auditService;
+        this.auditMetadataService = auditMetadataService;
     }
 
     @Scheduled(fixedRate = 3600000) // every hour
@@ -59,10 +68,21 @@ public class AssignmentScheduler {
 
                 if (a.getDueDate() != null &&
                         a.getDueDate().isBefore(Instant.now()) &&
-                        a.getStatus() != AssignmentStatus.COMPLETED) {
+                        a.getStatus() != AssignmentStatus.COMPLETED &&
+                        a.getStatus() != AssignmentStatus.OVERDUE) {
 
                     a.setStatus(AssignmentStatus.OVERDUE);
                     assignmentRepository.save(a);
+                    auditService.log(
+                            a.getUserId(),
+                            AuditAction.ASSIGNMENT_OVERDUE,
+                            "ASSIGNMENT",
+                            a.getId().toString(),
+                            auditMetadataService.describeUserInCurrentTenant(a.getUserId())
+                                    + " became overdue on "
+                                    + auditMetadataService.describeTrack(a.getTrackId())
+                                    + " with due date " + a.getDueDate()
+                    );
                     notificationService.createNotification(
                             a.getUserId(),
                             NotificationType.OVERDUE,

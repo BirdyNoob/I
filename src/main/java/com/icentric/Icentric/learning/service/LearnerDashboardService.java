@@ -6,6 +6,7 @@ import com.icentric.Icentric.content.entity.CourseModule;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.learning.dto.*;
 import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.repository.CertificateRepository;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
@@ -30,6 +31,7 @@ public class LearnerDashboardService {
     private final ModuleRepository moduleRepository;
     private final LessonRepository lessonRepository;
     private final IssuedCertificateRepository issuedCertificateRepository;
+    private final CertificateRepository certificateRepository;
     private final TenantSchemaService tenantSchemaService;
 
     public LearnerDashboardService(
@@ -39,6 +41,7 @@ public class LearnerDashboardService {
             ModuleRepository moduleRepository,
             LessonRepository lessonRepository,
             IssuedCertificateRepository issuedCertificateRepository,
+            CertificateRepository certificateRepository,
             TenantSchemaService tenantSchemaService
     ) {
         this.assignmentRepository = assignmentRepository;
@@ -47,6 +50,7 @@ public class LearnerDashboardService {
         this.moduleRepository = moduleRepository;
         this.lessonRepository = lessonRepository;
         this.issuedCertificateRepository = issuedCertificateRepository;
+        this.certificateRepository = certificateRepository;
         this.tenantSchemaService = tenantSchemaService;
 
     }
@@ -198,9 +202,14 @@ public class LearnerDashboardService {
                 issuedCertificateRepository.findByUserId(userId)
                         .stream()
                         .map(c -> new CertificateItem(
+                                c.getId(),
                                 c.getTrackId(),
-                                "Certificate", // improve later
-                                c.getIssuedAt()
+                                certificateRepository.findById(c.getCertificateId())
+                                        .map(cert -> cert.getTitle())
+                                        .orElse("Certificate"),
+                                c.getIssuedAt(),
+                                c.getStatus(),
+                                c.getDownloadUrl()
                         ))
                         .toList();
 

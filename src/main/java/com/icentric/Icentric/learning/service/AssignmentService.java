@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
@@ -17,6 +19,8 @@ import com.icentric.Icentric.tenant.TenantContext;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +37,7 @@ public class AssignmentService {
     private final TenantUserRepository tenantUserRepository;
     private final TenantRepository tenantRepository;
     private final TenantSchemaService tenantSchemaService;
+    private final AuditMetadataService auditMetadataService;
 
     public AssignmentService(
             UserAssignmentRepository repository,
@@ -41,7 +46,8 @@ public class AssignmentService {
             UserRepository userRepository,
             TenantUserRepository tenantUserRepository,
             TenantRepository tenantRepository,
-            TenantSchemaService tenantSchemaService
+            TenantSchemaService tenantSchemaService,
+            AuditMetadataService auditMetadataService
     ) {
         this.repository = repository;
         this.trackRepository = trackRepository;
@@ -50,9 +56,14 @@ public class AssignmentService {
         this.tenantUserRepository = tenantUserRepository;
         this.tenantRepository = tenantRepository;
         this.tenantSchemaService = tenantSchemaService;
+        this.auditMetadataService = auditMetadataService;
     }
 
+    @Transactional
     public UserAssignment assignTrack(CreateAssignmentRequest request) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        UUID adminUserId = currentActorUserId();
+
         var track = trackRepository.findById(request.trackId())
                 .orElseThrow();
         UserAssignment assignment = new UserAssignment();
@@ -67,16 +78,28 @@ public class AssignmentService {
 
         UserAssignment saved = repository.save(assignment);
 
-        Object userIdRaw = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication() != null ? org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getDetails() : null;
-        UUID adminUserId = userIdRaw != null ? (userIdRaw instanceof String ? UUID.fromString((String) userIdRaw) : UUID.fromString(userIdRaw.toString())) : null;
         if (adminUserId != null) {
-            auditService.log(adminUserId, "ASSIGN_TRACK", "ASSIGNMENT", saved.getId().toString(), "Track assigned to user " + request.userId());
+            auditService.log(
+                    adminUserId,
+                    AuditAction.ASSIGN_TRACK,
+                    "ASSIGNMENT",
+                    saved.getId().toString(),
+                    auditMetadataService.describeUser(adminUserId)
+                            + " assigned "
+                            + auditMetadataService.describeTrack(request.trackId())
+                            + " to "
+                            + auditMetadataService.describeUserInCurrentTenant(request.userId())
+                            + (request.dueDate() != null ? " with due date " + request.dueDate() : "")
+            );
         }
 
         return saved;
     }
 
+    @Transactional
     public Map<String, Object> bulkAssign(BulkAssignmentRequest request) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        UUID adminUserId = currentActorUserId();
 
         List<User> users;
 
@@ -115,6 +138,20 @@ public class AssignmentService {
                     .isPresent();
 
                 if (exists) {
+                    if (adminUserId != null) {
+                        auditService.log(
+                                adminUserId,
+                                AuditAction.ASSIGN_TRACK_SKIPPED,
+                                "ASSIGNMENT",
+                                request.trackId().toString(),
+                                auditMetadataService.describeUser(adminUserId)
+                                        + " bulk assignment skipped for "
+                                        + auditMetadataService.describeUserInCurrentTenant(user.getId())
+                                        + " because "
+                                        + auditMetadataService.describeTrack(request.trackId())
+                                        + " is already assigned"
+                        );
+                    }
                     skipped++;
                     continue;
                 }
@@ -129,9 +166,37 @@ public class AssignmentService {
                 assignment.setContentVersionAtAssignment(track.getVersion());
                 assignment.setRequiresRetraining(false);
 
-                repository.save(assignment);
+                UserAssignment saved = repository.save(assignment);
+                if (adminUserId != null) {
+                    auditService.log(
+                            adminUserId,
+                            AuditAction.ASSIGN_TRACK,
+                            "ASSIGNMENT",
+                            saved.getId().toString(),
+                            auditMetadataService.describeUser(adminUserId)
+                                    + " bulk assigned "
+                                    + auditMetadataService.describeTrack(request.trackId())
+                                    + " to "
+                                    + auditMetadataService.describeUserInCurrentTenant(user.getId())
+                                    + (request.dueDate() != null ? " with due date " + request.dueDate() : "")
+                    );
+                }
                 success++;
             } catch (Exception e) {
+                if (adminUserId != null) {
+                    auditService.log(
+                            adminUserId,
+                            AuditAction.ASSIGN_TRACK_FAILED,
+                            "ASSIGNMENT",
+                            request.trackId().toString(),
+                            auditMetadataService.describeUser(adminUserId)
+                                    + " bulk assignment failed for "
+                                    + auditMetadataService.describeUserInCurrentTenant(user.getId())
+                                    + " on "
+                                    + auditMetadataService.describeTrack(request.trackId())
+                                    + ": " + e.getMessage()
+                    );
+                }
                 errors.add("User " + user.getId() + ": " + e.getMessage());
             }
         }
@@ -160,5 +225,15 @@ public class AssignmentService {
                 pageable
         );
     }
-}
 
+    private UUID currentActorUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
+        if (userIdRaw == null) {
+            return null;
+        }
+        return userIdRaw instanceof String
+                ? UUID.fromString((String) userIdRaw)
+                : UUID.fromString(userIdRaw.toString());
+    }
+}

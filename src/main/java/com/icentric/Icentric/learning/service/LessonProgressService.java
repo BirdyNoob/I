@@ -1,5 +1,8 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
+import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
@@ -29,6 +32,8 @@ public class LessonProgressService {
     private final UserAssignmentRepository assignmentRepository;
     private final LessonRepository lessonRepository;
     private final ModuleRepository moduleRepository;
+    private final AuditService auditService;
+    private final AuditMetadataService auditMetadataService;
 
     public LessonProgressService(
             LessonProgressRepository repository,
@@ -36,7 +41,9 @@ public class LessonProgressService {
             TenantProvisioningService tenantProvisioningService,
             UserAssignmentRepository assignmentRepository,
             LessonRepository lessonRepository,
-            ModuleRepository moduleRepository
+            ModuleRepository moduleRepository,
+            AuditService auditService,
+            AuditMetadataService auditMetadataService
     ) {
         this.repository = repository;
         this.entityManager = entityManager;
@@ -44,6 +51,8 @@ public class LessonProgressService {
         this.assignmentRepository = assignmentRepository;
         this.lessonRepository = lessonRepository;
         this.moduleRepository = moduleRepository;
+        this.auditService = auditService;
+        this.auditMetadataService = auditMetadataService;
     }
 
     @Transactional
@@ -80,14 +89,27 @@ public class LessonProgressService {
             boolean siblingCompleted = repository.existsByUserIdAndLessonIdAndStatus(
                     userId, sibling.getId(), "COMPLETED");
             if (!siblingCompleted) {
+                auditService.log(
+                        userId,
+                        AuditAction.LESSON_ACCESS_BLOCKED,
+                        "LESSON",
+                        request.lessonId().toString(),
+                        auditMetadataService.describeUserInCurrentTenant(userId)
+                                + " attempted to access lesson " + request.lessonId()
+                                + " in " + auditMetadataService.currentTenantLabel()
+                                + " before completing prerequisite lesson " + sibling.getId()
+                                + " (" + sibling.getTitle() + ")"
+                );
                 throw new SequentialLockException(sibling.getTitle());
             }
         }
 
         // ── 3. Upsert lesson progress ─────────────────────────────────────────
+        final boolean[] created = {false};
         LessonProgress progress = repository
                 .findByUserIdAndLessonId(userId, request.lessonId())
                 .orElseGet(() -> {
+                    created[0] = true;
                     LessonProgress p = new LessonProgress();
                     p.setId(UUID.randomUUID());
                     p.setUserId(userId);
@@ -107,7 +129,41 @@ public class LessonProgressService {
         // ── 4. Mark assignment IN_PROGRESS on first lesson touch ──────────────
         UUID trackId = moduleRepository.findById(targetLesson.getModuleId())
                 .orElseThrow().getTrackId();
-        markInProgress(userId, trackId);
+        markInProgress(userId, trackId, request.lessonId());
+
+        if (created[0]) {
+            auditService.log(
+                    userId,
+                    AuditAction.LESSON_STARTED,
+                    "LESSON",
+                    request.lessonId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " started lesson " + request.lessonId()
+                            + " in " + auditMetadataService.describeTrack(trackId)
+            );
+        }
+
+        if ("COMPLETED".equals(request.status())) {
+            auditService.log(
+                    userId,
+                    AuditAction.LESSON_COMPLETED,
+                    "LESSON",
+                    request.lessonId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " completed lesson " + request.lessonId()
+                            + " in " + auditMetadataService.describeTrack(trackId)
+            );
+        } else {
+            auditService.log(
+                    userId,
+                    AuditAction.LESSON_PROGRESS_UPDATED,
+                    "LESSON",
+                    request.lessonId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " updated lesson " + request.lessonId()
+                            + " status to " + request.status()
+            );
+        }
 
         // ── 5. Auto-complete track assignment when every lesson is finished ────
         if ("COMPLETED".equals(request.status())) {
@@ -119,13 +175,22 @@ public class LessonProgressService {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    public void markInProgress(UUID userId, UUID trackId) {
+    public void markInProgress(UUID userId, UUID trackId, UUID lessonId) {
         var assignment = assignmentRepository
                 .findByUserIdAndTrackId(userId, trackId)
                 .orElseThrow();
         if (AssignmentStatus.ASSIGNED.equals(assignment.getStatus())) {
             assignment.setStatus(AssignmentStatus.IN_PROGRESS);
             assignmentRepository.save(assignment);
+            auditService.log(
+                    userId,
+                    AuditAction.COURSE_STARTED,
+                    "ASSIGNMENT",
+                    assignment.getId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " started " + auditMetadataService.describeTrack(trackId)
+                            + " by opening lesson " + lessonId
+            );
         }
     }
 
@@ -138,6 +203,15 @@ public class LessonProgressService {
                     .orElseThrow();
             assignment.setStatus(AssignmentStatus.COMPLETED);
             assignmentRepository.save(assignment);
+            auditService.log(
+                    userId,
+                    AuditAction.COURSE_COMPLETED,
+                    "ASSIGNMENT",
+                    assignment.getId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " completed " + auditMetadataService.describeTrack(trackId)
+                            + " after finishing " + completedLessons + " lessons"
+            );
         }
     }
 }

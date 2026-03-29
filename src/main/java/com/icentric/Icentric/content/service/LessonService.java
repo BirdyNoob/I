@@ -1,9 +1,16 @@
 package com.icentric.Icentric.content.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
+import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.content.entity.CourseModule;
+import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.dto.CreateLessonRequest;
 import com.icentric.Icentric.content.dto.LessonDetailResponse;
 import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.content.repository.LessonRepository;
+import com.icentric.Icentric.content.repository.ModuleRepository;
+import com.icentric.Icentric.content.repository.TrackRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,9 +22,23 @@ import java.util.UUID;
 public class LessonService {
 
     private final LessonRepository repository;
+    private final ModuleRepository moduleRepository;
+    private final TrackRepository trackRepository;
+    private final AuditService auditService;
+    private final AuditMetadataService auditMetadataService;
 
-    public LessonService(LessonRepository repository) {
+    public LessonService(
+            LessonRepository repository,
+            ModuleRepository moduleRepository,
+            TrackRepository trackRepository,
+            AuditService auditService,
+            AuditMetadataService auditMetadataService
+    ) {
         this.repository = repository;
+        this.moduleRepository = moduleRepository;
+        this.trackRepository = trackRepository;
+        this.auditService = auditService;
+        this.auditMetadataService = auditMetadataService;
     }
 
     /**
@@ -28,6 +49,7 @@ public class LessonService {
      */
     @Transactional
     public LessonDetailResponse createLesson(UUID moduleId, CreateLessonRequest request) {
+        assertTrackEditableByModule(moduleId);
         Lesson lesson = new Lesson();
         lesson.setId(UUID.randomUUID());
         lesson.setModuleId(moduleId);
@@ -41,6 +63,7 @@ public class LessonService {
         lesson.setCreatedAt(Instant.now());
 
         Lesson saved = repository.save(lesson);
+        logLessonAction(AuditAction.CREATE_LESSON, saved, "created lesson");
         return toDetailResponse(saved);
     }
 
@@ -62,13 +85,16 @@ public class LessonService {
     public LessonDetailResponse updateLesson(UUID lessonId, CreateLessonRequest request) {
         Lesson lesson = repository.findById(lessonId)
                 .orElseThrow(() -> new NoSuchElementException("Lesson not found: " + lessonId));
+        assertTrackEditableByLesson(lesson);
 
         if (request.title() != null)       lesson.setTitle(request.title());
         if (request.contentJson() != null) lesson.setContentJson(request.contentJson());
         if (request.videoUrl() != null)    lesson.setVideoUrl(request.videoUrl());
         if (request.resourceUrl() != null) lesson.setResourceUrl(request.resourceUrl());
 
-        return toDetailResponse(repository.save(lesson));
+        Lesson saved = repository.save(lesson);
+        logLessonAction(AuditAction.UPDATE_LESSON, saved, "updated lesson");
+        return toDetailResponse(saved);
     }
 
     /**
@@ -78,8 +104,11 @@ public class LessonService {
     public LessonDetailResponse publishLesson(UUID lessonId) {
         Lesson lesson = repository.findById(lessonId)
                 .orElseThrow(() -> new NoSuchElementException("Lesson not found: " + lessonId));
+        assertTrackEditableByLesson(lesson);
         lesson.setIsPublished(true);
-        return toDetailResponse(repository.save(lesson));
+        Lesson saved = repository.save(lesson);
+        logLessonAction(AuditAction.PUBLISH_LESSON, saved, "published lesson");
+        return toDetailResponse(saved);
     }
 
     // ── Mapper ─────────────────────────────────────────────────────────────────
@@ -93,5 +122,50 @@ public class LessonService {
                 lesson.getVideoUrl(),
                 lesson.getResourceUrl()
         );
+    }
+
+    private void logLessonAction(AuditAction action, Lesson lesson, String verb) {
+        UUID actorId = currentActorUserId();
+        if (actorId == null) {
+            return;
+        }
+        CourseModule module = moduleRepository.findById(lesson.getModuleId()).orElse(null);
+        String moduleLabel = module != null
+                ? "'" + module.getTitle() + "' [" + module.getId() + "]"
+                : "module " + lesson.getModuleId();
+        String trackLabel = module != null
+                ? auditMetadataService.describeTrack(module.getTrackId())
+                : "unknown track";
+
+        auditService.log(
+                actorId,
+                action,
+                "LESSON",
+                lesson.getId().toString(),
+                auditMetadataService.describeUser(actorId)
+                        + " " + verb + " '" + lesson.getTitle() + "' [" + lesson.getId() + "]"
+                        + " in " + moduleLabel
+                        + " for " + trackLabel
+        );
+    }
+
+    private UUID currentActorUserId() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
+        return userIdRaw == null ? null : UUID.fromString(userIdRaw.toString());
+    }
+
+    private void assertTrackEditableByLesson(Lesson lesson) {
+        assertTrackEditableByModule(lesson.getModuleId());
+    }
+
+    private void assertTrackEditableByModule(UUID moduleId) {
+        CourseModule module = moduleRepository.findById(moduleId)
+                .orElseThrow(() -> new NoSuchElementException("Module not found: " + moduleId));
+        Track track = trackRepository.findById(module.getTrackId())
+                .orElseThrow(() -> new NoSuchElementException("Track not found: " + module.getTrackId()));
+        if ("PUBLISHED".equals(track.getStatus())) {
+            throw new IllegalStateException("Cannot modify a published track version. Create a new version instead.");
+        }
     }
 }

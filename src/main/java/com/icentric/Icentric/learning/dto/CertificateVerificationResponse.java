@@ -5,13 +5,15 @@ import com.icentric.Icentric.learning.constants.CertificateStatus;
 import java.time.Instant;
 import java.util.UUID;
 
-public record CertificateItem(
-
+public record CertificateVerificationResponse(
         UUID certificateId,
-        UUID trackId,
-        String title,
+        UUID verificationToken,
+        String learnerName,
+        String learnerEmail,
+        String trackTitle,
         Instant issuedAt,
+        Instant generatedAt,
         CertificateStatus status,
+        boolean valid,
         String downloadUrl
-
 ) {}

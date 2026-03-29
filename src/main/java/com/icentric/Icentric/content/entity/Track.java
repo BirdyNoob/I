@@ -30,9 +30,13 @@ public class Track {
 
     private Integer version;
 
+    private UUID previousVersionId;
+
     private Boolean isPublished;
 
     private Instant createdAt;
+    private Instant publishedAt;
     private String status;
+    private String changeSummary;
 
 }

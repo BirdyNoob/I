@@ -1,5 +1,7 @@
 package com.icentric.Icentric.platform.impersonation.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository;
 import com.icentric.Icentric.platform.impersonation.entity.ImpersonationSession;
 import com.icentric.Icentric.platform.impersonation.repository.ImpersonationSessionRepository;
@@ -14,15 +16,18 @@ public class ImpersonationService {
     private final ImpersonationSessionRepository repository;
     private final JwtService jwtService;
     private final PlatformAdminRepository adminRepository;
+    private final AuditService auditService;
 
     public ImpersonationService(
             ImpersonationSessionRepository repository,
             JwtService jwtService,
-            PlatformAdminRepository adminRepository // Fix #6: resolve admin UUID from email
+            PlatformAdminRepository adminRepository,
+            AuditService auditService
     ) {
         this.repository = repository;
         this.jwtService = jwtService;
         this.adminRepository = adminRepository;
+        this.auditService = auditService;
     }
 
     /**
@@ -54,6 +59,21 @@ public class ImpersonationService {
         session.setReason(reason);
 
         repository.save(session);
+
+        String adminLabel = adminRepository.findById(platformAdminId)
+                .map(admin -> (admin.getFullName() != null && !admin.getFullName().isBlank() ? admin.getFullName() : admin.getEmail())
+                        + " <" + admin.getEmail() + ">")
+                .orElse(adminEmail);
+        auditService.log(
+                platformAdminId,
+                AuditAction.IMPERSONATION_STARTED,
+                "IMPERSONATION_SESSION",
+                session.getId().toString(),
+                adminLabel + " started impersonation for user " + targetUserId
+                        + " in tenant " + tenantSlug
+                        + " with role " + role
+                        + ". Reason: " + reason
+        );
 
         return jwtService.generateImpersonationToken(
                 adminEmail,

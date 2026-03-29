@@ -1,5 +1,8 @@
 package com.icentric.Icentric.identity.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
+import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.identity.dto.BulkUploadResponse;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
@@ -18,6 +21,7 @@ import org.apache.commons.csv.CSVRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,19 +59,25 @@ public class UserService {
     private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
     private final String bulkUploadDefaultPassword;
+    private final AuditService auditService;
+    private final AuditMetadataService auditMetadataService;
 
     public UserService(
             UserRepository userRepository,
             TenantUserRepository tenantUserRepository,
             TenantRepository tenantRepository,
             PasswordEncoder passwordEncoder,
-            @Value("${app.bulk-upload.default-password:ChangeMe@123}") String bulkUploadDefaultPassword
+            @Value("${app.bulk-upload.default-password:ChangeMe@123}") String bulkUploadDefaultPassword,
+            AuditService auditService,
+            AuditMetadataService auditMetadataService
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
         this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
         this.bulkUploadDefaultPassword = bulkUploadDefaultPassword;
+        this.auditService = auditService;
+        this.auditMetadataService = auditMetadataService;
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -108,6 +118,14 @@ public class UserService {
         TenantUser mapping = new TenantUser(user.getId(), tenant.getId(), request.role());
         mapping.setDepartment(request.department());
         tenantUserRepository.save(mapping);
+
+        logAdminAction(
+                AuditAction.CREATE_USER,
+                "USER",
+                user.getId().toString(),
+                actor -> actor + " created " + auditMetadataService.describeUserInCurrentTenant(user.getId())
+                        + " in " + auditMetadataService.currentTenantLabel()
+        );
 
         return toResponse(user, mapping);
     }
@@ -164,6 +182,13 @@ public class UserService {
         userRepository.save(user);
         tenantUserRepository.save(mapping);
 
+        logAdminAction(
+                AuditAction.UPDATE_USER,
+                "USER",
+                user.getId().toString(),
+                actor -> actor + " updated " + auditMetadataService.describeUserInCurrentTenant(user.getId())
+        );
+
         return toResponse(user, mapping);
     }
 
@@ -176,6 +201,13 @@ public class UserService {
 
         user.setIsActive(false);
         userRepository.save(user);
+
+        logAdminAction(
+                AuditAction.DEACTIVATE_USER,
+                "USER",
+                user.getId().toString(),
+                actor -> actor + " deactivated " + auditMetadataService.describeUserInCurrentTenant(user.getId())
+        );
     }
 
     // ── SEARCH ───────────────────────────────────────────────────────────────
@@ -324,6 +356,17 @@ public class UserService {
             success++;
         }
 
+        int totalRows = total;
+        int successRows = success;
+        int failedRows = failed;
+        logAdminAction(
+                AuditAction.BULK_UPLOAD_USERS,
+                "USER",
+                tenant.getId().toString(),
+                actor -> actor + " processed bulk user upload in " + auditMetadataService.currentTenantLabel()
+                        + ": total=" + totalRows + ", success=" + successRows + ", failed=" + failedRows
+        );
+
         return new BulkUploadResponse(total, success, failed, errors);
     }
 
@@ -339,6 +382,29 @@ public class UserService {
                 u.getIsActive(),
                 u.getCreatedAt()
         );
+    }
+
+    private void logAdminAction(
+            AuditAction action,
+            String entityType,
+            String entityId,
+            java.util.function.Function<String, String> detailsBuilder
+    ) {
+        UUID actorId = currentActorUserId();
+        if (actorId == null) {
+            return;
+        }
+        String actor = auditMetadataService.describeUserInCurrentTenant(actorId);
+        auditService.log(actorId, action, entityType, entityId, detailsBuilder.apply(actor));
+    }
+
+    private UUID currentActorUserId() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
+        if (userIdRaw == null) {
+            return null;
+        }
+        return UUID.fromString(userIdRaw.toString());
     }
 
     private void validateBulkUploadFile(MultipartFile file) {

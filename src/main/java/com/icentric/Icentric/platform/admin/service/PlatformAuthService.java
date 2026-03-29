@@ -1,5 +1,7 @@
 package com.icentric.Icentric.platform.admin.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.platform.admin.dto.PlatformLoginRequest;
 import com.icentric.Icentric.platform.admin.dto.PlatformLoginResponse;
 import com.icentric.Icentric.platform.admin.entity.PlatformAdmin;
@@ -17,16 +19,19 @@ public class PlatformAuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final MfaService mfaService;
+    private final AuditService auditService;
 
     public PlatformAuthService(
             PlatformAdminRepository repository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            MfaService mfaService) {
+            MfaService mfaService,
+            AuditService auditService) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.mfaService = mfaService;
+        this.auditService = auditService;
     }
 
     public PlatformLoginResponse login(PlatformLoginRequest request) {
@@ -54,6 +59,15 @@ public class PlatformAuthService {
                 admin.getId(),
                 "ROLE_PLATFORM_ADMIN",
                 "system");
+
+        auditService.log(
+                admin.getId(),
+                AuditAction.PLATFORM_ADMIN_LOGIN,
+                "PLATFORM_ADMIN",
+                admin.getId().toString(),
+                (admin.getFullName() != null && !admin.getFullName().isBlank() ? admin.getFullName() : admin.getEmail())
+                        + " <" + admin.getEmail() + "> logged into the platform admin console"
+        );
 
         return new PlatformLoginResponse(token);
     }

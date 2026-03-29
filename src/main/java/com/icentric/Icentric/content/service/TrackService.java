@@ -1,20 +1,31 @@
 package com.icentric.Icentric.content.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.content.dto.*;
+import com.icentric.Icentric.content.entity.Answer;
 import com.icentric.Icentric.content.entity.CourseModule;
 import com.icentric.Icentric.content.entity.Lesson;
+import com.icentric.Icentric.content.entity.Question;
 import com.icentric.Icentric.content.entity.Track;
+import com.icentric.Icentric.content.repository.AnswerRepository;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
+import com.icentric.Icentric.content.repository.QuestionRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
-import com.icentric.Icentric.learning.service.RetrainingService;
 import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.platform.tenant.entity.Tenant;
+import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
+import com.icentric.Icentric.tenant.TenantContext;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -25,30 +36,49 @@ public class TrackService {
     private final TrackRepository repository;
     private final ModuleRepository moduleRepository;
     private final LessonRepository lessonRepository;
+    private final QuestionRepository questionRepository;
+    private final AnswerRepository answerRepository;
     private final UserAssignmentRepository assignmentRepository;
-    private final RetrainingService retrainingService;
+    private final LessonProgressRepository lessonProgressRepository;
     private final AuditService auditService;
+    private final AuditMetadataService auditMetadataService;
+    private final TenantRepository tenantRepository;
+    private final EntityManager entityManager;
 
     public TrackService(
             TrackRepository repository,
             ModuleRepository moduleRepository,
             LessonRepository lessonRepository,
+            QuestionRepository questionRepository,
+            AnswerRepository answerRepository,
             UserAssignmentRepository assignmentRepository,
-            RetrainingService retrainingService,
-            AuditService auditService
+            LessonProgressRepository lessonProgressRepository,
+            AuditService auditService,
+            AuditMetadataService auditMetadataService,
+            TenantRepository tenantRepository,
+            EntityManager entityManager
     ) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
         this.lessonRepository = lessonRepository;
+        this.questionRepository = questionRepository;
+        this.answerRepository = answerRepository;
         this.assignmentRepository = assignmentRepository;
-        this.retrainingService = retrainingService;
+        this.lessonProgressRepository = lessonProgressRepository;
         this.auditService = auditService;
+        this.auditMetadataService = auditMetadataService;
+        this.tenantRepository = tenantRepository;
+        this.entityManager = entityManager;
     }
 
     // ── Admin: create track ────────────────────────────────────────────────────
 
     @Transactional
     public Track createTrack(CreateTrackRequest request) {
+        if (!repository.findBySlugOrderByVersionDesc(request.slug()).isEmpty()) {
+            throw new IllegalStateException("Track slug already exists: " + request.slug());
+        }
+
         Track track = new Track();
         track.setId(UUID.randomUUID());
         track.setSlug(request.slug());
@@ -58,16 +88,36 @@ public class TrackService {
         track.setTrackType(request.trackType());
         track.setEstimatedMins(request.estimatedMins());
         track.setVersion(1);
+        track.setPreviousVersionId(null);
         track.setIsPublished(false);
         track.setStatus("DRAFT");
         track.setCreatedAt(Instant.now());
-        return repository.save(track);
+        track.setPublishedAt(null);
+        track.setChangeSummary("Initial draft");
+        Track saved = repository.save(track);
+        logAdminTrackAction(AuditAction.CREATE_TRACK, saved.getId(), "created");
+        return saved;
     }
 
     // ── Admin: list all tracks ─────────────────────────────────────────────────
 
     public List<Track> getAllTracks() {
         return repository.findAll();
+    }
+
+    public List<Track> getPublishedTracks() {
+        return repository.findLatestPublishedTracks();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TrackVersionResponse> getTrackVersions(UUID trackId) {
+        Track track = repository.findById(trackId)
+                .orElseThrow(() -> new NoSuchElementException("Track not found: " + trackId));
+
+        return repository.findBySlugOrderByVersionDesc(track.getSlug())
+                .stream()
+                .map(this::toVersionResponse)
+                .toList();
     }
 
     // ── Admin / Learner: full track detail with ordered modules + lessons ──────
@@ -131,17 +181,28 @@ public class TrackService {
                 : null;
         if (userIdRaw != null) {
             UUID adminId = UUID.fromString(userIdRaw.toString());
-            auditService.log(adminId, "UPDATE_TRACK", "TRACK", trackId.toString(),
-                    "Track fields updated");
+            auditService.log(adminId, AuditAction.UPDATE_TRACK, "TRACK", trackId.toString(),
+                    auditMetadataService.describeUser(adminId)
+                            + " updated " + auditMetadataService.describeTrack(trackId));
         }
-
-        // Trigger retraining for all existing assignees
-        triggerRetrainingForTrack(trackId);
 
         return saved;
     }
 
-    // ── Admin: publish track ───────────────────────────────────────────────────
+    @Transactional
+    public Track createTrackVersion(UUID trackId, CreateTrackVersionRequest request) {
+        Track source = repository.findById(trackId)
+                .orElseThrow(() -> new NoSuchElementException("Track not found: " + trackId));
+
+        Track newVersion = cloneTrackVersion(
+                source,
+                nextVersionNumber(source.getSlug()),
+                request != null ? request.changeSummary() : null
+        );
+
+        logAdminTrackAction(AuditAction.CREATE_TRACK_VERSION, newVersion.getId(), "created version");
+        return newVersion;
+    }
 
     @Transactional
     public Track publishTrack(UUID trackId) {
@@ -155,16 +216,32 @@ public class TrackService {
         // Validate: must have at least one module with the full 4-lesson sequence
         validateTrackStructure(trackId);
 
+        archivePublishedVersions(track);
         track.setStatus("PUBLISHED");
         track.setIsPublished(true);
-        track.setVersion(track.getVersion() + 1);
+        track.setPublishedAt(Instant.now());
 
         Track saved = repository.save(track);
+        logAdminTrackAction(AuditAction.PUBLISH_TRACK, saved.getId(), "published");
 
-        // Trigger retraining
-        triggerRetrainingForTrack(trackId);
+        migrateAssignmentsToPublishedVersion(saved);
 
         return saved;
+    }
+
+    @Transactional
+    public Track rollbackTrack(UUID trackId, RollbackTrackVersionRequest request) {
+        Track source = repository.findById(trackId)
+                .orElseThrow(() -> new NoSuchElementException("Track not found: " + trackId));
+
+        String summary = request != null && request.changeSummary() != null && !request.changeSummary().isBlank()
+                ? request.changeSummary()
+                : "Rollback to version " + source.getVersion();
+
+        Track rollbackVersion = cloneTrackVersion(source, nextVersionNumber(source.getSlug()), summary);
+        Track published = publishTrack(rollbackVersion.getId());
+        logAdminTrackAction(AuditAction.ROLLBACK_TRACK_VERSION, published.getId(), "rolled back to");
+        return published;
     }
 
     // ── Admin: unpublish / archive track ──────────────────────────────────────
@@ -175,7 +252,9 @@ public class TrackService {
                 .orElseThrow(() -> new NoSuchElementException("Track not found: " + trackId));
         track.setStatus("ARCHIVED");
         track.setIsPublished(false);
-        return repository.save(track);
+        Track saved = repository.save(track);
+        logAdminTrackAction(AuditAction.ARCHIVE_TRACK, saved.getId(), "archived");
+        return saved;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -201,10 +280,162 @@ public class TrackService {
         }
     }
 
-    private void triggerRetrainingForTrack(UUID trackId) {
-        List<UserAssignment> assignments = assignmentRepository.findByTrackId(trackId);
-        for (UserAssignment assignment : assignments) {
-            retrainingService.checkRetraining(assignment.getUserId(), trackId);
+    private Track cloneTrackVersion(Track source, int version, String changeSummary) {
+        Track cloned = new Track();
+        cloned.setId(UUID.randomUUID());
+        cloned.setSlug(source.getSlug());
+        cloned.setTitle(source.getTitle());
+        cloned.setDescription(source.getDescription());
+        cloned.setDepartment(source.getDepartment());
+        cloned.setTrackType(source.getTrackType());
+        cloned.setEstimatedMins(source.getEstimatedMins());
+        cloned.setVersion(version);
+        cloned.setPreviousVersionId(source.getId());
+        cloned.setIsPublished(false);
+        cloned.setStatus("DRAFT");
+        cloned.setCreatedAt(Instant.now());
+        cloned.setPublishedAt(null);
+        cloned.setChangeSummary(
+                changeSummary != null && !changeSummary.isBlank()
+                        ? changeSummary
+                        : "Draft copied from version " + source.getVersion()
+        );
+        Track savedTrack = repository.save(cloned);
+
+        for (CourseModule module : moduleRepository.findByTrackIdOrderBySortOrder(source.getId())) {
+            CourseModule clonedModule = new CourseModule();
+            clonedModule.setId(UUID.randomUUID());
+            clonedModule.setTrackId(savedTrack.getId());
+            clonedModule.setTitle(module.getTitle());
+            clonedModule.setSortOrder(module.getSortOrder());
+            clonedModule.setIsPublished(module.getIsPublished());
+            clonedModule.setCreatedAt(Instant.now());
+            CourseModule savedModule = moduleRepository.save(clonedModule);
+
+            for (Lesson lesson : lessonRepository.findByModuleIdOrderBySortOrder(module.getId())) {
+                Lesson clonedLesson = new Lesson();
+                clonedLesson.setId(UUID.randomUUID());
+                clonedLesson.setModuleId(savedModule.getId());
+                clonedLesson.setTitle(lesson.getTitle());
+                clonedLesson.setLessonType(lesson.getLessonType());
+                clonedLesson.setContentJson(lesson.getContentJson());
+                clonedLesson.setVideoUrl(lesson.getVideoUrl());
+                clonedLesson.setResourceUrl(lesson.getResourceUrl());
+                clonedLesson.setSortOrder(lesson.getSortOrder());
+                clonedLesson.setIsPublished(lesson.getIsPublished());
+                clonedLesson.setCreatedAt(Instant.now());
+                Lesson savedLesson = lessonRepository.save(clonedLesson);
+
+                for (Question question : questionRepository.findByLessonId(lesson.getId())) {
+                    Question clonedQuestion = new Question();
+                    clonedQuestion.setId(UUID.randomUUID());
+                    clonedQuestion.setLessonId(savedLesson.getId());
+                    clonedQuestion.setQuestionText(question.getQuestionText());
+                    clonedQuestion.setQuestionType(question.getQuestionType());
+                    clonedQuestion.setCreatedAt(Instant.now());
+                    Question savedQuestion = questionRepository.save(clonedQuestion);
+
+                    for (Answer answer : answerRepository.findByQuestionId(question.getId())) {
+                        Answer clonedAnswer = new Answer();
+                        clonedAnswer.setId(UUID.randomUUID());
+                        clonedAnswer.setQuestionId(savedQuestion.getId());
+                        clonedAnswer.setAnswerText(answer.getAnswerText());
+                        clonedAnswer.setIsCorrect(answer.getIsCorrect());
+                        answerRepository.save(clonedAnswer);
+                    }
+                }
+            }
         }
+
+        return savedTrack;
+    }
+
+    private int nextVersionNumber(String slug) {
+        return repository.findTopBySlugOrderByVersionDesc(slug)
+                .map(track -> track.getVersion() + 1)
+                .orElse(1);
+    }
+
+    private void archivePublishedVersions(Track track) {
+        for (Track version : repository.findBySlugOrderByVersionDesc(track.getSlug())) {
+            if (!version.getId().equals(track.getId()) && Boolean.TRUE.equals(version.getIsPublished())) {
+                version.setIsPublished(false);
+                version.setStatus("ARCHIVED");
+                repository.save(version);
+            }
+        }
+    }
+
+    private void migrateAssignmentsToPublishedVersion(Track publishedTrack) {
+        List<UUID> priorTrackIds = repository.findBySlugOrderByVersionDesc(publishedTrack.getSlug())
+                .stream()
+                .filter(track -> !track.getId().equals(publishedTrack.getId()))
+                .map(Track::getId)
+                .toList();
+
+        if (priorTrackIds.isEmpty()) {
+            return;
+        }
+
+        String originalTenant = TenantContext.getTenant();
+        try {
+            List<Tenant> tenants = tenantRepository.findAll();
+            for (Tenant tenant : tenants) {
+                TenantContext.setTenant(tenant.getSlug());
+                entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + tenant.getSlug()).executeUpdate();
+
+                List<UserAssignment> assignments = assignmentRepository.findByTrackIdIn(priorTrackIds);
+                for (UserAssignment assignment : assignments) {
+                    lessonProgressRepository.deleteByUserIdAndTrackId(assignment.getUserId(), assignment.getTrackId());
+                    assignment.setTrackId(publishedTrack.getId());
+                    assignment.setContentVersionAtAssignment(publishedTrack.getVersion());
+                    assignment.setRequiresRetraining(true);
+                    assignment.setStatus(com.icentric.Icentric.learning.constants.AssignmentStatus.ASSIGNED);
+                    assignmentRepository.save(assignment);
+                }
+            }
+        } finally {
+            if (originalTenant != null && !originalTenant.isBlank()) {
+                TenantContext.setTenant(originalTenant);
+                entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + originalTenant).executeUpdate();
+            } else {
+                TenantContext.clear();
+                entityManager.createNativeQuery("SET LOCAL search_path TO public").executeUpdate();
+            }
+        }
+    }
+
+    private TrackVersionResponse toVersionResponse(Track track) {
+        return new TrackVersionResponse(
+                track.getId(),
+                track.getSlug(),
+                track.getTitle(),
+                track.getVersion(),
+                track.getStatus(),
+                track.getIsPublished(),
+                track.getCreatedAt(),
+                track.getPublishedAt(),
+                track.getPreviousVersionId(),
+                track.getChangeSummary()
+        );
+    }
+
+    private void logAdminTrackAction(AuditAction action, UUID trackId, String verb) {
+        Object userIdRaw = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication() != null
+                ? org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getDetails()
+                : null;
+        if (userIdRaw == null) {
+            return;
+        }
+        UUID adminId = UUID.fromString(userIdRaw.toString());
+        auditService.log(
+                adminId,
+                action,
+                "TRACK",
+                trackId.toString(),
+                auditMetadataService.describeUser(adminId) + " " + verb + " " + auditMetadataService.describeTrack(trackId)
+        );
     }
 }

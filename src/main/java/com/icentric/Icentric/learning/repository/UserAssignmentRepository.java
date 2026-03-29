@@ -22,6 +22,7 @@ public interface UserAssignmentRepository
     List<UserAssignment> findAll();
     Optional<UserAssignment> findByUserIdAndTrackId(UUID userId, UUID trackId);
     List<UserAssignment> findByTrackId(UUID trackId);
+    List<UserAssignment> findByTrackIdIn(List<UUID> trackIds);
     @Query("""
 SELECT ua, u.email, tu.department
 FROM UserAssignment ua

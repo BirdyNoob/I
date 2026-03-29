@@ -112,7 +112,8 @@ public class LearnerDashboardController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully downloaded the certificate PDF"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "404", description = "Certificate not found or not earned yet")
+            @ApiResponse(responseCode = "404", description = "Certificate not found or not earned yet"),
+            @ApiResponse(responseCode = "409", description = "Certificate generation is still in progress")
     })
     @GetMapping("/certificates/{trackId}/download")
     public ResponseEntity<byte[]> download(

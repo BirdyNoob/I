@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.content.repository.AnswerRepository;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
@@ -15,6 +17,7 @@ import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.audit.service.AuditService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -34,6 +37,7 @@ public class QuizService {
     private final UserAssignmentRepository assignmentRepository;
     private final NotificationService notificationService;
     private final AuditService auditService;
+    private final AuditMetadataService auditMetadataService;
 
     public QuizService(
             AnswerRepository answerRepository,
@@ -45,7 +49,8 @@ public class QuizService {
             IssuedCertificateRepository issuedRepository,
             UserAssignmentRepository assignmentRepository,
             NotificationService notificationService,
-            AuditService auditService
+            AuditService auditService,
+            AuditMetadataService auditMetadataService
     ) {
         this.answerRepository = answerRepository;
         this.attemptRepository = attemptRepository;
@@ -57,11 +62,13 @@ public class QuizService {
         this.assignmentRepository = assignmentRepository;
         this.notificationService = notificationService;
         this.auditService = auditService;
+        this.auditMetadataService = auditMetadataService;
     }
 
     private static final double PASS_THRESHOLD = 0.7; // 70%
     private static final int MAX_ATTEMPTS = 3;
 
+    @Transactional
     public QuizResultResponse submitQuiz(UUID userId, QuizSubmissionRequest request) {
 
         long attemptCount =
@@ -71,6 +78,14 @@ public class QuizService {
                 );
 
         if (attemptCount >= MAX_ATTEMPTS) {
+            auditService.log(
+                    userId,
+                    AuditAction.QUIZ_LOCKED_MAX_ATTEMPTS,
+                    "QUIZ",
+                    request.lessonId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " was blocked from quiz submission because maximum attempts were already used"
+            );
             throw new IllegalStateException("Max attempts reached");
         }
 
@@ -115,9 +130,30 @@ public class QuizService {
 
         attemptRepository.save(attempt);
 
-        auditService.log(userId, "QUIZ_ATTEMPT", "QUIZ", request.lessonId().toString(), "Quiz attempt " + attempt.getAttemptNumber() + " with score " + scorePercent);
+        auditService.log(
+                userId,
+                AuditAction.QUIZ_ATTEMPT,
+                "QUIZ",
+                request.lessonId().toString(),
+                auditMetadataService.describeUserInCurrentTenant(userId)
+                        + " submitted quiz attempt " + attempt.getAttemptNumber()
+                        + " submitted with score " + correct + "/" + total
+                        + " (" + Math.round(scorePercent * 100) + "%)"
+                        + ", passed=" + passed
+        );
 
-// 🔥 ADD FAILED LOGIC HERE
+        if (attempt.getAttemptNumber() > 1) {
+            auditService.log(
+                    userId,
+                    AuditAction.QUIZ_RETRY,
+                    "QUIZ",
+                    request.lessonId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " retried quiz for lesson " + request.lessonId()
+                            + " on attempt " + attempt.getAttemptNumber()
+            );
+        }
+
         if (!passed && attemptCount + 1 >= MAX_ATTEMPTS) {
 
             var lesson = lessonRepository.findById(request.lessonId())
@@ -135,10 +171,32 @@ public class QuizService {
             assignment.setStatus(AssignmentStatus.FAILED);
             assignmentRepository.save(assignment);
 
+            auditService.log(
+                    userId,
+                    AuditAction.COURSE_FAILED,
+                    "ASSIGNMENT",
+                    assignment.getId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " failed " + auditMetadataService.describeTrack(trackId)
+                            + " after exhausting all quiz attempts on lesson " + request.lessonId()
+            );
+
             notificationService.createNotification(
                     userId,
                     NotificationType.FAILED,
                     "You have failed the training after maximum attempts."
+            );
+        }
+
+        if (!passed && attemptCount + 1 < MAX_ATTEMPTS) {
+            auditService.log(
+                    userId,
+                    AuditAction.QUIZ_FAILED_RETRY_AVAILABLE,
+                    "QUIZ",
+                    request.lessonId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " failed quiz on attempt " + (attemptCount + 1)
+                            + ". Remaining attempts: " + (MAX_ATTEMPTS - (attemptCount + 1))
             );
         }
 
@@ -153,6 +211,16 @@ public class QuizService {
                     .orElseThrow();
 
             UUID trackId = module.getTrackId();
+
+            auditService.log(
+                    userId,
+                    AuditAction.QUIZ_PASSED,
+                    "QUIZ",
+                    request.lessonId().toString(),
+                    auditMetadataService.describeUserInCurrentTenant(userId)
+                            + " passed quiz for lesson " + request.lessonId()
+                            + " on " + auditMetadataService.describeTrack(trackId)
+            );
 
             certificateService.checkAndIssue(userId, trackId);
         }

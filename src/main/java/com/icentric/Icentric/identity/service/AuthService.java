@@ -1,5 +1,7 @@
 package com.icentric.Icentric.identity.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.identity.dto.LoginRequest;
 import com.icentric.Icentric.identity.dto.LoginResponse;
@@ -39,6 +41,7 @@ public class AuthService {
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuditService auditService;
+    private final AuditMetadataService auditMetadataService;
     private final RefreshTokenService refreshTokenService;
 
     public AuthService(
@@ -48,6 +51,7 @@ public class AuthService {
             org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AuditService auditService,
+            AuditMetadataService auditMetadataService,
             RefreshTokenService refreshTokenService
     ) {
         this.userRepository = userRepository;
@@ -56,6 +60,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.auditService = auditService;
+        this.auditMetadataService = auditMetadataService;
         this.refreshTokenService = refreshTokenService;
     }
 
@@ -205,8 +210,15 @@ public class AuthService {
                 tenantSlug
         );
 
-        auditService.log(user.getId(), "LOGIN", "USER", user.getId().toString(),
-                "User logged in to tenant " + tenantSlug);
+        auditService.log(
+                user.getId(),
+                AuditAction.LOGIN,
+                "USER",
+                user.getId().toString(),
+                auditMetadataService.describeUser(user.getId())
+                        + " logged in to tenant " + tenantSlug
+                        + " with role " + role
+        );
 
         return LoginResponse.singleTenant(accessToken, refreshToken);
     }

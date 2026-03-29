@@ -1,5 +1,6 @@
 package com.icentric.Icentric.audit.controller;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
 import com.icentric.Icentric.audit.entity.AuditLog;
 import com.icentric.Icentric.audit.service.AuditService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,11 +13,16 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/admin/audit-logs")
@@ -40,8 +46,20 @@ public class AuditController {
     @GetMapping
     public Page<AuditLog> getLogs(
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") @PositiveOrZero Integer page,
-            @Parameter(description = "Number of items per page") @RequestParam(defaultValue = "10") @Positive @Max(100) Integer size
+            @Parameter(description = "Number of items per page") @RequestParam(defaultValue = "10") @Positive @Max(100) Integer size,
+            @Parameter(description = "Filter by audit action") @RequestParam(required = false) AuditAction action,
+            @Parameter(description = "Filter by entity type") @RequestParam(required = false) String entityType,
+            @Parameter(description = "Filter by actor user ID") @RequestParam(required = false) UUID userId,
+            @Parameter(description = "Filter logs created at or after this instant") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdFrom,
+            @Parameter(description = "Filter logs created at or before this instant") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdTo
     ) {
-        return auditService.getLogs(PageRequest.of(page, size));
+        return auditService.getLogs(
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")),
+                action,
+                entityType,
+                userId,
+                createdFrom,
+                createdTo
+        );
     }
 }
