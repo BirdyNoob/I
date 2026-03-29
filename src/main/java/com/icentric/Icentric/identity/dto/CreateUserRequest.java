@@ -8,6 +8,10 @@ import jakarta.validation.constraints.Size;
 public record CreateUserRequest(
 
         @NotBlank
+        @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "name must not start or end with whitespace")
+        @Size(max = 100)
+        String name,
+        @NotBlank
         @Email
         @Size(max = 320)
         String email,

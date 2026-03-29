@@ -16,6 +16,8 @@ public class User {
     @Id
     private UUID id;
 
+    private String name;
+
     private String email;
 
     @Column(name = "password_hash")

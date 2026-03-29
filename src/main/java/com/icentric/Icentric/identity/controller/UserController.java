@@ -135,6 +135,7 @@ public class UserController {
     })
     @GetMapping("/search")
     public Page<UserResponse> searchUsers(
+            @Parameter(description = "Filter by user name") @RequestParam(required = false) String name,
             @Parameter(description = "Filter by email address") @RequestParam(required = false) String email,
             @Parameter(description = "Filter by department") @RequestParam(required = false) String department,
             @Parameter(description = "Filter by user role") @RequestParam(required = false) String role,
@@ -143,6 +144,7 @@ public class UserController {
             @Parameter(description = "Number of items per page") @RequestParam(defaultValue = "10") @Positive @Max(100) int size
     ) {
         return service.searchUsers(
+                name,
                 email,
                 department,
                 role,

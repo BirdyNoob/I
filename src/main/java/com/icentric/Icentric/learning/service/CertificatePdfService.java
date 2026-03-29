@@ -59,7 +59,7 @@ public class CertificatePdfService {
         placeholders.put("platformNameStart", "AI");
         placeholders.put("platformNameHighlight", "SAFE");
         placeholders.put("platformNameEnd", " PROTOCOL");
-        placeholders.put("recipientName", escape(data.userEmail()));
+        placeholders.put("recipientName", escape(resolveRecipientName(data)));
         placeholders.put("trackTitle", escape(data.trackTitle()));
         placeholders.put("certificateId", escape(shortId(data.certificateId())));
         placeholders.put("learnerId", escape(shortId(data.learnerId())));
@@ -91,6 +91,13 @@ public class CertificatePdfService {
 
     private String escape(String value) {
         return HtmlUtils.htmlEscape(value == null ? "" : value);
+    }
+
+    private String resolveRecipientName(CertificateDownloadData data) {
+        if (data.userName() != null && !data.userName().isBlank()) {
+            return data.userName();
+        }
+        return data.userEmail();
     }
 
     private String applyPlaceholders(String template, Map<String, String> placeholders) {

@@ -143,7 +143,10 @@ public class CertificateService {
     }
 
     private String buildCertificateFilename(CertificateDownloadData data) {
-        return "certificate-" + sanitizeFilenamePart(data.userEmail()) + "-" + sanitizeFilenamePart(data.trackTitle()) + ".pdf";
+        String userIdentifier = data.userName() != null && !data.userName().isBlank()
+                ? data.userName()
+                : data.userEmail();
+        return "certificate-" + sanitizeFilenamePart(userIdentifier) + "-" + sanitizeFilenamePart(data.trackTitle()) + ".pdf";
     }
 
     private String sanitizeFilenamePart(String value) {

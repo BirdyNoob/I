@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -37,7 +39,7 @@ public class UserService {
     private static final long MAX_BULK_UPLOAD_BYTES = 2L * 1024 * 1024;
     private static final int BATCH_SIZE = 100;
     private static final Set<String> ALLOWED_BULK_ROLES = Set.of("LEARNER", "ADMIN", "SUPER_ADMIN");
-    private static final String BULK_UPLOAD_TEMPLATE_HEADER = "email,role,department";
+    private static final String BULK_UPLOAD_TEMPLATE_HEADER = "name,email,role,department";
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$",
             Pattern.CASE_INSENSITIVE
@@ -67,6 +69,7 @@ public class UserService {
 
         User user = new User();
         user.setId(UUID.randomUUID());
+        user.setName(normalizeName(request.name()));
         user.setEmail(request.email());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(request.role());
@@ -124,6 +127,9 @@ public class UserService {
         var user = repository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
+        if (request.name() != null) {
+            user.setName(normalizeName(request.name()));
+        }
         if (request.role() != null) {
             user.setRole(request.role());
         }
@@ -154,6 +160,7 @@ public class UserService {
     private UserResponse toResponse(User u) {
         return new UserResponse(
                 u.getId(),
+                u.getName(),
                 u.getEmail(),
                 u.getRole(),
                 u.getDepartment(),
@@ -181,7 +188,7 @@ public class UserService {
         Set<String> seenEmailsInFile = new HashSet<>();
 
         try (
-                Reader reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8);
+                Reader reader = createCsvReader(file);
                 CSVParser csvParser = new CSVParser(reader,
                         CSVFormat.DEFAULT
                                 .withFirstRecordAsHeader()
@@ -202,16 +209,17 @@ public class UserService {
 
                 try {
                     String email = normalizeEmail(record.get("email"));
+                    String name = normalizeName(record.get("name"));
                     String role = normalizeRole(record.get("role"));
                     String department = normalizeDepartment(record.get("department"));
 
-                    validateCandidate(email, role);
+                    validateCandidate(name, email, role);
 
                     if (!seenEmailsInFile.add(email)) {
                         throw new IllegalArgumentException("Duplicate email in file");
                     }
 
-                    candidates.add(new RowCandidate(rowNumber, email, role, department));
+                    candidates.add(new RowCandidate(rowNumber, name, email, role, department));
 
                 } catch (IllegalArgumentException e) {
 
@@ -220,6 +228,8 @@ public class UserService {
                 }
             }
 
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("CSV processing failed", e);
         }
@@ -251,6 +261,7 @@ public class UserService {
 
             User user = new User();
             user.setId(UUID.randomUUID());
+            user.setName(candidate.name());
             user.setEmail(candidate.email());
             user.setPasswordHash(passwordHash);
             user.setRole(candidate.role());
@@ -296,9 +307,18 @@ public class UserService {
         }
     }
 
+    private Reader createCsvReader(MultipartFile file) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
+        reader.mark(1);
+        if (reader.read() != '\uFEFF') {
+            reader.reset();
+        }
+        return reader;
+    }
+
     private void validateRequiredHeaders(CSVParser csvParser) {
         if (csvParser.getHeaderMap() == null) {
-            throw new IllegalArgumentException("CSV must contain email, role, and department headers");
+            throw new IllegalArgumentException("CSV must contain name, email, role, and department headers");
         }
 
         Set<String> normalizedHeaders = new HashSet<>();
@@ -306,10 +326,11 @@ public class UserService {
             normalizedHeaders.add(header.trim().toLowerCase(Locale.ROOT));
         }
 
-        if (!normalizedHeaders.contains("email") ||
+        if (!normalizedHeaders.contains("name") ||
+                !normalizedHeaders.contains("email") ||
                 !normalizedHeaders.contains("role") ||
                 !normalizedHeaders.contains("department")) {
-            throw new IllegalArgumentException("CSV must contain email, role, and department headers");
+            throw new IllegalArgumentException("CSV must contain name, email, role, and department headers");
         }
     }
 
@@ -322,7 +343,10 @@ public class UserService {
         return true;
     }
 
-    private void validateCandidate(String email, String role) {
+    private void validateCandidate(String name, String email, String role) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Name missing");
+        }
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Email missing");
         }
@@ -332,6 +356,14 @@ public class UserService {
         if (role == null || !ALLOWED_BULK_ROLES.contains(role)) {
             throw new IllegalArgumentException("Invalid role");
         }
+    }
+
+    private String normalizeName(String name) {
+        if (name == null) {
+            return null;
+        }
+        String trimmed = name.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String normalizeEmail(String email) {
@@ -358,12 +390,14 @@ public class UserService {
 
     private record RowCandidate(
             long rowNumber,
+            String name,
             String email,
             String role,
             String department
     ) {}
     @Transactional(readOnly = true)
     public Page<UserResponse> searchUsers(
+            String name,
             String email,
             String department,
             String role,
@@ -371,12 +405,14 @@ public class UserService {
             Pageable pageable
     ) {
         tenantSchemaService.applyCurrentTenantSearchPath();
+        String normalizedName = normalizeSearchText(name);
         String normalizedEmail = normalizeSearchEmail(email);
 
         return repository.searchUsers(
-                normalizedEmail, department, role, isActive, pageable
+                normalizedName, normalizedEmail, department, role, isActive, pageable
         ).map(u -> new UserResponse(
                 u.getId(),
+                u.getName(),
                 u.getEmail(),
                 u.getRole(),
                 u.getDepartment(),
@@ -385,11 +421,15 @@ public class UserService {
         ));
     }
 
-    private String normalizeSearchEmail(String email) {
-        if (email == null) {
+    private String normalizeSearchText(String value) {
+        if (value == null) {
             return null;
         }
-        String trimmed = email.trim().toLowerCase(Locale.ROOT);
+        String trimmed = value.trim().toLowerCase(Locale.ROOT);
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeSearchEmail(String email) {
+        return normalizeSearchText(email);
     }
 }

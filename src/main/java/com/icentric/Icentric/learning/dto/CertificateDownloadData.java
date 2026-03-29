@@ -6,6 +6,7 @@ import java.time.Instant;
 public record CertificateDownloadData(
         UUID certificateId,
         UUID learnerId,
+        String userName,
         String userEmail,
         String trackTitle,
         Instant issuedAt

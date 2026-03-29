@@ -25,7 +25,7 @@ class UserControllerTest {
 
     @Test
     void getBulkUploadTemplate_returnsAttachmentWithExpectedCsvHeaderRow() {
-        when(userService.getBulkUploadTemplateCsv()).thenReturn("email,role,department\n");
+        when(userService.getBulkUploadTemplateCsv()).thenReturn("name,email,role,department\n");
 
         ResponseEntity<String> response = userController.getBulkUploadTemplate();
 
@@ -33,6 +33,6 @@ class UserControllerTest {
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
                 .isEqualTo("attachment; filename=tenant-user-bulk-upload-template.csv");
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.parseMediaType("text/csv"));
-        assertThat(response.getBody()).isEqualTo("email,role,department\n");
+        assertThat(response.getBody()).isEqualTo("name,email,role,department\n");
     }
 }

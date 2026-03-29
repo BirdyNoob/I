@@ -37,12 +37,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     long count();
     @Query("""
 SELECT u FROM User u
-WHERE (:email IS NULL OR LOWER(u.email) LIKE CONCAT(LOWER(:email), '%'))
+WHERE (:name IS NULL OR LOWER(u.name) LIKE CONCAT('%', LOWER(:name), '%'))
+AND (:email IS NULL OR LOWER(u.email) LIKE CONCAT(LOWER(:email), '%'))
 AND (:department IS NULL OR u.department = :department)
 AND (:role IS NULL OR u.role = :role)
 AND (:isActive IS NULL OR u.isActive = :isActive)
 """)
     Page<User> searchUsers(
+            @Param("name") String name,
             @Param("email") String email,
             @Param("department") String department,
             @Param("role") String role,

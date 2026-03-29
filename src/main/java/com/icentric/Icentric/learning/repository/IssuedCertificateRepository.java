@@ -22,6 +22,7 @@ public interface IssuedCertificateRepository
 SELECT new com.icentric.Icentric.learning.dto.CertificateDownloadData(
     ic.id,
     ic.userId,
+    u.name,
     u.email,
     t.title,
     ic.issuedAt

@@ -37,7 +37,7 @@ public class PlatformUserService {
             stmt.execute("SET search_path TO " + schema);
 
             ResultSet rs = stmt.executeQuery("""
-                SELECT id, email, role, department, is_active
+                SELECT id, name, email, role, department, is_active
                 FROM users
             """);
 
@@ -46,6 +46,7 @@ public class PlatformUserService {
             while (rs.next()) {
                 Map<String, Object> u = new HashMap<>();
                 u.put("id", rs.getObject("id"));
+                u.put("name", rs.getString("name"));
                 u.put("email", rs.getString("email"));
                 u.put("role", rs.getString("role"));
                 u.put("department", rs.getString("department"));
