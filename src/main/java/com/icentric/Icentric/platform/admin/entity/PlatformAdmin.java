@@ -38,6 +38,7 @@ public class PlatformAdmin {
         this.passwordHash = passwordHash;
         this.fullName = fullName;
         this.isActive = true;
+        this.mfaEnabled = false;
         this.createdAt = Instant.now();
     }
 

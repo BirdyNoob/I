@@ -47,7 +47,8 @@ public class PlatformTenantController {
         return tenantService.createTenant(
                 request.slug(),
                 request.companyName(),
-                request.adminEmail());
+                request.adminEmail(),
+                request.adminPassword());
     }
 
     @Operation(summary = "Impersonate a tenant admin", description = "Generates a session token that allows a platform admin to log in as a specific user within a tenant's environment.")

@@ -1,7 +1,8 @@
 package com.icentric.Icentric.learning.service;
 
 import com.icentric.Icentric.content.repository.LessonRepository;
-import com.icentric.Icentric.identity.entity.User;
+import com.icentric.Icentric.identity.entity.TenantUser;
+import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.*;
@@ -9,6 +10,9 @@ import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
+import com.icentric.Icentric.platform.tenant.entity.Tenant;
+import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
+import com.icentric.Icentric.tenant.TenantContext;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +29,8 @@ import java.util.stream.Collectors;
 public class AdminAnalyticsService {
 
     private final UserRepository userRepository;
+    private final TenantUserRepository tenantUserRepository;
+    private final TenantRepository tenantRepository;
     private final UserAssignmentRepository assignmentRepository;
     private final QuizAttemptRepository quizAttemptRepository;
     private final LessonProgressRepository progressRepository;
@@ -33,6 +39,8 @@ public class AdminAnalyticsService {
 
     public AdminAnalyticsService(
             UserRepository userRepository,
+            TenantUserRepository tenantUserRepository,
+            TenantRepository tenantRepository,
             UserAssignmentRepository assignmentRepository,
             QuizAttemptRepository quizAttemptRepository,
             LessonProgressRepository progressRepository,
@@ -40,10 +48,12 @@ public class AdminAnalyticsService {
             TenantSchemaService tenantSchemaService
     ) {
         this.userRepository = userRepository;
+        this.tenantUserRepository = tenantUserRepository;
+        this.tenantRepository = tenantRepository;
         this.assignmentRepository = assignmentRepository;
         this.quizAttemptRepository = quizAttemptRepository;
-        this.progressRepository=progressRepository;
-        this.lessonRepository=lessonRepository;
+        this.progressRepository = progressRepository;
+        this.lessonRepository = lessonRepository;
         this.tenantSchemaService = tenantSchemaService;
     }
 
@@ -51,7 +61,8 @@ public class AdminAnalyticsService {
     public AdminAnalyticsResponse getOverview() {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        long totalUsers = userRepository.count();
+        Tenant tenant = currentTenant();
+        long totalUsers = tenantUserRepository.findByTenantId(tenant.getId()).size();
 
         long totalAssignments = assignmentRepository.count();
 
@@ -72,6 +83,7 @@ public class AdminAnalyticsService {
                 avgScore == null ? 0 : avgScore * 100
         );
     }
+
     @Transactional(readOnly = true)
     public List<RiskUserResponse> getRiskUsers() {
         tenantSchemaService.applyCurrentTenantSearchPath();
@@ -128,6 +140,7 @@ public class AdminAnalyticsService {
 
         return result;
     }
+
     @Transactional(readOnly = true)
     public List<WeakLessonResponse> getWeakLessons() {
         tenantSchemaService.applyCurrentTenantSearchPath();
@@ -144,7 +157,6 @@ public class AdminAnalyticsService {
 
             double score = avgScore == null ? 0 : avgScore * 100;
 
-            // 🔥 Weak threshold
             if (score < 50) {
 
                 var lesson = lessonRepository.findById(lessonId)
@@ -161,16 +173,19 @@ public class AdminAnalyticsService {
 
         return result;
     }
+
     @Transactional(readOnly = true)
     public List<DepartmentPerformanceResponse> getDepartmentPerformance() {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        List<User> users = userRepository.findAll();
+        Tenant tenant = currentTenant();
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId());
 
-        Map<String, List<User>> byDept =
-                users.stream()
-                        .collect(Collectors.groupingBy(u ->
-                                u.getDepartment() == null ? "UNKNOWN" : u.getDepartment()
+        // Group memberships by department
+        Map<String, List<TenantUser>> byDept =
+                memberships.stream()
+                        .collect(Collectors.groupingBy(m ->
+                                m.getDepartment() == null ? "UNKNOWN" : m.getDepartment()
                         ));
 
         List<DepartmentPerformanceResponse> result = new ArrayList<>();
@@ -178,9 +193,9 @@ public class AdminAnalyticsService {
         for (var entry : byDept.entrySet()) {
 
             String department = entry.getKey();
-            List<User> deptUsers = entry.getValue();
+            List<TenantUser> deptMembers = entry.getValue();
 
-            long totalUsers = deptUsers.size();
+            long totalUsers = deptMembers.size();
 
             long totalCompleted = 0;
             long totalAssignments = 0;
@@ -188,9 +203,9 @@ public class AdminAnalyticsService {
             double totalScore = 0;
             int scoredUsers = 0;
 
-            for (User user : deptUsers) {
+            for (TenantUser member : deptMembers) {
 
-                UUID userId = user.getId();
+                UUID userId = member.getUserId();
 
                 long completed =
                         progressRepository.countCompletedByUser(userId);
@@ -228,11 +243,13 @@ public class AdminAnalyticsService {
 
         return result;
     }
+
     @Transactional(readOnly = true)
     public AdminDashboardResponse getDashboard() {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        long totalUsers = userRepository.count();
+        Tenant tenant = currentTenant();
+        long totalUsers = tenantUserRepository.findByTenantId(tenant.getId()).size();
 
         long totalAssignments = assignmentRepository.count();
 
@@ -261,9 +278,8 @@ public class AdminAnalyticsService {
                 )
         );
 
-        // 🔥 Department stats
         List<DepartmentStat> deptStats = rankDepartmentStats(
-                assignmentRepository.fetchDepartmentStats(AssignmentStatus.COMPLETED)
+                assignmentRepository.fetchDepartmentStats(tenant.getId(), AssignmentStatus.COMPLETED)
                         .stream()
                         .map(r -> new DepartmentAggregate(
                                 (String) r[0],
@@ -286,6 +302,12 @@ public class AdminAnalyticsService {
         );
     }
 
+    private Tenant currentTenant() {
+        String slug = TenantContext.getTenant();
+        return tenantRepository.findBySlug(slug)
+                .orElseThrow(() -> new IllegalStateException("Tenant not found: " + slug));
+    }
+
     private long countRiskUsers() {
         List<UserAssignment> assignments = assignmentRepository.findAll();
 
@@ -305,14 +327,14 @@ public class AdminAnalyticsService {
             Double avgScore = quizAttemptRepository.getAverageScoreByUser(userId);
             double score = avgScore == null ? 0 : avgScore * 100;
 
-            boolean overdue =
+            boolean overdueFlag =
                     userAssgn.stream().anyMatch(a ->
                             a.getDueDate() != null &&
                                     a.getDueDate().isBefore(Instant.now()) &&
                                     a.getStatus() != AssignmentStatus.COMPLETED
                     );
 
-            if (overdue || completionPercent < 50 || score < 50) {
+            if (overdueFlag || completionPercent < 50 || score < 50) {
                 riskUsersCount++;
             }
         }

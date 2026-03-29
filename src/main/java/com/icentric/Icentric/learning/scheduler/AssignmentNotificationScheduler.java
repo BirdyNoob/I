@@ -1,17 +1,17 @@
 package com.icentric.Icentric.learning.scheduler;
 
-import com.icentric.Icentric.identity.entity.User;
-import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.identity.entity.TenantUser;
+import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.NotificationRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.learning.service.NotificationService;
+import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantContext;
 import com.icentric.Icentric.tenant.TenantSchemaService;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -29,7 +30,7 @@ public class AssignmentNotificationScheduler {
     private final UserAssignmentRepository assignmentRepository;
     private final NotificationService notificationService;
     private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
+    private final TenantUserRepository tenantUserRepository;
     private final TenantRepository tenantRepository;
     private final TenantSchemaService tenantSchemaService;
 
@@ -37,14 +38,14 @@ public class AssignmentNotificationScheduler {
             UserAssignmentRepository assignmentRepository,
             NotificationService notificationService,
             NotificationRepository notificationRepository,
-            UserRepository userRepository,
+            TenantUserRepository tenantUserRepository,
             TenantRepository tenantRepository,
             TenantSchemaService tenantSchemaService
     ) {
         this.assignmentRepository = assignmentRepository;
         this.notificationService = notificationService;
         this.notificationRepository = notificationRepository;
-        this.userRepository = userRepository;
+        this.tenantUserRepository = tenantUserRepository;
         this.tenantRepository = tenantRepository;
         this.tenantSchemaService = tenantSchemaService;
     }
@@ -55,17 +56,17 @@ public class AssignmentNotificationScheduler {
         Instant now = Instant.now();
 
         for (var tenant : tenantRepository.findAll()) {
-            processAssignmentsForTenant(tenant.getSlug(), now);
+            processAssignmentsForTenant(tenant, now);
         }
     }
 
-    private void processAssignmentsForTenant(String tenantSlug, Instant now) {
-        TenantContext.setTenant(tenantSlug);
+    private void processAssignmentsForTenant(Tenant tenant, Instant now) {
+        TenantContext.setTenant(tenant.getSlug());
 
         try {
             tenantSchemaService.applyCurrentTenantSearchPath();
             processReminders(now);
-            processEscalations(now);
+            processEscalations(tenant, now);
         } finally {
             TenantContext.clear();
         }
@@ -100,7 +101,7 @@ public class AssignmentNotificationScheduler {
         }
     }
 
-    private void processEscalations(Instant now) {
+    private void processEscalations(Tenant tenant, Instant now) {
         List<UserAssignment> overdueAssignments = assignmentRepository.findByStatusAndDueDateIsNotNull(
                 AssignmentStatus.OVERDUE
         );
@@ -109,15 +110,24 @@ public class AssignmentNotificationScheduler {
             return;
         }
 
-        List<User> admins = userRepository.findByRole("SUPER_ADMIN", PageRequest.of(0, 1)).getContent();
-        if (admins.isEmpty()) {
-            admins = userRepository.findByRole("ADMIN", PageRequest.of(0, 1)).getContent();
+        // Find an admin within this tenant via the tenant_users junction table
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId());
+
+        Optional<TenantUser> admin = memberships.stream()
+                .filter(m -> "SUPER_ADMIN".equals(m.getRole()))
+                .findFirst();
+
+        if (admin.isEmpty()) {
+            admin = memberships.stream()
+                    .filter(m -> "ADMIN".equals(m.getRole()))
+                    .findFirst();
         }
-        if (admins.isEmpty()) {
+
+        if (admin.isEmpty()) {
             return;
         }
 
-        UUID adminUserId = admins.get(0).getId();
+        UUID adminUserId = admin.get().getUserId();
 
         UserAssignment firstOverdue = overdueAssignments.get(0);
         String message = "User " + firstOverdue.getUserId() + " has overdue training";
@@ -138,3 +148,4 @@ public class AssignmentNotificationScheduler {
         );
     }
 }
+

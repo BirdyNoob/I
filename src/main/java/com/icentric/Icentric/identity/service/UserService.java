@@ -4,10 +4,14 @@ import com.icentric.Icentric.identity.dto.BulkUploadResponse;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
 import com.icentric.Icentric.identity.dto.UserResponse;
+import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.exception.UserNotFoundException;
+import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
-import com.icentric.Icentric.tenant.TenantSchemaService;
+import com.icentric.Icentric.platform.tenant.entity.Tenant;
+import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
+import com.icentric.Icentric.tenant.TenantContext;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -25,19 +29,20 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+/**
+ * User management service.
+ * <p>
+ * Under the Global User Registry model, a "user within a tenant" is the
+ * combination of a global {@link User} and a {@link TenantUser} mapping.
+ * This service creates both records and joins them when returning data.
+ */
 @Service
 public class UserService {
     private static final long MAX_BULK_UPLOAD_BYTES = 2L * 1024 * 1024;
-    private static final int BATCH_SIZE = 100;
     private static final Set<String> ALLOWED_BULK_ROLES = Set.of("LEARNER", "ADMIN", "SUPER_ADMIN");
     private static final String BULK_UPLOAD_TEMPLATE_HEADER = "name,email,role,department";
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
@@ -45,44 +50,70 @@ public class UserService {
             Pattern.CASE_INSENSITIVE
     );
 
-    private final UserRepository repository;
+    private final UserRepository userRepository;
+    private final TenantUserRepository tenantUserRepository;
+    private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
-    private final TenantSchemaService tenantSchemaService;
     private final String bulkUploadDefaultPassword;
 
     public UserService(
-            UserRepository repository,
+            UserRepository userRepository,
+            TenantUserRepository tenantUserRepository,
+            TenantRepository tenantRepository,
             PasswordEncoder passwordEncoder,
-            TenantSchemaService tenantSchemaService,
             @Value("${app.bulk-upload.default-password:ChangeMe@123}") String bulkUploadDefaultPassword
     ) {
-        this.repository = repository;
+        this.userRepository = userRepository;
+        this.tenantUserRepository = tenantUserRepository;
+        this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
-        this.tenantSchemaService = tenantSchemaService;
         this.bulkUploadDefaultPassword = bulkUploadDefaultPassword;
     }
 
-    // ✅ CREATE USER — returns UserResponse (never exposes passwordHash)
-    @Transactional
-    public UserResponse createUser(CreateUserRequest request) {
-        tenantSchemaService.applyCurrentTenantSearchPath();
+    // ── helpers ──────────────────────────────────────────────────────────────
 
-        User user = new User();
-        user.setId(UUID.randomUUID());
-        user.setName(normalizeName(request.name()));
-        user.setEmail(request.email());
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setRole(request.role());
-        user.setDepartment(request.department());
-        user.setIsActive(true);
-        user.setCreatedAt(Instant.now());
-
-        User saved = repository.save(user);
-
-        return toResponse(saved);
+    /**
+     * Resolves the current tenant from TenantContext.
+     */
+    private Tenant currentTenant() {
+        String slug = TenantContext.getTenant();
+        if (slug == null || slug.isBlank()) {
+            throw new IllegalStateException("No tenant in context");
+        }
+        return tenantRepository.findBySlug(slug)
+                .orElseThrow(() -> new IllegalStateException("Tenant not found: " + slug));
     }
 
-    // ✅ GET USERS — @Transactional(readOnly) ensures SET LOCAL search_path stays in scope
+    // ── CREATE ───────────────────────────────────────────────────────────────
+
+    @Transactional
+    public UserResponse createUser(CreateUserRequest request) {
+        Tenant tenant = currentTenant();
+
+        // Upsert global user
+        User user = userRepository.findByEmail(request.email())
+                .orElseGet(() -> {
+                    User u = new User();
+                    u.setId(UUID.randomUUID());
+                    u.setName(normalizeName(request.name()));
+                    u.setEmail(request.email());
+                    u.setPasswordHash(passwordEncoder.encode(request.password()));
+                    u.setAuthProvider("LOCAL");
+                    u.setIsActive(true);
+                    u.setCreatedAt(Instant.now());
+                    return userRepository.save(u);
+                });
+
+        // Create tenant mapping
+        TenantUser mapping = new TenantUser(user.getId(), tenant.getId(), request.role());
+        mapping.setDepartment(request.department());
+        tenantUserRepository.save(mapping);
+
+        return toResponse(user, mapping);
+    }
+
+    // ── READ (paginated, filtered) ──────────────────────────────────────────
+
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(
             String department,
@@ -90,84 +121,91 @@ public class UserService {
             Boolean isActive,
             Pageable pageable
     ) {
-        tenantSchemaService.applyCurrentTenantSearchPath();
+        Tenant tenant = currentTenant();
 
-        Page<User> users;
-
-        boolean hasDept   = department != null;
-        boolean hasRole   = role != null;
-        boolean hasActive = isActive != null;
-
-        if (hasDept && hasRole && hasActive) {
-            users = repository.findByDepartmentAndRoleAndIsActive(department, role, isActive, pageable);
-        } else if (hasDept && hasRole) {
-            users = repository.findByDepartmentAndRole(department, role, pageable);
-        } else if (hasDept && hasActive) {
-            users = repository.findByDepartmentAndIsActive(department, isActive, pageable);
-        } else if (hasRole && hasActive) {
-            users = repository.findByRoleAndIsActive(role, isActive, pageable);
-        } else if (hasDept) {
-            users = repository.findByDepartment(department, pageable);
-        } else if (hasRole) {
-            users = repository.findByRole(role, pageable);
-        } else if (hasActive) {
-            users = repository.findByIsActive(isActive, pageable);
-        } else {
-            users = repository.findAll(pageable);
-        }
-
-        return users.map(this::toResponse);
+        return userRepository.findTenantUsers(
+                tenant.getId(),
+                department,
+                role,
+                isActive,
+                pageable
+        );
     }
 
-    // ✅ UPDATE USER
+    // ── UPDATE ───────────────────────────────────────────────────────────────
+
     @Transactional
     public UserResponse updateUser(UUID userId, UpdateUserRequest request) {
-        tenantSchemaService.applyCurrentTenantSearchPath();
+        Tenant tenant = currentTenant();
 
-        var user = repository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
+        TenantUser mapping = tenantUserRepository
+                .findByUserIdAndTenantId(userId, tenant.getId())
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        // Update global fields
         if (request.name() != null) {
             user.setName(normalizeName(request.name()));
         }
+
+        // Update tenant-level fields
         if (request.role() != null) {
-            user.setRole(request.role());
+            mapping.setRole(request.role());
         }
         if (request.department() != null) {
-            user.setDepartment(request.department());
+            mapping.setDepartment(request.department());
         }
         if (request.isActive() != null) {
             user.setIsActive(request.isActive());
         }
 
-        return toResponse(repository.save(user));
+        userRepository.save(user);
+        tenantUserRepository.save(mapping);
+
+        return toResponse(user, mapping);
     }
 
-    // ✅ DEACTIVATE USER (soft delete)
+    // ── DEACTIVATE ───────────────────────────────────────────────────────────
+
     @Transactional
     public void deactivateUser(UUID userId) {
-        tenantSchemaService.applyCurrentTenantSearchPath();
-
-        var user = repository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
         user.setIsActive(false);
-        repository.save(user);
+        userRepository.save(user);
     }
 
-    // ── private helpers ───────────────────────────────────────────────────────
+    // ── SEARCH ───────────────────────────────────────────────────────────────
 
-    private UserResponse toResponse(User u) {
-        return new UserResponse(
-                u.getId(),
-                u.getName(),
-                u.getEmail(),
-                u.getRole(),
-                u.getDepartment(),
-                u.getIsActive(),
-                u.getCreatedAt()
+    @Transactional(readOnly = true)
+    public Page<UserResponse> searchUsers(
+            String name,
+            String email,
+            String department,
+            String role,
+            Boolean isActive,
+            Pageable pageable
+    ) {
+        Tenant tenant = currentTenant();
+
+        String normalizedName = normalizeSearchText(name);
+        String normalizedEmail = normalizeSearchEmail(email);
+
+        return userRepository.searchTenantUsers(
+                tenant.getId(),
+                department,
+                role,
+                isActive,
+                normalizedName,
+                normalizedEmail,
+                pageable
         );
     }
+
+    // ── BULK UPLOAD ──────────────────────────────────────────────────────────
 
     public String getBulkUploadTemplateCsv() {
         return BULK_UPLOAD_TEMPLATE_HEADER + "\n";
@@ -175,7 +213,7 @@ public class UserService {
 
     @Transactional
     public BulkUploadResponse bulkUploadUsers(MultipartFile file) {
-        tenantSchemaService.applyCurrentTenantSearchPath();
+        Tenant tenant = currentTenant();
         validateBulkUploadFile(file);
         validateBulkUploadDefaults();
 
@@ -208,21 +246,20 @@ public class UserService {
                 total++;
 
                 try {
-                    String email = normalizeEmail(record.get("email"));
-                    String name = normalizeName(record.get("name"));
-                    String role = normalizeRole(record.get("role"));
-                    String department = normalizeDepartment(record.get("department"));
+                    String emailVal = normalizeEmail(record.get("email"));
+                    String nameVal = normalizeName(record.get("name"));
+                    String roleVal = normalizeRole(record.get("role"));
+                    String departmentVal = normalizeDepartment(record.get("department"));
 
-                    validateCandidate(name, email, role);
+                    validateCandidate(nameVal, emailVal, roleVal);
 
-                    if (!seenEmailsInFile.add(email)) {
+                    if (!seenEmailsInFile.add(emailVal)) {
                         throw new IllegalArgumentException("Duplicate email in file");
                     }
 
-                    candidates.add(new RowCandidate(rowNumber, name, email, role, department));
+                    candidates.add(new RowCandidate(rowNumber, nameVal, emailVal, roleVal, departmentVal));
 
                 } catch (IllegalArgumentException e) {
-
                     failed++;
                     errors.add("Row " + rowNumber + ": " + e.getMessage());
                 }
@@ -238,53 +275,70 @@ public class UserService {
             return new BulkUploadResponse(total, success, failed, errors);
         }
 
+        // Check which emails already exist globally
         Set<String> candidateEmails = new LinkedHashSet<>();
         for (RowCandidate candidate : candidates) {
             candidateEmails.add(candidate.email());
         }
 
-        Set<String> existingEmails = new HashSet<>();
-        for (User existingUser : repository.findAllByEmailLowerIn(candidateEmails)) {
-            existingEmails.add(normalizeEmail(existingUser.getEmail()));
+        Map<String, User> existingUsers = new HashMap<>();
+        for (User existingUser : userRepository.findAllByEmailLowerIn(candidateEmails)) {
+            existingUsers.put(existingUser.getEmail().toLowerCase(Locale.ROOT), existingUser);
         }
+
+        // Check which emails already have a mapping in THIS tenant
+        Set<UUID> existingMappedUserIds = tenantUserRepository.findByTenantId(tenant.getId())
+                .stream().map(TenantUser::getUserId).collect(Collectors.toSet());
 
         Instant createdAt = Instant.now();
         String passwordHash = passwordEncoder.encode(bulkUploadDefaultPassword);
-        List<User> batch = new ArrayList<>(BATCH_SIZE);
 
         for (RowCandidate candidate : candidates) {
-            if (existingEmails.contains(candidate.email())) {
+            User user = existingUsers.get(candidate.email());
+
+            if (user != null && existingMappedUserIds.contains(user.getId())) {
+                // User already exists AND is already mapped to this tenant
                 failed++;
-                errors.add("Row " + candidate.rowNumber() + ": User already exists");
+                errors.add("Row " + candidate.rowNumber() + ": User already exists in this tenant");
                 continue;
             }
 
-            User user = new User();
-            user.setId(UUID.randomUUID());
-            user.setName(candidate.name());
-            user.setEmail(candidate.email());
-            user.setPasswordHash(passwordHash);
-            user.setRole(candidate.role());
-            user.setDepartment(candidate.department());
-            user.setIsActive(true);
-            user.setCreatedAt(createdAt);
-
-            batch.add(user);
-            success++;
-
-            if (batch.size() == BATCH_SIZE) {
-                repository.saveAll(batch);
-                repository.flush();
-                batch.clear();
+            // Create global user if needed
+            if (user == null) {
+                user = new User();
+                user.setId(UUID.randomUUID());
+                user.setName(candidate.name());
+                user.setEmail(candidate.email());
+                user.setPasswordHash(passwordHash);
+                user.setAuthProvider("LOCAL");
+                user.setIsActive(true);
+                user.setCreatedAt(createdAt);
+                user = userRepository.save(user);
             }
-        }
 
-        if (!batch.isEmpty()) {
-            repository.saveAll(batch);
-            repository.flush();
+            // Create tenant mapping
+            TenantUser mapping = new TenantUser(user.getId(), tenant.getId(), candidate.role());
+            mapping.setDepartment(candidate.department());
+            tenantUserRepository.save(mapping);
+
+            success++;
         }
 
         return new BulkUploadResponse(total, success, failed, errors);
+    }
+
+    // ── Private helpers ──────────────────────────────────────────────────────
+
+    private UserResponse toResponse(User u, TenantUser m) {
+        return new UserResponse(
+                u.getId(),
+                u.getName(),
+                u.getEmail(),
+                m.getRole(),
+                m.getDepartment(),
+                u.getIsActive(),
+                u.getCreatedAt()
+        );
     }
 
     private void validateBulkUploadFile(MultipartFile file) {
@@ -359,33 +413,35 @@ public class UserService {
     }
 
     private String normalizeName(String name) {
-        if (name == null) {
-            return null;
-        }
+        if (name == null) return null;
         String trimmed = name.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String normalizeEmail(String email) {
-        if (email == null) {
-            return null;
-        }
+        if (email == null) return null;
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
     private String normalizeRole(String role) {
-        if (role == null) {
-            return null;
-        }
+        if (role == null) return null;
         return role.trim().toUpperCase(Locale.ROOT);
     }
 
     private String normalizeDepartment(String department) {
-        if (department == null) {
-            return null;
-        }
+        if (department == null) return null;
         String trimmed = department.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim().toLowerCase(Locale.ROOT);
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeSearchEmail(String email) {
+        return normalizeSearchText(email);
     }
 
     private record RowCandidate(
@@ -395,41 +451,4 @@ public class UserService {
             String role,
             String department
     ) {}
-    @Transactional(readOnly = true)
-    public Page<UserResponse> searchUsers(
-            String name,
-            String email,
-            String department,
-            String role,
-            Boolean isActive,
-            Pageable pageable
-    ) {
-        tenantSchemaService.applyCurrentTenantSearchPath();
-        String normalizedName = normalizeSearchText(name);
-        String normalizedEmail = normalizeSearchEmail(email);
-
-        return repository.searchUsers(
-                normalizedName, normalizedEmail, department, role, isActive, pageable
-        ).map(u -> new UserResponse(
-                u.getId(),
-                u.getName(),
-                u.getEmail(),
-                u.getRole(),
-                u.getDepartment(),
-                u.getIsActive(),
-                u.getCreatedAt()
-        ));
-    }
-
-    private String normalizeSearchText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim().toLowerCase(Locale.ROOT);
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String normalizeSearchEmail(String email) {
-        return normalizeSearchText(email);
-    }
 }

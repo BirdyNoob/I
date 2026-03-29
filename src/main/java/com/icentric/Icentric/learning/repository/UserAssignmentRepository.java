@@ -23,42 +23,50 @@ public interface UserAssignmentRepository
     Optional<UserAssignment> findByUserIdAndTrackId(UUID userId, UUID trackId);
     List<UserAssignment> findByTrackId(UUID trackId);
     @Query("""
-SELECT ua, u.email, u.department
+SELECT ua, u.email, tu.department
 FROM UserAssignment ua
 JOIN User u ON ua.userId = u.id
-WHERE (:department IS NULL OR u.department = :department)
+JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
+WHERE (:department IS NULL OR tu.department = :department)
 AND (:status IS NULL OR ua.status = :status)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
     List<Object[]> fetchCompletionData(
-            String department,
-            AssignmentStatus status,
-            UUID trackId
+            @Param("tenantId") UUID tenantId,
+            @Param("department") String department,
+            @Param("status") AssignmentStatus status,
+            @Param("trackId") UUID trackId
     );
     @Query("""
-SELECT ua, u.email, u.department
+SELECT ua, u.email, tu.department
 FROM UserAssignment ua
 JOIN User u ON ua.userId = u.id
+JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
 WHERE ua.status IN :statuses
-AND (:department IS NULL OR u.department = :department)
+AND (:department IS NULL OR tu.department = :department)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
     List<Object[]> fetchRiskData(
+            @Param("tenantId") UUID tenantId,
             @Param("statuses") List<AssignmentStatus> statuses,
-            String department,
-            UUID trackId
+            @Param("department") String department,
+            @Param("trackId") UUID trackId
     );
     List<UserAssignment> findByStatusInAndDueDateIsNotNull(List<AssignmentStatus> statuses);
 
     List<UserAssignment> findByStatusAndDueDateIsNotNull(AssignmentStatus status);
     @Query("""
-SELECT u.department, COUNT(ua), 
+SELECT tu.department, COUNT(ua), 
 SUM(CASE WHEN ua.status = :completedStatus THEN 1 ELSE 0 END)
 FROM UserAssignment ua
 JOIN User u ON ua.userId = u.id
-GROUP BY u.department
+JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
+GROUP BY tu.department
 """)
-    List<Object[]> fetchDepartmentStats(@Param("completedStatus") AssignmentStatus completedStatus);
+    List<Object[]> fetchDepartmentStats(
+            @Param("tenantId") UUID tenantId,
+            @Param("completedStatus") AssignmentStatus completedStatus
+    );
 
     long countByAssignedAtAfter(Instant assignedAt);
 

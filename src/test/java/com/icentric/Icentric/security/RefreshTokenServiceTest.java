@@ -67,7 +67,7 @@ class RefreshTokenServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.validate("nope"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class)
                 .hasMessageContaining("Invalid or expired refresh token");
     }
 
@@ -82,7 +82,7 @@ class RefreshTokenServiceTest {
                 .thenReturn(Optional.of(expired));
 
         assertThatThrownBy(() -> service.validate("expired-token"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class)
                 .hasMessageContaining("Refresh token expired");
     }
 

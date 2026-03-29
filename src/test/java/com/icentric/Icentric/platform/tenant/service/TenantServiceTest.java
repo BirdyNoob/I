@@ -34,14 +34,14 @@ class TenantServiceTest {
         when(tenantRepository.findBySlug("acme")).thenReturn(Optional.empty());
         when(tenantRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Tenant result = tenantService.createTenant("acme", "Acme Corp", "owner@acme.com");
+        Tenant result = tenantService.createTenant("acme", "Acme Corp", "owner@acme.com", "SecurePass1!");
 
         assertThat(result.getSlug()).isEqualTo("acme");
         assertThat(result.getCompanyName()).isEqualTo("Acme Corp");
         assertThat(result.getStatus()).isEqualTo("active");
 
         verify(provisioningService).provisionTenantSchema("acme");
-        verify(bootstrapService).createSuperAdmin("acme", "owner@acme.com");
+        verify(bootstrapService).createSuperAdmin("acme", "owner@acme.com", "SecurePass1!");
     }
 
     @Test
@@ -50,7 +50,7 @@ class TenantServiceTest {
         Tenant existing = new Tenant("acme", "Existing Corp");
         when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> tenantService.createTenant("acme", "New Corp", "owner@new.com"))
+        assertThatThrownBy(() -> tenantService.createTenant("acme", "New Corp", "owner@new.com", "SomePass1!"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("acme");
 

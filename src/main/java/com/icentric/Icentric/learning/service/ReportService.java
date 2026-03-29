@@ -20,13 +20,23 @@ public class ReportService {
 
     private final UserAssignmentRepository repository;
     private final TenantSchemaService tenantSchemaService;
+    private final com.icentric.Icentric.platform.tenant.repository.TenantRepository tenantRepository;
 
     public ReportService(
             UserAssignmentRepository repository,
-            TenantSchemaService tenantSchemaService
+            TenantSchemaService tenantSchemaService,
+            com.icentric.Icentric.platform.tenant.repository.TenantRepository tenantRepository
     ) {
         this.repository = repository;
         this.tenantSchemaService = tenantSchemaService;
+        this.tenantRepository = tenantRepository;
+    }
+
+    private UUID getCurrentTenantId() {
+        String slug = com.icentric.Icentric.tenant.TenantContext.getTenant();
+        return tenantRepository.findBySlug(slug)
+                .orElseThrow(() -> new IllegalStateException("Tenant not found: " + slug))
+                .getId();
     }
 
     // ✅ Risk Report
@@ -36,9 +46,11 @@ public class ReportService {
             UUID trackId
     ) {
         tenantSchemaService.applyCurrentTenantSearchPath();
+        UUID currentTenantId = getCurrentTenantId();
 
         List<String[]> rows = new ArrayList<>();
         var data = repository.fetchRiskData(
+                currentTenantId,
                 List.of(AssignmentStatus.FAILED, AssignmentStatus.OVERDUE),
                 department,
                 trackId
@@ -76,9 +88,10 @@ public class ReportService {
             UUID trackId
     ) {
         tenantSchemaService.applyCurrentTenantSearchPath();
+        UUID currentTenantId = getCurrentTenantId();
 
         List<String[]> rows = new ArrayList<>();
-        var data = repository.fetchCompletionData(department, status, trackId);
+        var data = repository.fetchCompletionData(currentTenantId, department, status, trackId);
 
         for (Object[] row : data) {
             UserAssignment ua = (UserAssignment) row[0];

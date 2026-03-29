@@ -3,6 +3,7 @@ package com.icentric.Icentric.identity.controller;
 import com.icentric.Icentric.identity.dto.LoginRequest;
 import com.icentric.Icentric.identity.dto.LoginResponse;
 import com.icentric.Icentric.identity.dto.RefreshTokenRequest;
+import com.icentric.Icentric.identity.dto.SelectTenantRequest;
 import com.icentric.Icentric.identity.service.AuthService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,11 +28,15 @@ public class AuthController {
     }
 
     /**
-     * Tenant user login. Tenant slug is now in the request body.
+     * Global login. Returns tokens directly when the user belongs to a single tenant,
+     * or a list of workspace choices when the user belongs to multiple tenants.
      */
-    @Operation(summary = "User Login", description = "Authenticates a tenant user with email and password, returning an access and refresh token.")
+    @Operation(summary = "User Login",
+               description = "Authenticates a user globally with email and password. "
+                       + "If the user belongs to a single tenant, returns access and refresh tokens. "
+                       + "If the user belongs to multiple tenants, returns a list of workspaces to choose from.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully logged in"),
+            @ApiResponse(responseCode = "200", description = "Successfully authenticated"),
             @ApiResponse(responseCode = "400", description = "Invalid request format"),
             @ApiResponse(responseCode = "401", description = "Invalid credentials")
     })
@@ -41,9 +46,31 @@ public class AuthController {
     }
 
     /**
+     * Called after login when the user belongs to multiple tenants.
+     * The email is passed as a query parameter (kept from the previous login response
+     * in the frontend's memory) so we can identify the user without a JWT.
+     */
+    @Operation(summary = "Select Tenant",
+               description = "After a multi-tenant login, the user selects a workspace. "
+                       + "Returns access and refresh tokens scoped to the chosen tenant.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Tokens issued for selected tenant"),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "401", description = "Invalid credentials or not a member of the selected tenant")
+    })
+    @PostMapping("/select-tenant")
+    public LoginResponse selectTenant(
+            @RequestParam String email,
+            @Valid @RequestBody SelectTenantRequest request
+    ) {
+        return service.selectTenant(email, request);
+    }
+
+    /**
      * Exchange a valid refresh token for a new access + refresh token pair.
      */
-    @Operation(summary = "Refresh Token", description = "Exchanges a valid refresh token for a new access and refresh token pair.")
+    @Operation(summary = "Refresh Token",
+               description = "Exchanges a valid refresh token for a new access and refresh token pair.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully refreshed token"),
             @ApiResponse(responseCode = "400", description = "Invalid request format"),
@@ -57,7 +84,8 @@ public class AuthController {
     /**
      * Revoke the refresh token (logout).
      */
-    @Operation(summary = "Logout User", description = "Revokes the provided refresh token, effectively logging the user out.")
+    @Operation(summary = "Logout User",
+               description = "Revokes the provided refresh token, effectively logging the user out.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully logged out"),
             @ApiResponse(responseCode = "400", description = "Invalid request format")

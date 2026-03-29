@@ -65,7 +65,7 @@ class PlatformAuthServiceTest {
         when(repository.findByEmail(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.login(new PlatformLoginRequest("nope@x.com", "pw", null)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class)
                 .hasMessageContaining("Invalid credentials");
     }
 
@@ -76,7 +76,7 @@ class PlatformAuthServiceTest {
         when(passwordEncoder.matches(any(), any())).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(new PlatformLoginRequest("admin@example.com", "bad", null)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class)
                 .hasMessageContaining("Invalid credentials");
     }
 
@@ -91,7 +91,7 @@ class PlatformAuthServiceTest {
         when(mfaService.verifyCode("totp-secret", "000000")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(new PlatformLoginRequest("admin@example.com", "secret", "000000")))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class)
                 .hasMessageContaining("Invalid MFA code");
     }
 

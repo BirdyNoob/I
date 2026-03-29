@@ -7,10 +7,15 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Global user record.
+ * Lives in the {@code system} schema — resolved independently of the
+ * per-tenant {@code search_path}.
+ */
 @Data
 @NoArgsConstructor
 @Entity
-@Table(name = "users")
+@Table(name = "users", schema = "system")
 public class User {
 
     @Id
@@ -18,25 +23,20 @@ public class User {
 
     private String name;
 
+    @Column(unique = true, nullable = false)
     private String email;
 
-    @Column(name = "password_hash")
+    @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
-    private String role;
+    /** LOCAL | GOOGLE | MICROSOFT */
+    @Column(name = "auth_provider", nullable = false)
+    private String authProvider = "LOCAL";
 
-    private String department;
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive = true;
 
-    @Column(name = "is_active")
-    private Boolean isActive;
-
-    @Column(name = "impersonated_by")
-    private UUID impersonatedBy;
-
-    @Column(name = "impersonation_expires_at")
-    private Instant impersonationExpiresAt;
-
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     @Column(name = "last_login_at")

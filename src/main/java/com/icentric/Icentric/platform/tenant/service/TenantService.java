@@ -24,7 +24,7 @@ public class TenantService {
         this.bootstrapService = bootstrapService;
     }
 
-    public Tenant createTenant(String slug, String companyName, String adminEmail) {
+    public Tenant createTenant(String slug, String companyName, String adminEmail, String adminPassword) {
 
         if (tenantRepository.findBySlug(slug).isPresent()) {
             throw new IllegalStateException("Tenant slug already exists: " + slug);
@@ -36,7 +36,7 @@ public class TenantService {
 
         provisioningService.provisionTenantSchema(slug);
 
-        bootstrapService.createSuperAdmin(slug, adminEmail);
+        bootstrapService.createSuperAdmin(slug, adminEmail, adminPassword);
 
         return tenant;
     }

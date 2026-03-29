@@ -38,7 +38,7 @@ public class PlatformAuthService {
             throw new BadCredentialsException("Invalid credentials");
         }
 
-        if (admin.getMfaEnabled()) {
+        if (Boolean.TRUE.equals(admin.getMfaEnabled())) {
 
             boolean valid = mfaService.verifyCode(
                     admin.getMfaSecret(),

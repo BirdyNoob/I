@@ -14,7 +14,9 @@ import java.time.Instant;
 import java.util.UUID;
 @Data
 @Entity
-@Table(name = "user_assignments")
+@Table(name = "user_assignments", indexes = {
+    @jakarta.persistence.Index(name = "idx_user_assignments_user_id", columnList = "user_id")
+})
 public class UserAssignment {
 
     @Id
