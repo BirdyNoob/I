@@ -17,9 +17,13 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Platform-admin CRUD for learning tracks.
+ * Base: /api/v1/platform/content/tracks
+ */
 @RestController
 @RequestMapping("/api/v1/platform/content/tracks")
-@Tag(name = "Tracks (Platform)", description = "APIs for platform admins to manage learning tracks")
+@Tag(name = "Tracks (Platform Admin)", description = "APIs for platform admins to manage learning tracks")
 public class TrackController {
 
     private final TrackService service;
@@ -28,12 +32,14 @@ public class TrackController {
         this.service = service;
     }
 
-    @Operation(summary = "Create a new track", description = "Creates a new learning track for the platform.")
+    // ── POST /tracks ───────────────────────────────────────────────────────────
+
+    @Operation(summary = "Create a track", description = "Creates a new learning track in DRAFT status.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully created the track"),
+            @ApiResponse(responseCode = "200", description = "Track created"),
             @ApiResponse(responseCode = "400", description = "Invalid request payload"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - platform admin role required")
+            @ApiResponse(responseCode = "403", description = "Forbidden — platform admin role required")
     })
     @PostMapping
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
@@ -43,11 +49,13 @@ public class TrackController {
         return service.createTrack(request);
     }
 
-    @Operation(summary = "Get all tracks", description = "Retrieves a list of all tracks created on the platform.")
+    // ── GET /tracks ────────────────────────────────────────────────────────────
+
+    @Operation(summary = "List all tracks", description = "Returns all tracks (all statuses).")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved list of tracks"),
+            @ApiResponse(responseCode = "200", description = "Track list returned"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - platform admin role required")
+            @ApiResponse(responseCode = "403", description = "Forbidden")
     })
     @GetMapping
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
@@ -55,9 +63,14 @@ public class TrackController {
         return service.getAllTracks();
     }
 
-    @Operation(summary = "Get track details", description = "Retrieves complete details of a specific track by its UUID.")
+    // ── GET /tracks/{trackId} ──────────────────────────────────────────────────
+
+    @Operation(
+            summary = "Get track detail",
+            description = "Returns the track with its modules and lessons (ordered by sortOrder). " +
+                          "Each lesson carries its lessonType so the frontend knows what component to render.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully retrieved track details"),
+            @ApiResponse(responseCode = "200", description = "Track detail returned"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
             @ApiResponse(responseCode = "403", description = "Forbidden"),
             @ApiResponse(responseCode = "404", description = "Track not found")
@@ -70,31 +83,65 @@ public class TrackController {
         return service.getTrack(trackId);
     }
 
-    @Operation(summary = "Update a track", description = "Updates details of a specific track. Currently accessible without strict role check (verify access).")
+    // ── PUT /tracks/{trackId} ──────────────────────────────────────────────────
+
+    @Operation(
+            summary = "Update a track",
+            description = "Updates title and/or description. Only allowed while track is in DRAFT status.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully updated the track"),
-            @ApiResponse(responseCode = "400", description = "Invalid request payload"),
+            @ApiResponse(responseCode = "200", description = "Track updated"),
+            @ApiResponse(responseCode = "400", description = "Invalid payload"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "404", description = "Track not found")
+            @ApiResponse(responseCode = "403", description = "Forbidden"),
+            @ApiResponse(responseCode = "404", description = "Track not found"),
+            @ApiResponse(responseCode = "409", description = "Track already published — cannot edit")
     })
-    @PutMapping("/tracks/{trackId}")
+    @PutMapping("/{trackId}")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     public Track updateTrack(
-            @Parameter(description = "UUID of the track to update") @PathVariable UUID trackId,
+            @Parameter(description = "UUID of the track") @PathVariable UUID trackId,
             @Valid @RequestBody UpdateTrackRequest request
     ) {
         return service.updateTrack(trackId, request);
     }
 
-    @Operation(summary = "Publish a track", description = "Marks a specific track as published, making it available for assignment.")
+    // ── PATCH /tracks/{trackId}/publish ───────────────────────────────────────
+
+    @Operation(
+            summary = "Publish a track",
+            description = "Validates that every module has all 4 lesson types, then marks the track PUBLISHED " +
+                          "and increments its version. Published tracks trigger retraining for existing assignees.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully published the track"),
+            @ApiResponse(responseCode = "200", description = "Track published"),
+            @ApiResponse(responseCode = "400", description = "Track structure incomplete"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden"),
             @ApiResponse(responseCode = "404", description = "Track not found")
     })
-    @PatchMapping("/tracks/{id}/publish")
+    @PatchMapping("/{trackId}/publish")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     public Track publishTrack(
-            @Parameter(description = "UUID of the track to publish") @PathVariable UUID id
+            @Parameter(description = "UUID of the track") @PathVariable UUID trackId
     ) {
-        return service.publishTrack(id);
+        return service.publishTrack(trackId);
+    }
+
+    // ── PATCH /tracks/{trackId}/archive ───────────────────────────────────────
+
+    @Operation(
+            summary = "Archive a track",
+            description = "Sets track status to ARCHIVED and un-publishes it.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Track archived"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden"),
+            @ApiResponse(responseCode = "404", description = "Track not found")
+    })
+    @PatchMapping("/{trackId}/archive")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public Track archiveTrack(
+            @Parameter(description = "UUID of the track") @PathVariable UUID trackId
+    ) {
+        return service.archiveTrack(trackId);
     }
 }

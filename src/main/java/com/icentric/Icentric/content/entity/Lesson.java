@@ -1,5 +1,6 @@
 package com.icentric.Icentric.content.entity;
 
+import com.icentric.Icentric.content.constants.LessonType;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -20,7 +21,9 @@ public class Lesson {
 
     private String title;
 
-    private String lessonType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lesson_type")
+    private LessonType lessonType;
 
     @Column(name = "content_json", columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)

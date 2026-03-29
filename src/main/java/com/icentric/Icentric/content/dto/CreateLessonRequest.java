@@ -1,5 +1,6 @@
 package com.icentric.Icentric.content.dto;
 
+import com.icentric.Icentric.content.constants.LessonType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -10,9 +11,8 @@ public record CreateLessonRequest(
         @NotBlank
         @Size(max = 255)
         String title,
-        @NotBlank
-        @Size(max = 50)
-        String lessonType,
+        @NotNull
+        LessonType lessonType,
         @Size(max = 20000)
         String contentJson,
         @Size(max = 2048)

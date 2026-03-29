@@ -1,5 +1,4 @@
 package com.icentric.Icentric.learning.repository;
-import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.learning.entity.LessonProgress;
 import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;

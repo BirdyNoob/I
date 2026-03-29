@@ -4,7 +4,6 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.entity.CourseModule;
 import com.icentric.Icentric.content.repository.ModuleRepository;
-import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.*;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
@@ -208,6 +207,69 @@ public class LearnerDashboardService {
         return new LearnerDashboardResponse(
                 trainings,
                 certificates
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public TrackProgressResponse getTrackProgress(UUID userId, UUID trackId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        var track = trackRepository.findById(trackId)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Track not found: " + trackId));
+
+        var modules = moduleRepository.findByTrackIdOrderBySortOrder(trackId);
+
+        int totalLessons = 0;
+        int completedLessons = 0;
+        var moduleProgressList = new ArrayList<TrackProgressResponse.ModuleProgress>();
+
+        for (var module : modules) {
+            var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+            var lessonStatuses = new java.util.ArrayList<TrackProgressResponse.LessonStatus>();
+
+            boolean previousComplete = true; // first lesson is always unlocked
+            int moduleCompleted = 0;
+
+            for (var lesson : lessons) {
+                boolean done = progressRepository.existsByUserIdAndLessonIdAndStatus(
+                        userId, lesson.getId(), "COMPLETED");
+                boolean locked = !previousComplete; // locked if the one before wasn't done
+
+                lessonStatuses.add(new TrackProgressResponse.LessonStatus(
+                        lesson.getId(),
+                        lesson.getTitle(),
+                        lesson.getLessonType(),
+                        lesson.getSortOrder(),
+                        done,
+                        locked
+                ));
+
+                if (done) moduleCompleted++;
+                previousComplete = done; // next lesson locks if this one isn't done
+            }
+
+            totalLessons += lessons.size();
+            completedLessons += moduleCompleted;
+            boolean moduleComplete = !lessons.isEmpty() && moduleCompleted == lessons.size();
+
+            moduleProgressList.add(new TrackProgressResponse.ModuleProgress(
+                    module.getId(),
+                    module.getTitle(),
+                    module.getSortOrder(),
+                    moduleComplete,
+                    lessonStatuses
+            ));
+        }
+
+        int progressPercent = totalLessons == 0 ? 0 : (completedLessons * 100) / totalLessons;
+
+        return new TrackProgressResponse(
+                trackId,
+                track.getTitle(),
+                totalLessons,
+                completedLessons,
+                progressPercent,
+                moduleProgressList
         );
     }
 

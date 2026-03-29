@@ -6,6 +6,7 @@ import com.icentric.Icentric.learning.dto.CertificateDownloadResult;
 import com.icentric.Icentric.learning.dto.LearnerAssignmentResponse;
 import com.icentric.Icentric.learning.dto.LearnerDashboardResponse;
 import com.icentric.Icentric.learning.dto.NextLessonResponse;
+import com.icentric.Icentric.learning.dto.TrackProgressResponse;
 import com.icentric.Icentric.learning.service.CertificateService;
 import com.icentric.Icentric.learning.service.LearnerDashboardService;
 
@@ -131,5 +132,25 @@ public class LearnerDashboardController {
                         "attachment; filename=\"" + certificate.filename() + "\"")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(certificate.pdf());
+    }
+    @Operation(summary = "Get track progress",
+               description = "Returns per-module and per-lesson completion status. Each lesson includes a 'locked' flag indicating whether the learner must complete a preceding lesson first.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Track progress returned"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Track not found")
+    })
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('LEARNER')")
+    @GetMapping("/tracks/{trackId}/progress")
+    public TrackProgressResponse trackProgress(
+            @org.springframework.web.bind.annotation.PathVariable UUID trackId,
+            Authentication auth
+    ) {
+        Object userIdRaw = auth != null ? auth.getDetails() : null;
+        if (userIdRaw == null) {
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
+        }
+        UUID userId = UUID.fromString(userIdRaw.toString());
+        return service.getTrackProgress(userId, trackId);
     }
 }

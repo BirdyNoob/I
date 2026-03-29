@@ -2,6 +2,8 @@ package com.icentric.Icentric.config;
 
 import com.icentric.Icentric.identity.exception.UserNotFoundException;
 import com.icentric.Icentric.learning.exception.CertificateGenerationException;
+import com.icentric.Icentric.learning.exception.SequentialLockException;
+import com.icentric.Icentric.platform.exception.TenantNotFoundException;
 import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -189,6 +191,28 @@ public class GlobalExceptionHandler {
         return buildProblem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Certificate generation failed",
+                ex.getMessage(),
+                request
+        );
+    }
+
+    /** Sequential lesson lock – learner tries to skip ahead */
+    @ExceptionHandler(SequentialLockException.class)
+    ProblemDetail handleSequentialLock(SequentialLockException ex, HttpServletRequest request) {
+        return buildProblem(
+                HttpStatus.FORBIDDEN,
+                "Lesson locked",
+                ex.getMessage(),
+                request
+        );
+    }
+
+    /** Tenant not found → 404 */
+    @ExceptionHandler(TenantNotFoundException.class)
+    ProblemDetail handleTenantNotFound(TenantNotFoundException ex, HttpServletRequest request) {
+        return buildProblem(
+                HttpStatus.NOT_FOUND,
+                "Tenant not found",
                 ex.getMessage(),
                 request
         );
