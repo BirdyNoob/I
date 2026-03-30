@@ -21,6 +21,7 @@ public interface NotificationRepository
     List<NotificationEvent> findBySentFalse();
 
     boolean existsByUserIdAndTypeAndSentFalse(UUID userId, NotificationType type);
+    boolean existsByEventKey(String eventKey);
     boolean existsByUserIdAndTypeAndCreatedAtAfter(UUID userId, NotificationType type, java.time.Instant createdAt);
     boolean existsByUserIdAndTypeAndMessageAndCreatedAtAfter(UUID userId, NotificationType type, String message, java.time.Instant createdAt);
     Page<NotificationEvent> findAll(Pageable pageable);

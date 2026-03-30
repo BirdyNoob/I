@@ -178,7 +178,11 @@ public class AuthService {
                 stored.getTenantSlug()
         );
 
-        return LoginResponse.singleTenant(accessToken, newRefreshToken);
+        return LoginResponse.singleTenant(
+                accessToken,
+                newRefreshToken,
+                frontendRole(stored.getRole())
+        );
     }
 
     // ── Logout ──────────────────────────────────────────────────────────────
@@ -210,16 +214,26 @@ public class AuthService {
                 tenantSlug
         );
 
-        auditService.log(
+        auditService.logForTenant(
                 user.getId(),
                 AuditAction.LOGIN,
                 "USER",
                 user.getId().toString(),
                 auditMetadataService.describeUser(user.getId())
                         + " logged in to tenant " + tenantSlug
-                        + " with role " + role
+                        + " with role " + role,
+                tenantSlug
         );
 
-        return LoginResponse.singleTenant(accessToken, refreshToken);
+        return LoginResponse.singleTenant(accessToken, refreshToken, role);
+    }
+
+    private String frontendRole(String storedRole) {
+        if (storedRole == null || storedRole.isBlank()) {
+            return storedRole;
+        }
+        return storedRole.startsWith("ROLE_")
+                ? storedRole.substring("ROLE_".length())
+                : storedRole;
     }
 }

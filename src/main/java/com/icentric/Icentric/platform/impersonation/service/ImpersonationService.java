@@ -64,7 +64,7 @@ public class ImpersonationService {
                 .map(admin -> (admin.getFullName() != null && !admin.getFullName().isBlank() ? admin.getFullName() : admin.getEmail())
                         + " <" + admin.getEmail() + ">")
                 .orElse(adminEmail);
-        auditService.log(
+        auditService.logForTenant(
                 platformAdminId,
                 AuditAction.IMPERSONATION_STARTED,
                 "IMPERSONATION_SESSION",
@@ -72,7 +72,8 @@ public class ImpersonationService {
                 adminLabel + " started impersonation for user " + targetUserId
                         + " in tenant " + tenantSlug
                         + " with role " + role
-                        + ". Reason: " + reason
+                        + ". Reason: " + reason,
+                "system"
         );
 
         return jwtService.generateImpersonationToken(

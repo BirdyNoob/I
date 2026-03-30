@@ -47,13 +47,14 @@ public class TenantService {
 
         UUID actorId = currentActorUserId();
         if (actorId != null) {
-            auditService.log(
+            auditService.logForTenant(
                     actorId,
                     AuditAction.TENANT_CREATED,
                     "TENANT",
                     tenant.getId().toString(),
                     "Platform admin " + actorId + " created tenant " + tenant.getCompanyName()
-                            + " [" + tenant.getSlug() + "] with bootstrap admin " + adminEmail
+                            + " [" + tenant.getSlug() + "] with bootstrap admin " + adminEmail,
+                    "system"
             );
         }
 

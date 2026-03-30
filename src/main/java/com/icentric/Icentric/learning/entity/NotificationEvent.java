@@ -20,6 +20,7 @@ public class NotificationEvent {
     private UUID userId;
     @Enumerated(EnumType.STRING)
     private NotificationType type;
+    private String eventKey;
     private String message;
     private Boolean sent;
     private Boolean isRead = false;

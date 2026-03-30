@@ -1,7 +1,7 @@
 package com.icentric.Icentric.audit.controller;
 
 import com.icentric.Icentric.audit.constants.AuditAction;
-import com.icentric.Icentric.audit.entity.AuditLog;
+import com.icentric.Icentric.audit.dto.AuditLogResponse;
 import com.icentric.Icentric.audit.service.AuditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -44,7 +44,7 @@ public class AuditController {
             @ApiResponse(responseCode = "403", description = "Forbidden - admin role required")
     })
     @GetMapping
-    public Page<AuditLog> getLogs(
+    public Page<AuditLogResponse> getLogs(
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") @PositiveOrZero Integer page,
             @Parameter(description = "Number of items per page") @RequestParam(defaultValue = "10") @Positive @Max(100) Integer size,
             @Parameter(description = "Filter by audit action") @RequestParam(required = false) AuditAction action,

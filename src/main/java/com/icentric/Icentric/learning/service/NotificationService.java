@@ -36,12 +36,21 @@ public class NotificationService {
 
     @Transactional
     public void createNotification(UUID userId, NotificationType type, String message) {
+        createNotification(userId, type, message, null);
+    }
+
+    @Transactional
+    public void createNotification(UUID userId, NotificationType type, String message, String eventKey) {
         tenantSchemaService.applyCurrentTenantSearchPath();
+
+        if (eventKey != null && !eventKey.isBlank() && repository.existsByEventKey(eventKey)) {
+            return;
+        }
 
         boolean alreadyQueued =
                 repository.existsByUserIdAndTypeAndSentFalse(userId, type);
 
-        if (alreadyQueued) {
+        if (eventKey == null && alreadyQueued) {
             return;
         }
 
@@ -49,6 +58,7 @@ public class NotificationService {
         event.setId(UUID.randomUUID());
         event.setUserId(userId);
         event.setType(type);
+        event.setEventKey(eventKey);
         event.setMessage(message);
         event.setSent(false);
         event.setCreatedAt(Instant.now());

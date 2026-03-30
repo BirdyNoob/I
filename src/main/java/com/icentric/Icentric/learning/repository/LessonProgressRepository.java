@@ -53,6 +53,19 @@ AND m.trackId IN :trackIds
 GROUP BY m.trackId
 """)
     List<Object[]> countCompletedLessonsByTrack(UUID userId, Collection<UUID> trackIds);
+
+    @Query("""
+SELECT lp.userId, m.trackId, COUNT(lp)
+FROM LessonProgress lp
+JOIN Lesson l ON lp.lessonId = l.id
+JOIN CourseModule m ON l.moduleId = m.id
+WHERE lp.userId IN :userIds
+AND lp.status = 'COMPLETED'
+AND m.trackId IN :trackIds
+GROUP BY lp.userId, m.trackId
+""")
+    List<Object[]> countCompletedLessonsByUserAndTrack(Collection<UUID> userIds, Collection<UUID> trackIds);
+
     @Modifying
     @Transactional
     @Query("""

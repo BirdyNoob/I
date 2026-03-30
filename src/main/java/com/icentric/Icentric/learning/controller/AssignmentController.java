@@ -1,5 +1,6 @@
 package com.icentric.Icentric.learning.controller;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
+import com.icentric.Icentric.learning.dto.AdminAssignmentSearchResponse;
 import com.icentric.Icentric.learning.dto.BulkAssignmentRequest;
 import com.icentric.Icentric.learning.dto.CreateAssignmentRequest;
 import com.icentric.Icentric.learning.entity.UserAssignment;
@@ -74,7 +75,7 @@ public class AssignmentController {
     })
     @GetMapping("/assignments/search")
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-    public Page<UserAssignment> searchAssignments(
+    public Page<AdminAssignmentSearchResponse> searchAssignments(
             @Parameter(description = "Filter by assignment status") @RequestParam(required = false) AssignmentStatus status,
             @Parameter(description = "Filter by track ID") @RequestParam(required = false) UUID trackId,
             @Parameter(description = "Filter by user ID") @RequestParam(required = false) UUID userId,

@@ -4,6 +4,7 @@ import com.icentric.Icentric.audit.constants.AuditAction;
 import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.identity.service.TenantAccessGuard;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.constants.CertificateStatus;
 import com.icentric.Icentric.learning.dto.CertificateDownloadResult;
@@ -47,6 +48,7 @@ public class CertificateService {
     private final CertificateIssuanceAsyncService certificateIssuanceAsyncService;
     private final TenantSchemaService tenantSchemaService;
     private final TenantRepository tenantRepository;
+    private final TenantAccessGuard tenantAccessGuard;
 
     public CertificateService(
             CertificateRepository certificateRepository,
@@ -61,7 +63,8 @@ public class CertificateService {
             CertificateUrlService certificateUrlService,
             CertificateIssuanceAsyncService certificateIssuanceAsyncService,
             TenantSchemaService tenantSchemaService,
-            TenantRepository tenantRepository
+            TenantRepository tenantRepository,
+            TenantAccessGuard tenantAccessGuard
     ) {
         this.certificateRepository = certificateRepository;
         this.issuedRepository = issuedRepository;
@@ -76,6 +79,7 @@ public class CertificateService {
         this.certificateIssuanceAsyncService = certificateIssuanceAsyncService;
         this.tenantSchemaService = tenantSchemaService;
         this.tenantRepository = tenantRepository;
+        this.tenantAccessGuard = tenantAccessGuard;
     }
 
     @Transactional
@@ -157,6 +161,7 @@ public class CertificateService {
     @Transactional(readOnly = true)
     public List<CertificateResponse> getCertificates(UUID userId) {
         tenantSchemaService.applyCurrentTenantSearchPath();
+        tenantAccessGuard.assertUserBelongsToCurrentTenant(userId);
 
         return issuedRepository.findByUserId(userId)
                 .stream()
@@ -183,6 +188,7 @@ public class CertificateService {
     @Transactional(readOnly = true)
     public CertificateDownloadResult downloadCertificate(UUID userId, UUID trackId) {
         tenantSchemaService.applyCurrentTenantSearchPath();
+        tenantAccessGuard.assertUserBelongsToCurrentTenant(userId);
 
         IssuedCertificate issued = issuedRepository.findByUserIdAndTrackId(userId, trackId)
                 .orElseThrow(() -> new NoSuchElementException(
@@ -286,11 +292,7 @@ public class CertificateService {
     }
 
     private String currentTenantSlug() {
-        String tenantSlug = TenantContext.getTenant();
-        if (tenantSlug == null || tenantSlug.isBlank()) {
-            throw new IllegalStateException("Missing tenant in request context");
-        }
-        return tenantSlug;
+        return tenantAccessGuard.currentTenantSlug();
     }
 
     private record LocatedCertificate(String tenantSlug, IssuedCertificate issuedCertificate) {

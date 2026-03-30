@@ -15,6 +15,7 @@ import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.NotificationRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.learning.service.NotificationService;
+import com.icentric.Icentric.learning.service.ReminderConfigService;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantContext;
@@ -26,13 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class AssignmentNotificationScheduler {
-    private static final Duration REMINDER_COOLDOWN = Duration.ofHours(24);
-    private static final Duration ESCALATION_COOLDOWN = Duration.ofHours(24);
 
     private final UserAssignmentRepository assignmentRepository;
     private final NotificationService notificationService;
@@ -44,6 +42,7 @@ public class AssignmentNotificationScheduler {
     private final AuditMetadataService auditMetadataService;
     private final UserRepository userRepository;
     private final TrackRepository trackRepository;
+    private final ReminderConfigService reminderConfigService;
 
     public AssignmentNotificationScheduler(
             UserAssignmentRepository assignmentRepository,
@@ -55,7 +54,8 @@ public class AssignmentNotificationScheduler {
             AuditService auditService,
             AuditMetadataService auditMetadataService,
             UserRepository userRepository,
-            TrackRepository trackRepository
+            TrackRepository trackRepository,
+            ReminderConfigService reminderConfigService
     ) {
         this.assignmentRepository = assignmentRepository;
         this.notificationService = notificationService;
@@ -67,6 +67,7 @@ public class AssignmentNotificationScheduler {
         this.auditMetadataService = auditMetadataService;
         this.userRepository = userRepository;
         this.trackRepository = trackRepository;
+        this.reminderConfigService = reminderConfigService;
     }
 
     @Scheduled(fixedRate = 60000) // every 1 min (for testing)
@@ -84,14 +85,19 @@ public class AssignmentNotificationScheduler {
 
         try {
             tenantSchemaService.applyCurrentTenantSearchPath();
-            processReminders(now);
-            processEscalations(tenant, now);
+            ReminderConfigService.ReminderSettings settings = reminderConfigService.resolveConfig(tenant.getId());
+            processReminders(now, settings);
+            processEscalations(tenant, now, settings);
         } finally {
             TenantContext.clear();
         }
     }
 
-    private void processReminders(Instant now) {
+    private void processReminders(Instant now, ReminderConfigService.ReminderSettings settings) {
+        if (!settings.reminderEnabled()) {
+            return;
+        }
+
         List<UserAssignment> assignments = assignmentRepository.findByStatusInAndDueDateIsNotNull(
                 List.of(AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS)
         );
@@ -103,35 +109,40 @@ public class AssignmentNotificationScheduler {
 
             long hoursLeft = Duration.between(now, assignment.getDueDate()).toHours();
 
-            if (hoursLeft > 0 && hoursLeft <= 48) {
-                Instant cooldownStart = now.minus(REMINDER_COOLDOWN);
-                if (!notificationRepository.existsByUserIdAndTypeAndCreatedAtAfter(
-                        assignment.getUserId(),
-                        NotificationType.REMINDER,
-                        cooldownStart)) {
-
+            for (Integer offsetHours : settings.reminderOffsetsHours()) {
+                if (hoursLeft > 0 && hoursLeft <= offsetHours) {
+                    String eventKey = reminderEventKey(assignment.getId(), offsetHours);
+                    if (!notificationRepository.existsByEventKey(eventKey)) {
+                        String message = buildLearnerReminderMessage(assignment, offsetHours);
                     notificationService.createNotification(
                             assignment.getUserId(),
                             NotificationType.REMINDER,
-                            "Training is due soon"
+                                message,
+                                eventKey
                     );
                     auditService.log(
                             assignment.getUserId(),
                             AuditAction.ASSIGNMENT_REMINDER_SENT,
                             "ASSIGNMENT",
                             assignment.getId().toString(),
-                            "Due-soon reminder sent to "
+                                "Reminder (" + offsetHours + "h) sent to "
                                     + auditMetadataService.describeUserInCurrentTenant(assignment.getUserId())
                                     + " for "
                                     + auditMetadataService.describeTrack(assignment.getTrackId())
                                     + " with " + hoursLeft + " hours remaining"
                     );
+                        break;
+                    }
                 }
             }
         }
     }
 
-    private void processEscalations(Tenant tenant, Instant now) {
+    private void processEscalations(Tenant tenant, Instant now, ReminderConfigService.ReminderSettings settings) {
+        if (!settings.escalationEnabled()) {
+            return;
+        }
+
         List<UserAssignment> overdueAssignments = assignmentRepository.findByStatusAndDueDateIsNotNull(
                 AssignmentStatus.OVERDUE
         );
@@ -140,53 +151,48 @@ public class AssignmentNotificationScheduler {
             return;
         }
 
-        // Find an admin within this tenant via the tenant_users junction table
         List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId());
+        List<TenantUser> admins = memberships.stream()
+                .filter(m -> "SUPER_ADMIN".equals(m.getRole()) || "ADMIN".equals(m.getRole()))
+                .toList();
 
-        Optional<TenantUser> admin = memberships.stream()
-                .filter(m -> "SUPER_ADMIN".equals(m.getRole()))
-                .findFirst();
-
-        if (admin.isEmpty()) {
-            admin = memberships.stream()
-                    .filter(m -> "ADMIN".equals(m.getRole()))
-                    .findFirst();
-        }
-
-        if (admin.isEmpty()) {
+        if (admins.isEmpty()) {
             return;
         }
 
-        UUID adminUserId = admin.get().getUserId();
+        for (UserAssignment assignment : overdueAssignments) {
+            long overdueHours = Duration.between(assignment.getDueDate(), now).toHours();
+            if (overdueHours < settings.escalationDelayHours()) {
+                continue;
+            }
 
-        UserAssignment firstOverdue = overdueAssignments.get(0);
-        String message = buildAdminEscalationMessage(firstOverdue);
-        Instant cooldownStart = now.minus(ESCALATION_COOLDOWN);
+            String message = buildAdminEscalationMessage(assignment);
+            for (TenantUser admin : admins) {
+                UUID adminUserId = admin.getUserId();
+                String eventKey = escalationEventKey(assignment.getId(), adminUserId, settings.escalationDelayHours());
+                if (notificationRepository.existsByEventKey(eventKey)) {
+                    continue;
+                }
 
-        if (notificationRepository.existsByUserIdAndTypeAndMessageAndCreatedAtAfter(
-                adminUserId,
-                NotificationType.ESCALATION,
-                message,
-                cooldownStart)) {
-            return;
+                notificationService.createNotification(
+                        adminUserId,
+                        NotificationType.ESCALATION,
+                        message,
+                        eventKey
+                );
+                auditService.log(
+                        adminUserId,
+                        AuditAction.ASSIGNMENT_ESCALATION_SENT,
+                        "ASSIGNMENT",
+                        assignment.getId().toString(),
+                        "Escalation sent to "
+                                + auditMetadataService.describeUserInCurrentTenant(adminUserId)
+                                + " about overdue learner "
+                                + auditMetadataService.describeUserInCurrentTenant(assignment.getUserId())
+                                + " on " + auditMetadataService.describeTrack(assignment.getTrackId())
+                );
+            }
         }
-
-        notificationService.createNotification(
-                adminUserId,
-                NotificationType.ESCALATION,
-                message
-        );
-        auditService.log(
-                adminUserId,
-                AuditAction.ASSIGNMENT_ESCALATION_SENT,
-                "ASSIGNMENT",
-                firstOverdue.getId().toString(),
-                "Escalation sent to "
-                        + auditMetadataService.describeUserInCurrentTenant(adminUserId)
-                        + " about overdue learner "
-                        + auditMetadataService.describeUserInCurrentTenant(firstOverdue.getUserId())
-                        + " on " + auditMetadataService.describeTrack(firstOverdue.getTrackId())
-        );
     }
 
     private String buildAdminEscalationMessage(UserAssignment assignment) {
@@ -206,5 +212,22 @@ public class AssignmentNotificationScheduler {
 
         return "Overdue training alert: " + learnerName + learnerEmail
                 + " has not completed '" + trackTitle + "' due on " + dueDate + ".";
+    }
+
+    private String buildLearnerReminderMessage(UserAssignment assignment, int offsetHours) {
+        Track track = trackRepository.findById(assignment.getTrackId()).orElse(null);
+        String trackTitle = track != null && track.getTitle() != null && !track.getTitle().isBlank()
+                ? track.getTitle()
+                : assignment.getTrackId().toString();
+        return "Reminder: '" + trackTitle + "' is due on " + assignment.getDueDate()
+                + ". This reminder was triggered " + offsetHours + " hours before the deadline.";
+    }
+
+    private String reminderEventKey(UUID assignmentId, int offsetHours) {
+        return "assignment:" + assignmentId + ":reminder:" + offsetHours;
+    }
+
+    private String escalationEventKey(UUID assignmentId, UUID adminUserId, int escalationDelayHours) {
+        return "assignment:" + assignmentId + ":escalation:" + adminUserId + ":" + escalationDelayHours;
     }
 }

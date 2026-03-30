@@ -13,8 +13,6 @@ import com.icentric.Icentric.identity.exception.UserNotFoundException;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
-import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
-import com.icentric.Icentric.tenant.TenantContext;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -56,49 +54,35 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final TenantUserRepository tenantUserRepository;
-    private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
     private final String bulkUploadDefaultPassword;
     private final AuditService auditService;
     private final AuditMetadataService auditMetadataService;
+    private final TenantAccessGuard tenantAccessGuard;
 
     public UserService(
             UserRepository userRepository,
             TenantUserRepository tenantUserRepository,
-            TenantRepository tenantRepository,
             PasswordEncoder passwordEncoder,
             @Value("${app.bulk-upload.default-password:ChangeMe@123}") String bulkUploadDefaultPassword,
             AuditService auditService,
-            AuditMetadataService auditMetadataService
+            AuditMetadataService auditMetadataService,
+            TenantAccessGuard tenantAccessGuard
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
-        this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
         this.bulkUploadDefaultPassword = bulkUploadDefaultPassword;
         this.auditService = auditService;
         this.auditMetadataService = auditMetadataService;
-    }
-
-    // ── helpers ──────────────────────────────────────────────────────────────
-
-    /**
-     * Resolves the current tenant from TenantContext.
-     */
-    private Tenant currentTenant() {
-        String slug = TenantContext.getTenant();
-        if (slug == null || slug.isBlank()) {
-            throw new IllegalStateException("No tenant in context");
-        }
-        return tenantRepository.findBySlug(slug)
-                .orElseThrow(() -> new IllegalStateException("Tenant not found: " + slug));
+        this.tenantAccessGuard = tenantAccessGuard;
     }
 
     // ── CREATE ───────────────────────────────────────────────────────────────
 
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
-        Tenant tenant = currentTenant();
+        Tenant tenant = tenantAccessGuard.currentTenant();
 
         // Upsert global user
         User user = userRepository.findByEmail(request.email())
@@ -139,7 +123,7 @@ public class UserService {
             Boolean isActive,
             Pageable pageable
     ) {
-        Tenant tenant = currentTenant();
+        Tenant tenant = tenantAccessGuard.currentTenant();
 
         return userRepository.findTenantUsers(
                 tenant.getId(),
@@ -154,7 +138,7 @@ public class UserService {
 
     @Transactional
     public UserResponse updateUser(UUID userId, UpdateUserRequest request) {
-        Tenant tenant = currentTenant();
+        Tenant tenant = tenantAccessGuard.currentTenant();
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
@@ -196,6 +180,7 @@ public class UserService {
 
     @Transactional
     public void deactivateUser(UUID userId) {
+        tenantAccessGuard.assertUserBelongsToCurrentTenant(userId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
@@ -221,7 +206,7 @@ public class UserService {
             Boolean isActive,
             Pageable pageable
     ) {
-        Tenant tenant = currentTenant();
+        Tenant tenant = tenantAccessGuard.currentTenant();
 
         String normalizedName = normalizeSearchText(name);
         String normalizedEmail = normalizeSearchEmail(email);
@@ -245,7 +230,7 @@ public class UserService {
 
     @Transactional
     public BulkUploadResponse bulkUploadUsers(MultipartFile file) {
-        Tenant tenant = currentTenant();
+        Tenant tenant = tenantAccessGuard.currentTenant();
         validateBulkUploadFile(file);
         validateBulkUploadDefaults();
 
@@ -319,8 +304,13 @@ public class UserService {
         }
 
         // Check which emails already have a mapping in THIS tenant
-        Set<UUID> existingMappedUserIds = tenantUserRepository.findByTenantId(tenant.getId())
-                .stream().map(TenantUser::getUserId).collect(Collectors.toSet());
+        Set<UUID> candidateUserIds = existingUsers.values().stream()
+                .map(User::getId)
+                .collect(Collectors.toSet());
+        Set<UUID> existingMappedUserIds = new HashSet<>(tenantUserRepository.findUserIdsByTenantIdAndUserIdIn(
+                tenant.getId(),
+                candidateUserIds
+        ));
 
         Instant createdAt = Instant.now();
         String passwordHash = passwordEncoder.encode(bulkUploadDefaultPassword);

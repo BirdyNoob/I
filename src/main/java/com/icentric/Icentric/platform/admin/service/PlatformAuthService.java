@@ -60,13 +60,14 @@ public class PlatformAuthService {
                 "ROLE_PLATFORM_ADMIN",
                 "system");
 
-        auditService.log(
+        auditService.logForTenant(
                 admin.getId(),
                 AuditAction.PLATFORM_ADMIN_LOGIN,
                 "PLATFORM_ADMIN",
                 admin.getId().toString(),
                 (admin.getFullName() != null && !admin.getFullName().isBlank() ? admin.getFullName() : admin.getEmail())
-                        + " <" + admin.getEmail() + "> logged into the platform admin console"
+                        + " <" + admin.getEmail() + "> logged into the platform admin console",
+                "system"
         );
 
         return new PlatformLoginResponse(token);
