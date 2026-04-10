@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.Collection;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -65,6 +66,16 @@ AND m.trackId IN :trackIds
 GROUP BY lp.userId, m.trackId
 """)
     List<Object[]> countCompletedLessonsByUserAndTrack(Collection<UUID> userIds, Collection<UUID> trackIds);
+
+    @Query("""
+SELECT lp.completedAt
+FROM LessonProgress lp
+WHERE lp.userId = :userId
+AND lp.status = 'COMPLETED'
+AND lp.completedAt IS NOT NULL
+ORDER BY lp.completedAt DESC
+""")
+    List<Instant> findCompletedTimestampsByUserId(UUID userId);
 
     @Modifying
     @Transactional

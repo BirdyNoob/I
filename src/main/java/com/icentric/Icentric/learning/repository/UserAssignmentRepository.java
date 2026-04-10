@@ -24,10 +24,11 @@ public interface UserAssignmentRepository
     List<UserAssignment> findByTrackId(UUID trackId);
     List<UserAssignment> findByTrackIdIn(List<UUID> trackIds);
     @Query("""
-SELECT ua, u.email, tu.department
+SELECT ua, u.name, u.email, tu.role, tu.department, t.title
 FROM UserAssignment ua
 JOIN User u ON ua.userId = u.id
 JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
+JOIN Track t ON ua.trackId = t.id
 WHERE (:department IS NULL OR tu.department = :department)
 AND (:status IS NULL OR ua.status = :status)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
@@ -39,15 +40,32 @@ AND (:trackId IS NULL OR ua.trackId = :trackId)
             @Param("trackId") UUID trackId
     );
     @Query("""
-SELECT ua, u.email, tu.department
+SELECT ua, u.name, u.email, tu.role, tu.department, t.title
 FROM UserAssignment ua
 JOIN User u ON ua.userId = u.id
 JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
+JOIN Track t ON ua.trackId = t.id
 WHERE ua.status IN :statuses
 AND (:department IS NULL OR tu.department = :department)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
     List<Object[]> fetchRiskData(
+            @Param("tenantId") UUID tenantId,
+            @Param("statuses") List<AssignmentStatus> statuses,
+            @Param("department") String department,
+            @Param("trackId") UUID trackId
+    );
+    @Query("""
+SELECT ua, u.name, u.email, tu.role, tu.department, t.title
+FROM UserAssignment ua
+JOIN User u ON ua.userId = u.id
+JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
+JOIN Track t ON ua.trackId = t.id
+WHERE ua.status IN :statuses
+AND (:department IS NULL OR tu.department = :department)
+AND (:trackId IS NULL OR ua.trackId = :trackId)
+""")
+    List<Object[]> fetchReportDataByStatuses(
             @Param("tenantId") UUID tenantId,
             @Param("statuses") List<AssignmentStatus> statuses,
             @Param("department") String department,

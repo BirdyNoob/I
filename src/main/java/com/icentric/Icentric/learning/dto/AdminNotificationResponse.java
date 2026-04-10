@@ -13,6 +13,7 @@ public record AdminNotificationResponse(
         NotificationType type,
         String message,
         boolean sent,
+        boolean read,
         Instant createdAt
 
 ) {}

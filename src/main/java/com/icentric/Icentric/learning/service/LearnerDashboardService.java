@@ -11,15 +11,22 @@ import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -33,6 +40,7 @@ public class LearnerDashboardService {
     private final IssuedCertificateRepository issuedCertificateRepository;
     private final CertificateRepository certificateRepository;
     private final TenantSchemaService tenantSchemaService;
+    private final UserRepository userRepository;
 
     public LearnerDashboardService(
             UserAssignmentRepository assignmentRepository,
@@ -42,7 +50,8 @@ public class LearnerDashboardService {
             LessonRepository lessonRepository,
             IssuedCertificateRepository issuedCertificateRepository,
             CertificateRepository certificateRepository,
-            TenantSchemaService tenantSchemaService
+            TenantSchemaService tenantSchemaService,
+            UserRepository userRepository
     ) {
         this.assignmentRepository = assignmentRepository;
         this.progressRepository = progressRepository;
@@ -52,6 +61,7 @@ public class LearnerDashboardService {
         this.issuedCertificateRepository = issuedCertificateRepository;
         this.certificateRepository = certificateRepository;
         this.tenantSchemaService = tenantSchemaService;
+        this.userRepository = userRepository;
 
     }
 
@@ -143,6 +153,15 @@ public class LearnerDashboardService {
 
         List<UserAssignment> assignments =
                 assignmentRepository.findByUserId(userId);
+        String learnerName = userRepository.findById(userId)
+                .map(user -> user.getName() != null && !user.getName().isBlank() ? user.getName() : user.getEmail())
+                .orElse("Learner");
+        int learningStreakDays = calculateLearningStreak(userId);
+        Instant nextDeadline = assignments.stream()
+                .filter(a -> a.getDueDate() != null && a.getStatus() != AssignmentStatus.COMPLETED)
+                .map(UserAssignment::getDueDate)
+                .min(Comparator.naturalOrder())
+                .orElse(null);
 
         List<UUID> trackIds = assignments.stream()
                 .map(UserAssignment::getTrackId)
@@ -214,6 +233,9 @@ public class LearnerDashboardService {
                         .toList();
 
         return new LearnerDashboardResponse(
+                learnerName,
+                learningStreakDays,
+                nextDeadline,
                 trainings,
                 certificates
         );
@@ -300,5 +322,34 @@ public class LearnerDashboardService {
             case COMPLETED -> 4;
             default -> 5;
         };
+    }
+
+    private int calculateLearningStreak(UUID userId) {
+        List<Instant> completedAtList = progressRepository.findCompletedTimestampsByUserId(userId);
+        if (completedAtList.isEmpty()) {
+            return 0;
+        }
+
+        Set<LocalDate> completionDays = new LinkedHashSet<>();
+        for (Instant completedAt : completedAtList) {
+            completionDays.add(completedAt.atZone(ZoneOffset.UTC).toLocalDate());
+        }
+
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate cursor;
+        if (completionDays.contains(today)) {
+            cursor = today;
+        } else if (completionDays.contains(today.minusDays(1))) {
+            cursor = today.minusDays(1);
+        } else {
+            return 0;
+        }
+
+        int streak = 0;
+        while (completionDays.contains(cursor)) {
+            streak++;
+            cursor = cursor.minusDays(1);
+        }
+        return streak;
     }
 }

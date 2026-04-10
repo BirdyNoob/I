@@ -1,6 +1,7 @@
 package com.icentric.Icentric.learning.controller;
 
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
+import com.icentric.Icentric.learning.dto.ReportRow;
 import com.icentric.Icentric.learning.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -14,9 +15,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.UUID;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/admin/reports")
@@ -29,47 +30,32 @@ public class ReportController {
         this.service = service;
     }
 
-    @Operation(summary = "Download Completion Report", description = "Generates and streams a CSV report showing track completion status for users. Can be filtered by department, status, and track.")
+    @Operation(summary = "Get Admin Report", description = "Unified report API. Returns JSON rows by default, or CSV download when format=csv. Supports filtering by department, track, and one or more statuses.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully generated completion report CSV"),
+            @ApiResponse(responseCode = "200", description = "Successfully returned report data"),
             @ApiResponse(responseCode = "401", description = "Unauthorized"),
             @ApiResponse(responseCode = "403", description = "Forbidden")
     })
-    @GetMapping("/completion")
-    public ResponseEntity<StreamingResponseBody> completionReport(
+    @GetMapping
+    public ResponseEntity<?> report(
             @Parameter(description = "Filter by department") @RequestParam(required = false) String department,
-            @Parameter(description = "Filter by assignment status") @RequestParam(required = false) AssignmentStatus status,
-            @Parameter(description = "Filter by track ID") @RequestParam(required = false) UUID trackId
+            @Parameter(description = "Filter by assignment statuses. Repeat param for multiple statuses.") @RequestParam(required = false) List<AssignmentStatus> status,
+            @Parameter(description = "Filter by track ID") @RequestParam(required = false) UUID trackId,
+            @Parameter(description = "Response format: json or csv") @RequestParam(defaultValue = "json") String format
     ) {
+        if ("csv".equalsIgnoreCase(format)) {
+            List<ReportRow> rows = service.getReportData(department, trackId, status);
+            String csv = service.toCsv(rows);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=admin_report.csv")
+                    .contentType(MediaType.parseMediaType("text/csv"))
+                    .body(csv);
+        }
+        if (!"json".equalsIgnoreCase(format)) {
+            throw new IllegalArgumentException("format must be either 'json' or 'csv'");
+        }
 
-        StreamingResponseBody stream =
-                service.streamCompletionReport(department, status, trackId);
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=completion_report.csv")
-                .contentType(MediaType.TEXT_PLAIN)
-                .body(stream);
-    }
-
-    @Operation(summary = "Download Risk Report", description = "Generates and streams a CSV report identifying users at risk (e.g. falling behind). Can be filtered by department and track.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Successfully generated risk report CSV"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Forbidden")
-    })
-    @GetMapping("/risk")
-    public ResponseEntity<StreamingResponseBody> riskReport(
-            @Parameter(description = "Filter by department") @RequestParam(required = false) String department,
-            @Parameter(description = "Filter by track ID") @RequestParam(required = false) UUID trackId
-    ) {
-
-        var stream = service.streamRiskReport(department, trackId);
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=risk_report.csv")
-                .contentType(MediaType.TEXT_PLAIN)
-                .body(stream);
+        List<ReportRow> rows = service.getReportData(department, trackId, status);
+        return ResponseEntity.ok(rows);
     }
 }

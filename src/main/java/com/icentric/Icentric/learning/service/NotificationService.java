@@ -83,10 +83,10 @@ public class NotificationService {
         }
     }
     @Transactional(readOnly = true)
-    public Page<AdminNotificationResponse> getAdminNotifications(Pageable pageable) {
+    public Page<AdminNotificationResponse> getAdminNotifications(UUID userId, Pageable pageable) {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        return repository.findAll(pageable)
+        return repository.findByUserId(userId, pageable)
                 .map(event -> {
 
                     var user = userRepository.findById(event.getUserId())
@@ -99,6 +99,7 @@ public class NotificationService {
                             event.getType(),
                             event.getMessage(),
                             event.getSent(),
+                            Boolean.TRUE.equals(event.getIsRead()),
                             event.getCreatedAt()
                     );
                 });
