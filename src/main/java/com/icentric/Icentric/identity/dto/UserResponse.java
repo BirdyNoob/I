@@ -7,8 +7,10 @@ public record UserResponse(
         UUID id,
         String name,
         String email,
+        String location,
         String role,
         String department,
         boolean isActive,
-        Instant createdAt
+        Instant createdAt,
+        Instant lastLogin
 ) {}

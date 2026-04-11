@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS system.users
+    ADD COLUMN IF NOT EXISTS location VARCHAR(100);

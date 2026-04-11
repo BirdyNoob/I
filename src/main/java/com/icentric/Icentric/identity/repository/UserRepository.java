@@ -38,7 +38,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("""
         SELECT new com.icentric.Icentric.identity.dto.UserResponse(
-            u.id, u.name, u.email, tu.role, tu.department, u.isActive, u.createdAt
+            u.id, u.name, u.email, u.location, tu.role, tu.department, u.isActive, u.createdAt, u.lastLoginAt
         )
         FROM User u
         JOIN TenantUser tu ON u.id = tu.userId
@@ -57,7 +57,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("""
         SELECT new com.icentric.Icentric.identity.dto.UserResponse(
-            u.id, u.name, u.email, tu.role, tu.department, u.isActive, u.createdAt
+            u.id, u.name, u.email, u.location, tu.role, tu.department, u.isActive, u.createdAt, u.lastLoginAt
         )
         FROM User u
         JOIN TenantUser tu ON u.id = tu.userId

@@ -23,6 +23,9 @@ public record CreateUserRequest(
         String role,
         @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "department must not start or end with whitespace")
         @Size(max = 100)
-        String department
+        String department,
+        @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "location must not start or end with whitespace")
+        @Size(max = 100)
+        String location
 
 ) {}

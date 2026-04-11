@@ -98,10 +98,6 @@ public class AuthService {
             throw new BadCredentialsException("User is not associated with any workspace");
         }
 
-        // Update last login
-        user.setLastLoginAt(Instant.now());
-        userRepository.save(user);
-
         // Step 4: single vs multi-tenant
         if (memberships.size() == 1) {
             TenantUser membership = memberships.get(0);
@@ -198,6 +194,9 @@ public class AuthService {
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private LoginResponse issueTokens(User user, String tenantSlug, String role) {
+        user.setLastLoginAt(Instant.now());
+        userRepository.save(user);
+
         String qualifiedRole = "ROLE_" + role;
 
         String accessToken = jwtService.generateToken(

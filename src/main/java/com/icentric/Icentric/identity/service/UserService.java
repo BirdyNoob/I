@@ -91,6 +91,7 @@ public class UserService {
                     u.setId(UUID.randomUUID());
                     u.setName(normalizeName(request.name()));
                     u.setEmail(request.email());
+                    u.setLocation(normalizeLocation(request.location()));
                     u.setPasswordHash(passwordEncoder.encode(request.password()));
                     u.setAuthProvider("LOCAL");
                     u.setIsActive(true);
@@ -150,6 +151,9 @@ public class UserService {
         // Update global fields
         if (request.name() != null) {
             user.setName(normalizeName(request.name()));
+        }
+        if (request.location() != null) {
+            user.setLocation(normalizeLocation(request.location()));
         }
 
         // Update tenant-level fields
@@ -367,10 +371,12 @@ public class UserService {
                 u.getId(),
                 u.getName(),
                 u.getEmail(),
+                u.getLocation(),
                 m.getRole(),
                 m.getDepartment(),
                 u.getIsActive(),
-                u.getCreatedAt()
+                u.getCreatedAt(),
+                u.getLastLoginAt()
         );
     }
 
@@ -487,6 +493,12 @@ public class UserService {
     private String normalizeDepartment(String department) {
         if (department == null) return null;
         String trimmed = department.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeLocation(String location) {
+        if (location == null) return null;
+        String trimmed = location.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
 

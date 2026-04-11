@@ -13,10 +13,13 @@ public record UpdateUserRequest(
         @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "department must not start or end with whitespace")
         @Size(max = 100)
         String department,
+        @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "location must not start or end with whitespace")
+        @Size(max = 100)
+        String location,
         Boolean isActive
 ) {
         @AssertTrue(message = "Provide at least one field to update")
         public boolean hasUpdates() {
-                return name != null || role != null || department != null || isActive != null;
+                return name != null || role != null || department != null || location != null || isActive != null;
         }
 }
