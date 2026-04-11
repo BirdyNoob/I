@@ -64,7 +64,7 @@ public class AdminAnalyticsController {
             @ApiResponse(responseCode = "200", description = "Successfully retrieved dashboard data")
     })
     @GetMapping("/dashboard")
-    public AdminDashboardResponse dashboard() {
+    public AdminOverviewResponse dashboard() {
         return service.getDashboard();
     }
 }

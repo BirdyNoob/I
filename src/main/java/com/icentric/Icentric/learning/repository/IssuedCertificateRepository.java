@@ -16,6 +16,7 @@ public interface IssuedCertificateRepository
         extends JpaRepository<IssuedCertificate, UUID> {
 
     List<IssuedCertificate> findByUserId(UUID userId);
+    long countByIssuedAtAfter(java.time.Instant issuedAt);
     boolean existsByUserIdAndTrackId(UUID userId, UUID trackId);
     Optional<IssuedCertificate> findByUserIdAndTrackId(UUID userId, UUID trackId);
     Optional<IssuedCertificate> findByVerificationToken(UUID verificationToken);

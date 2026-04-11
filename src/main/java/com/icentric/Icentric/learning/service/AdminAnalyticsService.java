@@ -2,11 +2,14 @@ package com.icentric.Icentric.learning.service;
 
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.identity.entity.TenantUser;
+import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.*;
+import com.icentric.Icentric.learning.entity.IssuedCertificate;
 import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
@@ -18,8 +21,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,6 +39,7 @@ public class AdminAnalyticsService {
     private final TenantRepository tenantRepository;
     private final UserAssignmentRepository assignmentRepository;
     private final QuizAttemptRepository quizAttemptRepository;
+    private final IssuedCertificateRepository issuedCertificateRepository;
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
     private final TenantSchemaService tenantSchemaService;
@@ -43,6 +50,7 @@ public class AdminAnalyticsService {
             TenantRepository tenantRepository,
             UserAssignmentRepository assignmentRepository,
             QuizAttemptRepository quizAttemptRepository,
+            IssuedCertificateRepository issuedCertificateRepository,
             LessonProgressRepository progressRepository,
             LessonRepository lessonRepository,
             TenantSchemaService tenantSchemaService
@@ -52,6 +60,7 @@ public class AdminAnalyticsService {
         this.tenantRepository = tenantRepository;
         this.assignmentRepository = assignmentRepository;
         this.quizAttemptRepository = quizAttemptRepository;
+        this.issuedCertificateRepository = issuedCertificateRepository;
         this.progressRepository = progressRepository;
         this.lessonRepository = lessonRepository;
         this.tenantSchemaService = tenantSchemaService;
@@ -245,60 +254,136 @@ public class AdminAnalyticsService {
     }
 
     @Transactional(readOnly = true)
-    public AdminDashboardResponse getDashboard() {
+    public AdminOverviewResponse getDashboard() {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         Tenant tenant = currentTenant();
-        long totalUsers = tenantUserRepository.findByTenantId(tenant.getId()).size();
-
-        long totalAssignments = assignmentRepository.count();
-
-        long completed = assignmentRepository.countByStatus(AssignmentStatus.COMPLETED);
-
-        long overdue = assignmentRepository.countByStatus(AssignmentStatus.OVERDUE);
-
-        long failed = assignmentRepository.countByStatus(AssignmentStatus.FAILED);
-
-        long riskUsersCount = countRiskUsers();
-
-        double completionRate = totalAssignments == 0 ? 0 :
-                (completed * 100.0) / totalAssignments;
-
         Instant now = Instant.now();
         Instant sevenDaysAgo = now.minusSeconds(7L * 24 * 60 * 60);
-        Instant sevenDaysFromNow = now.plusSeconds(7L * 24 * 60 * 60);
+        Instant fourteenDaysAgo = now.minusSeconds(14L * 24 * 60 * 60);
 
-        DashboardTimeInsights timeInsights = new DashboardTimeInsights(
-                assignmentRepository.countByAssignedAtAfter(sevenDaysAgo),
-                quizAttemptRepository.countByAttemptedAtAfter(sevenDaysAgo),
-                assignmentRepository.countByDueDateBetweenAndStatusIn(
-                        now,
-                        sevenDaysFromNow,
-                        List.of(AssignmentStatus.ASSIGNED, AssignmentStatus.IN_PROGRESS)
-                )
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId());
+        Map<UUID, TenantUser> membershipByUserId = memberships.stream()
+                .collect(Collectors.toMap(TenantUser::getUserId, m -> m, (a, b) -> a));
+        List<UUID> tenantUserIds = memberships.stream().map(TenantUser::getUserId).distinct().toList();
+        Map<UUID, User> usersById = userRepository.findByIdIn(tenantUserIds).stream()
+                .collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
+
+        List<UserAssignment> assignments = assignmentRepository.findAll();
+        long totalAssignments = assignments.size();
+        long completedAssignments = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count();
+        long overdueAssignments = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.OVERDUE).count();
+
+        double overallCompletionPercent = totalAssignments == 0 ? 0 : (completedAssignments * 100.0) / totalAssignments;
+        double overallCompletionDeltaPercent = computeCompletionDelta(assignments, sevenDaysAgo, fourteenDaysAgo);
+
+        long activeLearners = assignments.stream()
+                .filter(a -> a.getStatus() == AssignmentStatus.IN_PROGRESS || a.getStatus() == AssignmentStatus.COMPLETED)
+                .map(UserAssignment::getUserId)
+                .distinct()
+                .count();
+
+        long overdueNewThisWeek = assignments.stream()
+                .filter(a -> a.getStatus() == AssignmentStatus.OVERDUE && a.getDueDate() != null && !a.getDueDate().isBefore(sevenDaysAgo))
+                .count();
+
+        Double avgScoreCurrent = quizAttemptRepository.getAverageScore();
+        double avgAssessmentScorePercent = avgScoreCurrent == null ? 0 : avgScoreCurrent * 100;
+        Double thisWeekScore = quizAttemptRepository.getAverageScoreBetween(sevenDaysAgo, now);
+        Double prevWeekScore = quizAttemptRepository.getAverageScoreBetween(fourteenDaysAgo, sevenDaysAgo);
+        double avgAssessmentTrendPoints = ((thisWeekScore == null ? 0 : thisWeekScore) - (prevWeekScore == null ? 0 : prevWeekScore)) * 100;
+
+        Instant monthStart = LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        long certificatesIssuedThisMonth = issuedCertificateRepository.countByIssuedAtAfter(monthStart);
+
+        List<AdminOverviewResponse.CompletionByDepartment> completionByDepartment = assignmentRepository
+                .fetchDepartmentStats(tenant.getId(), AssignmentStatus.COMPLETED)
+                .stream()
+                .map(r -> {
+                    String department = r[0] == null ? "UNKNOWN" : (String) r[0];
+                    long total = ((Number) r[1]).longValue();
+                    long completed = ((Number) r[2]).longValue();
+                    double progressPercent = total == 0 ? 0 : (completed * 100.0) / total;
+                    return new AdminOverviewResponse.CompletionByDepartment(
+                            department,
+                            progressPercent,
+                            classifyDepartmentStatus(progressPercent)
+                    );
+                })
+                .sorted(Comparator.comparing(AdminOverviewResponse.CompletionByDepartment::department, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        List<String> riskLabels = completionByDepartment.stream().map(AdminOverviewResponse.CompletionByDepartment::department).toList();
+        List<Double> currentScores = completionByDepartment.stream().map(AdminOverviewResponse.CompletionByDepartment::progressPercent).toList();
+        List<Double> targetScores = completionByDepartment.stream().map(ignored -> 85.0).toList();
+        double currentAverage = currentScores.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double targetAverage = targetScores.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        AdminOverviewResponse.RiskMaturity riskMaturity = new AdminOverviewResponse.RiskMaturity(
+                riskLabels, currentScores, targetScores, currentAverage, targetAverage
         );
 
-        List<DepartmentStat> deptStats = rankDepartmentStats(
-                assignmentRepository.fetchDepartmentStats(tenant.getId(), AssignmentStatus.COMPLETED)
-                        .stream()
-                        .map(r -> new DepartmentAggregate(
-                                (String) r[0],
-                                ((Number) r[1]).longValue(),
-                                ((Number) r[2]).longValue()
-                        ))
-                        .toList()
-        );
+        List<AdminOverviewResponse.OverdueUser> overdueUsers = assignments.stream()
+                .filter(a -> a.getStatus() == AssignmentStatus.OVERDUE && a.getDueDate() != null)
+                .sorted(Comparator.comparing(UserAssignment::getDueDate))
+                .limit(10)
+                .map(a -> {
+                    User user = usersById.get(a.getUserId());
+                    TenantUser tenantUser = membershipByUserId.get(a.getUserId());
+                    String name = user == null ? "Unknown User" : (user.getName() != null && !user.getName().isBlank() ? user.getName() : user.getEmail());
+                    String department = tenantUser == null || tenantUser.getDepartment() == null ? "UNKNOWN" : tenantUser.getDepartment();
+                    long daysOverdue = Math.max(0, (now.getEpochSecond() - a.getDueDate().getEpochSecond()) / 86_400);
+                    return new AdminOverviewResponse.OverdueUser(name, department, daysOverdue);
+                })
+                .toList();
 
-        return new AdminDashboardResponse(
-                totalUsers,
+        List<AdminOverviewResponse.ActivityItem> activityFeed = buildActivityFeed(
+                certificatesIssuedThisMonth,
+                overdueAssignments,
+                avgAssessmentTrendPoints,
                 totalAssignments,
-                completed,
-                overdue,
-                failed,
-                riskUsersCount,
-                completionRate,
-                timeInsights,
-                deptStats
+                now
+        );
+
+        List<AdminOverviewResponse.QuizPerformanceByDepartment> quizPerformanceByDepartment = quizAttemptRepository
+                .getQuizPerformanceByDepartment(tenant.getId())
+                .stream()
+                .map(row -> new AdminOverviewResponse.QuizPerformanceByDepartment(
+                        (String) row[0],
+                        row[1] == null ? 0 : ((Double) row[1]) * 100,
+                        row[2] == null ? 0 : ((Double) row[2]) * 100
+                ))
+                .sorted(Comparator.comparing(AdminOverviewResponse.QuizPerformanceByDepartment::department, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        List<AdminOverviewResponse.HighestFailureLesson> highestFailureLessons = quizAttemptRepository
+                .getLessonFailureRateByDepartment(tenant.getId())
+                .stream()
+                .limit(10)
+                .map(row -> new AdminOverviewResponse.HighestFailureLesson(
+                        (String) row[0],
+                        (String) row[1],
+                        row[2] == null ? 0 : ((Double) row[2])
+                ))
+                .toList();
+
+        AdminOverviewResponse.Kpis kpis = new AdminOverviewResponse.Kpis(
+                overallCompletionPercent,
+                overallCompletionDeltaPercent,
+                new AdminOverviewResponse.ActiveLearners(activeLearners, memberships.size()),
+                new AdminOverviewResponse.OverdueSummary(overdueAssignments, overdueNewThisWeek),
+                avgAssessmentScorePercent,
+                avgAssessmentTrendPoints,
+                certificatesIssuedThisMonth
+        );
+
+        return new AdminOverviewResponse(
+                kpis,
+                completionByDepartment,
+                riskMaturity,
+                overdueUsers,
+                activityFeed,
+                quizPerformanceByDepartment,
+                highestFailureLessons
         );
     }
 
@@ -340,6 +425,74 @@ public class AdminAnalyticsService {
         }
 
         return riskUsersCount;
+    }
+
+    private double computeCompletionDelta(List<UserAssignment> assignments, Instant sevenDaysAgo, Instant fourteenDaysAgo) {
+        List<UserAssignment> currentWindow = assignments.stream()
+                .filter(a -> a.getAssignedAt() != null && !a.getAssignedAt().isBefore(sevenDaysAgo))
+                .toList();
+        List<UserAssignment> previousWindow = assignments.stream()
+                .filter(a -> a.getAssignedAt() != null
+                        && !a.getAssignedAt().isBefore(fourteenDaysAgo)
+                        && a.getAssignedAt().isBefore(sevenDaysAgo))
+                .toList();
+
+        double currentRate = currentWindow.isEmpty() ? 0 : (currentWindow.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count() * 100.0) / currentWindow.size();
+        double previousRate = previousWindow.isEmpty() ? 0 : (previousWindow.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count() * 100.0) / previousWindow.size();
+        return currentRate - previousRate;
+    }
+
+    private AdminOverviewResponse.CompletionByDepartment.Status classifyDepartmentStatus(double progressPercent) {
+        if (progressPercent >= 80) {
+            return AdminOverviewResponse.CompletionByDepartment.Status.ON_TRACK;
+        }
+        if (progressPercent >= 50) {
+            return AdminOverviewResponse.CompletionByDepartment.Status.AT_RISK;
+        }
+        return AdminOverviewResponse.CompletionByDepartment.Status.CRITICAL;
+    }
+
+    private List<AdminOverviewResponse.ActivityItem> buildActivityFeed(
+            long certificatesIssuedThisMonth,
+            long overdueAssignments,
+            double avgAssessmentTrendPoints,
+            long totalAssignments,
+            Instant now
+    ) {
+        List<AdminOverviewResponse.ActivityItem> feed = new ArrayList<>();
+        feed.add(new AdminOverviewResponse.ActivityItem(
+                AdminOverviewResponse.ActivityItem.Type.INFO,
+                "Total assignments in scope: " + totalAssignments,
+                "just now"
+        ));
+        if (certificatesIssuedThisMonth > 0) {
+            feed.add(new AdminOverviewResponse.ActivityItem(
+                    AdminOverviewResponse.ActivityItem.Type.SUCCESS,
+                    certificatesIssuedThisMonth + " certificates issued this month",
+                    "this month"
+            ));
+        }
+        if (overdueAssignments > 0) {
+            feed.add(new AdminOverviewResponse.ActivityItem(
+                    AdminOverviewResponse.ActivityItem.Type.WARNING,
+                    overdueAssignments + " learners are currently overdue",
+                    "current"
+            ));
+        }
+        if (avgAssessmentTrendPoints < 0) {
+            feed.add(new AdminOverviewResponse.ActivityItem(
+                    AdminOverviewResponse.ActivityItem.Type.ERROR,
+                    "Average assessment trend dropped by " + Math.abs(Math.round(avgAssessmentTrendPoints * 10.0) / 10.0) + " points",
+                    "last 7 days"
+            ));
+        } else {
+            feed.add(new AdminOverviewResponse.ActivityItem(
+                    AdminOverviewResponse.ActivityItem.Type.INFO,
+                    "Average assessment trend improved by " + Math.round(avgAssessmentTrendPoints * 10.0) / 10.0 + " points",
+                    "last 7 days"
+            ));
+        }
+        return feed;
     }
 
     private List<DepartmentStat> rankDepartmentStats(List<DepartmentAggregate> aggregates) {
