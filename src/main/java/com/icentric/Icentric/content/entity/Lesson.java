@@ -1,10 +1,7 @@
 package com.icentric.Icentric.content.entity;
 
-import com.icentric.Icentric.content.constants.LessonType;
 import jakarta.persistence.*;
 import lombok.Data;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -21,17 +18,7 @@ public class Lesson {
 
     private String title;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "lesson_type")
-    private LessonType lessonType;
-
-    @Column(name = "content_json", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String contentJson;
-
-    private String videoUrl;
-
-    private String resourceUrl;
+    private Integer estimatedMins;
 
     private Integer sortOrder;
 

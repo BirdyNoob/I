@@ -22,6 +22,7 @@ import org.springframework.security.authentication.AuthenticationCredentialsNotF
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import com.icentric.Icentric.learning.dto.LearningPathResponse;
 import java.util.List;
 import java.util.UUID;
 
@@ -153,5 +154,22 @@ public class LearnerDashboardController {
         }
         UUID userId = UUID.fromString(userIdRaw.toString());
         return service.getTrackProgress(userId, trackId);
+    }
+
+    @Operation(summary = "Get comprehensive learning paths",
+               description = "Returns a rich structure of all assigned tracks, their modules, lessons, and timelines designed specifically for the Learning Path UI page.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Learning paths retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('LEARNER')")
+    @GetMapping("/learning-paths")
+    public List<LearningPathResponse> learningPaths(Authentication auth) {
+        Object userIdRaw = auth != null ? auth.getDetails() : null;
+        if (userIdRaw == null) {
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
+        }
+        UUID userId = UUID.fromString(userIdRaw.toString());
+        return service.getLearningPaths(userId);
     }
 }

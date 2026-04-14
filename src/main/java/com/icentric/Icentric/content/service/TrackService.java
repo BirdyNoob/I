@@ -38,6 +38,7 @@ public class TrackService {
     private final LessonRepository lessonRepository;
     private final QuestionRepository questionRepository;
     private final AnswerRepository answerRepository;
+    private final com.icentric.Icentric.content.repository.LessonStepRepository lessonStepRepository;
     private final UserAssignmentRepository assignmentRepository;
     private final LessonProgressRepository lessonProgressRepository;
     private final AuditService auditService;
@@ -51,6 +52,7 @@ public class TrackService {
             LessonRepository lessonRepository,
             QuestionRepository questionRepository,
             AnswerRepository answerRepository,
+            com.icentric.Icentric.content.repository.LessonStepRepository lessonStepRepository,
             UserAssignmentRepository assignmentRepository,
             LessonProgressRepository lessonProgressRepository,
             AuditService auditService,
@@ -63,6 +65,7 @@ public class TrackService {
         this.lessonRepository = lessonRepository;
         this.questionRepository = questionRepository;
         this.answerRepository = answerRepository;
+        this.lessonStepRepository = lessonStepRepository;
         this.assignmentRepository = assignmentRepository;
         this.lessonProgressRepository = lessonProgressRepository;
         this.auditService = auditService;
@@ -138,8 +141,8 @@ public class TrackService {
                     List<LessonResponse> lessonResponses = lessons.stream()
                             .map(l -> new LessonResponse(
                                     l.getId(),
-                                    l.getTitle(),
-                                    l.getLessonType()))
+                                    l.getTitle()
+                            ))
                             .toList();
 
                     return new ModuleResponse(
@@ -271,11 +274,9 @@ public class TrackService {
         }
         for (CourseModule module : modules) {
             List<Lesson> lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
-            long uniqueTypes = lessons.stream().map(Lesson::getLessonType).distinct().count();
-            if (uniqueTypes < 4) {
+            if (lessons.isEmpty()) {
                 throw new IllegalStateException(
-                        "Module '" + module.getTitle() + "' must have all 4 lesson types: " +
-                        "VIDEO_CONCEPT, INTERACTIVE_SCENARIO, DOS_AND_DONTS, QUIZ.");
+                        "Module '" + module.getTitle() + "' must have at least one lesson.");
             }
         }
     }
@@ -317,14 +318,23 @@ public class TrackService {
                 clonedLesson.setId(UUID.randomUUID());
                 clonedLesson.setModuleId(savedModule.getId());
                 clonedLesson.setTitle(lesson.getTitle());
-                clonedLesson.setLessonType(lesson.getLessonType());
-                clonedLesson.setContentJson(lesson.getContentJson());
-                clonedLesson.setVideoUrl(lesson.getVideoUrl());
-                clonedLesson.setResourceUrl(lesson.getResourceUrl());
                 clonedLesson.setSortOrder(lesson.getSortOrder());
                 clonedLesson.setIsPublished(lesson.getIsPublished());
+                clonedLesson.setEstimatedMins(lesson.getEstimatedMins());
                 clonedLesson.setCreatedAt(Instant.now());
                 Lesson savedLesson = lessonRepository.save(clonedLesson);
+
+                for (com.icentric.Icentric.content.entity.LessonStep step : lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId())) {
+                    com.icentric.Icentric.content.entity.LessonStep clonedStep = new com.icentric.Icentric.content.entity.LessonStep();
+                    clonedStep.setId(UUID.randomUUID());
+                    clonedStep.setLessonId(savedLesson.getId());
+                    clonedStep.setStepType(step.getStepType());
+                    clonedStep.setTitle(step.getTitle());
+                    clonedStep.setContentJson(step.getContentJson());
+                    clonedStep.setSortOrder(step.getSortOrder());
+                    clonedStep.setCreatedAt(Instant.now());
+                    lessonStepRepository.save(clonedStep);
+                }
 
                 for (Question question : questionRepository.findByLessonId(lesson.getId())) {
                     Question clonedQuestion = new Question();

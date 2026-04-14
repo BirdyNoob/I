@@ -56,6 +56,26 @@ public class LearnerLessonController {
         return service.getLesson(lessonId);
     }
 
+    // ── GET lesson step detail ──────────────────────────────────────────────────
+
+    @Operation(
+            summary = "Get lesson step detail",
+            description = "Returns the detailed content of a specific lesson step."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lesson step returned"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Lesson or step not found")
+    })
+    @PreAuthorize("hasRole('LEARNER')")
+    @GetMapping("/{lessonId}/steps/{stepId}")
+    public com.icentric.Icentric.content.dto.LessonStepResponse getLessonStep(
+            @Parameter(description = "UUID of the lesson") @PathVariable UUID lessonId,
+            @Parameter(description = "UUID of the step") @PathVariable UUID stepId
+    ) {
+        return service.getLessonStep(lessonId, stepId);
+    }
+
     // ── POST quiz attempt ──────────────────────────────────────────────────────
 
     @Operation(

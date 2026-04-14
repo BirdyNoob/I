@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Comparator;
@@ -137,8 +138,7 @@ public class LearnerDashboardService {
                                 lesson.getId(),
                                 track.getTitle(),
                                 module.getTitle(),
-                                lesson.getTitle(),
-                                lesson.getLessonType()
+                                lesson.getTitle()
                         );
                     }
                 }
@@ -146,6 +146,132 @@ public class LearnerDashboardService {
         }
 
         return null;
+    }
+
+    @Transactional(readOnly = true)
+    public List<LearningPathResponse> getLearningPaths(UUID userId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        List<UserAssignment> assignments = assignmentRepository.findByUserId(userId);
+        List<LearningPathResponse> result = new ArrayList<>();
+
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneOffset.UTC);
+        DateTimeFormatter shortDateFormatter = DateTimeFormatter.ofPattern("MMM d").withZone(ZoneOffset.UTC);
+
+        for (UserAssignment assignment : assignments) {
+            var track = trackRepository.findById(assignment.getTrackId()).orElseThrow();
+            var modules = moduleRepository.findByTrackIdOrderBySortOrder(track.getId());
+
+            int completedModulesCount = 0;
+            int totalModulesCount = modules.size();
+
+            List<LearningPathResponse.ModuleItem> moduleItems = new ArrayList<>();
+            List<LearningPathResponse.TimelineItem> timelineItems = new ArrayList<>();
+
+            boolean previousModuleComplete = true; 
+
+            for (CourseModule module : modules) {
+                var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+
+                int totalLessonsInModule = lessons.size();
+                int completedLessonsInModule = 0;
+                List<LearningPathResponse.LessonItem> lessonItems = new ArrayList<>();
+
+                boolean previousLessonComplete = true;
+
+                for (var lesson : lessons) {
+                    boolean done = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
+                    
+                    String status;
+                    if (done) {
+                        status = "COMPLETED";
+                        completedLessonsInModule++;
+                    } else if (previousLessonComplete && previousModuleComplete) {
+                        status = "IN_PROGRESS";
+                    } else {
+                        status = "LOCKED";
+                    }
+
+                    String meta = done ? "Done" : (status.equals("IN_PROGRESS") ? "Next up" : "Upcoming");
+                    String actionLabel = done ? "Review" : (status.equals("LOCKED") ? "Locked" : "Continue");
+
+                    lessonItems.add(new LearningPathResponse.LessonItem(
+                            lesson.getId(),
+                            lesson.getTitle(),
+                            status,
+                            meta,
+                            actionLabel
+                    ));
+
+                    previousLessonComplete = done;
+                }
+
+                boolean moduleCompleted = (totalLessonsInModule > 0 && completedLessonsInModule == totalLessonsInModule);
+                if (moduleCompleted) completedModulesCount++;
+
+                String moduleStatus;
+                if (moduleCompleted) {
+                    moduleStatus = "COMPLETED";
+                } else if (previousModuleComplete) {
+                    moduleStatus = "IN_PROGRESS";
+                } else {
+                    moduleStatus = "LOCKED";
+                }
+
+                String moduleMeta = moduleCompleted ? "Completed" : (moduleStatus.equals("LOCKED") ? "Unlocks later" : "In Progress");
+                int progressPercent = totalLessonsInModule == 0 ? 0 : (completedLessonsInModule * 100) / totalLessonsInModule;
+
+                moduleItems.add(new LearningPathResponse.ModuleItem(
+                        module.getId(),
+                        module.getSortOrder() + 1,
+                        module.getTitle(),
+                        moduleStatus,
+                        List.of("General"), // Placeholder for topics
+                        moduleMeta,
+                        moduleCompleted ? 100 : 0, // Placeholder for score
+                        lessonItems,
+                        progressPercent,
+                        completedLessonsInModule,
+                        totalLessonsInModule
+                ));
+
+                String curLabel = assignment.getDueDate() != null ? shortDateFormatter.format(assignment.getDueDate()) : "TBD";
+                String timelineStatus = moduleCompleted ? "COMPLETE" : (moduleStatus.equals("LOCKED") ? "LOCKED" : "CURRENT");
+
+                timelineItems.add(new LearningPathResponse.TimelineItem(
+                        module.getId(),
+                        module.getTitle(),
+                        moduleStatus.equals("LOCKED") ? "Locked" : curLabel,
+                        timelineStatus
+                ));
+
+                previousModuleComplete = moduleCompleted;
+            }
+
+            String deadlineLabel = assignment.getDueDate() != null ? dateFormatter.format(assignment.getDueDate()) : "No deadline";
+            Long daysLeft = calculateDaysLeft(assignment);
+            String daysRemainingLabel = daysLeft != null ? (daysLeft >= 0 ? daysLeft + " days remaining" : Math.abs(daysLeft) + " days overdue") : "";
+            
+            int estimatedMins = track.getEstimatedMins() != null ? track.getEstimatedMins() : 0;
+
+            result.add(new LearningPathResponse(
+                    track.getId(),
+                    track.getTitle(),
+                    "v" + track.getVersion(),
+                    track.getDescription(),
+                    true, // Defaulting mandatory to true for assignments
+                    "~" + estimatedMins + " min total",
+                    completedModulesCount,
+                    totalModulesCount,
+                    "~" + (estimatedMins / 2) + " min remaining", // Mock remaining
+                    deadlineLabel,
+                    daysRemainingLabel,
+                    timelineItems,
+                    moduleItems
+            ));
+        }
+
+        return result;
     }
     @Transactional(readOnly = true)
     public LearnerDashboardResponse getDashboard(UUID userId) {
@@ -269,7 +395,6 @@ public class LearnerDashboardService {
                 lessonStatuses.add(new TrackProgressResponse.LessonStatus(
                         lesson.getId(),
                         lesson.getTitle(),
-                        lesson.getLessonType(),
                         lesson.getSortOrder(),
                         done,
                         locked

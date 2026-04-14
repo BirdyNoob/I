@@ -1,6 +1,5 @@
 package com.icentric.Icentric.learning.dto;
 
-import com.icentric.Icentric.content.constants.LessonType;
 
 import java.util.List;
 import java.util.UUID;
@@ -24,7 +23,6 @@ public record TrackProgressResponse(
     public record LessonStatus(
             UUID lessonId,
             String title,
-            LessonType lessonType,
             int sortOrder,
             boolean completed,
             boolean locked

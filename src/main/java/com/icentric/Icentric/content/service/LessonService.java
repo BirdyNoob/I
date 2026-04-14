@@ -9,6 +9,7 @@ import com.icentric.Icentric.content.dto.CreateLessonRequest;
 import com.icentric.Icentric.content.dto.LessonDetailResponse;
 import com.icentric.Icentric.content.entity.Lesson;
 import com.icentric.Icentric.content.repository.LessonRepository;
+import com.icentric.Icentric.content.repository.LessonStepRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class LessonService {
     private final LessonRepository repository;
     private final ModuleRepository moduleRepository;
     private final TrackRepository trackRepository;
+    private final LessonStepRepository lessonStepRepository;
     private final AuditService auditService;
     private final AuditMetadataService auditMetadataService;
 
@@ -31,12 +33,14 @@ public class LessonService {
             LessonRepository repository,
             ModuleRepository moduleRepository,
             TrackRepository trackRepository,
+            LessonStepRepository lessonStepRepository,
             AuditService auditService,
             AuditMetadataService auditMetadataService
     ) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
         this.trackRepository = trackRepository;
+        this.lessonStepRepository = lessonStepRepository;
         this.auditService = auditService;
         this.auditMetadataService = auditMetadataService;
     }
@@ -54,15 +58,27 @@ public class LessonService {
         lesson.setId(UUID.randomUUID());
         lesson.setModuleId(moduleId);
         lesson.setTitle(request.title());
-        lesson.setLessonType(request.lessonType());
-        lesson.setContentJson(request.contentJson());
-        lesson.setVideoUrl(request.videoUrl());
-        lesson.setResourceUrl(request.resourceUrl());
+        lesson.setEstimatedMins(request.estimatedMins());
         lesson.setSortOrder(request.sortOrder());
         lesson.setIsPublished(false);
         lesson.setCreatedAt(Instant.now());
 
         Lesson saved = repository.save(lesson);
+
+        if (request.steps() != null) {
+            for (com.icentric.Icentric.content.dto.CreateLessonStepRequest stepReq : request.steps()) {
+                com.icentric.Icentric.content.entity.LessonStep step = new com.icentric.Icentric.content.entity.LessonStep();
+                step.setId(UUID.randomUUID());
+                step.setLessonId(saved.getId());
+                step.setStepType(com.icentric.Icentric.content.constants.StepType.valueOf(stepReq.stepType()));
+                step.setTitle(stepReq.title());
+                step.setContentJson(stepReq.contentJson());
+                step.setSortOrder(stepReq.sortOrder());
+                step.setCreatedAt(Instant.now());
+                lessonStepRepository.save(step);
+            }
+        }
+
         logLessonAction(AuditAction.CREATE_LESSON, saved, "created lesson");
         return toDetailResponse(saved);
     }
@@ -88,11 +104,25 @@ public class LessonService {
         assertTrackEditableByLesson(lesson);
 
         if (request.title() != null)       lesson.setTitle(request.title());
-        if (request.contentJson() != null) lesson.setContentJson(request.contentJson());
-        if (request.videoUrl() != null)    lesson.setVideoUrl(request.videoUrl());
-        if (request.resourceUrl() != null) lesson.setResourceUrl(request.resourceUrl());
+        if (request.estimatedMins() != null) lesson.setEstimatedMins(request.estimatedMins());
 
         Lesson saved = repository.save(lesson);
+
+        if (request.steps() != null) {
+            lessonStepRepository.deleteByLessonId(saved.getId());
+            for (com.icentric.Icentric.content.dto.CreateLessonStepRequest stepReq : request.steps()) {
+                com.icentric.Icentric.content.entity.LessonStep step = new com.icentric.Icentric.content.entity.LessonStep();
+                step.setId(UUID.randomUUID());
+                step.setLessonId(saved.getId());
+                step.setStepType(com.icentric.Icentric.content.constants.StepType.valueOf(stepReq.stepType()));
+                step.setTitle(stepReq.title());
+                step.setContentJson(stepReq.contentJson());
+                step.setSortOrder(stepReq.sortOrder());
+                step.setCreatedAt(Instant.now());
+                lessonStepRepository.save(step);
+            }
+        }
+
         logLessonAction(AuditAction.UPDATE_LESSON, saved, "updated lesson");
         return toDetailResponse(saved);
     }
@@ -111,16 +141,49 @@ public class LessonService {
         return toDetailResponse(saved);
     }
 
+    /**
+     * Fetches a specific step within a lesson.
+     */
+    @Transactional(readOnly = true)
+    public com.icentric.Icentric.content.dto.LessonStepResponse getLessonStep(UUID lessonId, UUID stepId) {
+        return lessonStepRepository.findById(stepId)
+            .filter(step -> step.getLessonId().equals(lessonId))
+            .map(step -> new com.icentric.Icentric.content.dto.LessonStepResponse(
+                    step.getId(),
+                    step.getLessonId(),
+                    step.getStepType().name(),
+                    step.getTitle(),
+                    step.getContentJson(),
+                    step.getSortOrder()
+            ))
+            .orElseThrow(() -> new NoSuchElementException("Step not found or does not belong to lesson"));
+    }
+
     // ── Mapper ─────────────────────────────────────────────────────────────────
 
     private LessonDetailResponse toDetailResponse(Lesson lesson) {
+        CourseModule module = moduleRepository.findById(lesson.getModuleId()).orElse(null);
+        String moduleTitle = module != null ? module.getTitle() : "";
+        var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+        
+        java.util.List<LessonDetailResponse.OutlineItem> outline = steps.stream().map(step ->
+            new LessonDetailResponse.OutlineItem(
+                step.getId(),
+                step.getStepType().name(),
+                step.getTitle(),
+                "0:00", // Computed or fetched from payload
+                false // Dynamic based on progress
+            )
+        ).toList();
+
         return new LessonDetailResponse(
                 lesson.getId(),
+                moduleTitle,
                 lesson.getTitle(),
-                lesson.getLessonType(),
-                lesson.getContentJson(),
-                lesson.getVideoUrl(),
-                lesson.getResourceUrl()
+                lesson.getEstimatedMins(),
+                steps.size(),
+                steps.isEmpty() ? null : steps.get(0).getId(),
+                outline
         );
     }
 
