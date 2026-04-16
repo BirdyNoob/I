@@ -1,9 +1,12 @@
 package com.icentric.Icentric.content.constants;
 
 public enum StepType {
-    HOOK,
-    VIDEO,
+    CONCEPT,
     SCENARIO,
+    QUIZ,
     DO_DONT,
-    QUIZ
+    SUMMARY,
+    // Legacy/alternative types
+    HOOK,
+    VIDEO
 }

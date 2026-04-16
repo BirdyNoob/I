@@ -2,6 +2,7 @@ package com.icentric.Icentric.learning.service;
 
 
 import com.icentric.Icentric.content.repository.LessonRepository;
+import com.icentric.Icentric.content.repository.LessonStepRepository;
 import com.icentric.Icentric.content.entity.CourseModule;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.learning.dto.*;
@@ -38,6 +39,7 @@ public class LearnerDashboardService {
     private final TrackRepository trackRepository;
     private final ModuleRepository moduleRepository;
     private final LessonRepository lessonRepository;
+    private final LessonStepRepository lessonStepRepository;
     private final IssuedCertificateRepository issuedCertificateRepository;
     private final CertificateRepository certificateRepository;
     private final TenantSchemaService tenantSchemaService;
@@ -49,6 +51,7 @@ public class LearnerDashboardService {
             TrackRepository trackRepository,
             ModuleRepository moduleRepository,
             LessonRepository lessonRepository,
+            LessonStepRepository lessonStepRepository,
             IssuedCertificateRepository issuedCertificateRepository,
             CertificateRepository certificateRepository,
             TenantSchemaService tenantSchemaService,
@@ -59,11 +62,11 @@ public class LearnerDashboardService {
         this.trackRepository = trackRepository;
         this.moduleRepository = moduleRepository;
         this.lessonRepository = lessonRepository;
+        this.lessonStepRepository = lessonStepRepository;
         this.issuedCertificateRepository = issuedCertificateRepository;
         this.certificateRepository = certificateRepository;
         this.tenantSchemaService = tenantSchemaService;
         this.userRepository = userRepository;
-
     }
 
     @Transactional(readOnly = true)
@@ -155,58 +158,113 @@ public class LearnerDashboardService {
         List<UserAssignment> assignments = assignmentRepository.findByUserId(userId);
         List<LearningPathResponse> result = new ArrayList<>();
 
-        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneOffset.UTC);
+        DateTimeFormatter dateFormatter      = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneOffset.UTC);
         DateTimeFormatter shortDateFormatter = DateTimeFormatter.ofPattern("MMM d").withZone(ZoneOffset.UTC);
 
         for (UserAssignment assignment : assignments) {
-            var track = trackRepository.findById(assignment.getTrackId()).orElseThrow();
+            var track   = trackRepository.findById(assignment.getTrackId()).orElseThrow();
             var modules = moduleRepository.findByTrackIdOrderBySortOrder(track.getId());
 
             int completedModulesCount = 0;
-            int totalModulesCount = modules.size();
+            int totalModulesCount     = modules.size();
+            int remainingMinsTotal    = 0;
 
-            List<LearningPathResponse.ModuleItem> moduleItems = new ArrayList<>();
+            List<LearningPathResponse.ModuleItem>   moduleItems   = new ArrayList<>();
             List<LearningPathResponse.TimelineItem> timelineItems = new ArrayList<>();
 
-            boolean previousModuleComplete = true; 
+            boolean previousModuleComplete = true;
+            // FIX 1: use a 1-based counter so moduleNumber is always correct
+            //         regardless of how sortOrder is stored in the DB
+            int moduleIndex = 1;
 
             for (CourseModule module : modules) {
                 var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
 
-                int totalLessonsInModule = lessons.size();
+                int totalLessonsInModule     = lessons.size();
                 int completedLessonsInModule = 0;
                 List<LearningPathResponse.LessonItem> lessonItems = new ArrayList<>();
+
+                // Collect topics and display items across all lessons in this module.
+                // Universal rule:
+                //   - Lesson HAS steps → expand steps as items; topics = step types (human-readable)
+                //   - Lesson has NO steps  → lesson is the item; topics = prefix before ':' in title
+                var topicSet = new java.util.LinkedHashSet<String>();
+                int totalDisplayItems = 0;   // steps or lessons, whichever applies
 
                 boolean previousLessonComplete = true;
 
                 for (var lesson : lessons) {
-                    boolean done = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
-                    
-                    String status;
-                    if (done) {
-                        status = "COMPLETED";
-                        completedLessonsInModule++;
-                    } else if (previousLessonComplete && previousModuleComplete) {
-                        status = "IN_PROGRESS";
+                    boolean lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(
+                            userId, lesson.getId(), "COMPLETED");
+
+                    var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+
+                    if (!steps.isEmpty()) {
+                        // ── NEW architecture: lesson wraps steps ──────────────────────────
+                        // Topics = step type labels (CONCEPT → "Concept" etc.)
+                        steps.forEach(s -> topicSet.add(humanizeStepType(s.getStepType().name())));
+                        totalDisplayItems += steps.size();
+
+                        if (lessonDone) {
+                            // All steps show as completed
+                            completedLessonsInModule++;
+                            steps.forEach(s -> lessonItems.add(new LearningPathResponse.LessonItem(
+                                    lesson.getId(), s.getTitle(), "COMPLETED", "Done", "Review"
+                            )));
+                        } else if (previousLessonComplete && previousModuleComplete) {
+                            // First step IN_PROGRESS, rest UPCOMING (progress is at lesson level)
+                            lessonItems.add(new LearningPathResponse.LessonItem(
+                                    lesson.getId(), steps.get(0).getTitle(), "IN_PROGRESS", "Next up", "Continue"
+                            ));
+                            for (int si = 1; si < steps.size(); si++) {
+                                lessonItems.add(new LearningPathResponse.LessonItem(
+                                        lesson.getId(), steps.get(si).getTitle(), "UPCOMING", "Upcoming", "Locked"
+                                ));
+                            }
+                            remainingMinsTotal += (lesson.getEstimatedMins() != null ? lesson.getEstimatedMins() : 0);
+                        } else {
+                            // Module locked — all steps locked
+                            steps.forEach(s -> lessonItems.add(new LearningPathResponse.LessonItem(
+                                    lesson.getId(), s.getTitle(), "UPCOMING", "Upcoming", "Locked"
+                            )));
+                            remainingMinsTotal += (lesson.getEstimatedMins() != null ? lesson.getEstimatedMins() : 0);
+                        }
+
                     } else {
-                        status = "LOCKED";
+                        // ── OLD architecture: lesson is the atomic unit ───────────────────
+                        // Topics = word before ':' in lesson title ("Concept: Intro" → "Concept")
+                        String t = lesson.getTitle();
+                        int colon = t.indexOf(':');
+                        topicSet.add(colon >= 0 ? t.substring(0, colon).trim() : t);
+                        totalDisplayItems++;
+
+                        String lessonStatus;
+                        if (lessonDone) {
+                            lessonStatus = "COMPLETED";
+                            completedLessonsInModule++;
+                        } else if (previousLessonComplete && previousModuleComplete) {
+                            lessonStatus = "IN_PROGRESS";
+                            remainingMinsTotal += (lesson.getEstimatedMins() != null ? lesson.getEstimatedMins() : 0);
+                        } else {
+                            lessonStatus = "UPCOMING";
+                            remainingMinsTotal += (lesson.getEstimatedMins() != null ? lesson.getEstimatedMins() : 0);
+                        }
+
+                        String meta        = lessonDone ? "Done" : (lessonStatus.equals("IN_PROGRESS") ? "Next up" : "Upcoming");
+                        String actionLabel = lessonDone ? "Review" : (lessonStatus.equals("UPCOMING") ? "Locked" : "Continue");
+
+                        lessonItems.add(new LearningPathResponse.LessonItem(
+                                lesson.getId(), lesson.getTitle(), lessonStatus, meta, actionLabel
+                        ));
                     }
 
-                    String meta = done ? "Done" : (status.equals("IN_PROGRESS") ? "Next up" : "Upcoming");
-                    String actionLabel = done ? "Review" : (status.equals("LOCKED") ? "Locked" : "Continue");
-
-                    lessonItems.add(new LearningPathResponse.LessonItem(
-                            lesson.getId(),
-                            lesson.getTitle(),
-                            status,
-                            meta,
-                            actionLabel
-                    ));
-
-                    previousLessonComplete = done;
+                    previousLessonComplete = lessonDone;
                 }
 
-                boolean moduleCompleted = (totalLessonsInModule > 0 && completedLessonsInModule == totalLessonsInModule);
+                List<String> topics = topicSet.isEmpty() ? List.of("General") : new ArrayList<>(topicSet);
+
+                boolean moduleCompleted = (totalLessonsInModule > 0
+                        && completedLessonsInModule == totalLessonsInModule);
                 if (moduleCompleted) completedModulesCount++;
 
                 String moduleStatus;
@@ -218,52 +276,81 @@ public class LearnerDashboardService {
                     moduleStatus = "LOCKED";
                 }
 
-                String moduleMeta = moduleCompleted ? "Completed" : (moduleStatus.equals("LOCKED") ? "Unlocks later" : "In Progress");
-                int progressPercent = totalLessonsInModule == 0 ? 0 : (completedLessonsInModule * 100) / totalLessonsInModule;
+                int progressPercent = totalDisplayItems == 0
+                        ? 0
+                        : (completedLessonsInModule * totalLessonsInModule == 0
+                           ? 0
+                           : (completedLessonsInModule * 100) / totalLessonsInModule);
+
+                String moduleMeta;
+                if (moduleCompleted) {
+                    moduleMeta = "Completed";
+                } else if (moduleStatus.equals("LOCKED")) {
+                    moduleMeta = "Unlocks after completing previous module";
+                } else {
+                    moduleMeta = completedLessonsInModule + " of " + totalLessonsInModule + " lessons done";
+                }
 
                 moduleItems.add(new LearningPathResponse.ModuleItem(
                         module.getId(),
-                        module.getSortOrder() + 1,
+                        moduleIndex,
                         module.getTitle(),
                         moduleStatus,
-                        List.of("General"), // Placeholder for topics
+                        topics,
                         moduleMeta,
-                        moduleCompleted ? 100 : 0, // Placeholder for score
+                        progressPercent,
                         lessonItems,
                         progressPercent,
                         completedLessonsInModule,
-                        totalLessonsInModule
+                        totalDisplayItems   // real count: steps if step-based, lessons otherwise
                 ));
 
-                String curLabel = assignment.getDueDate() != null ? shortDateFormatter.format(assignment.getDueDate()) : "TBD";
-                String timelineStatus = moduleCompleted ? "COMPLETE" : (moduleStatus.equals("LOCKED") ? "LOCKED" : "CURRENT");
+                // FIX 5: timeline label uses meaningful status text per module
+                String timelineLabel;
+                if (moduleCompleted) {
+                    timelineLabel = "Completed";
+                } else if (moduleStatus.equals("LOCKED")) {
+                    timelineLabel = "Locked";
+                } else {
+                    timelineLabel = "In progress " + progressPercent + "%";
+                }
+                String timelineStatus = moduleCompleted ? "COMPLETE"
+                        : (moduleStatus.equals("LOCKED") ? "LOCKED" : "CURRENT");
 
                 timelineItems.add(new LearningPathResponse.TimelineItem(
                         module.getId(),
                         module.getTitle(),
-                        moduleStatus.equals("LOCKED") ? "Locked" : curLabel,
+                        timelineLabel,
                         timelineStatus
                 ));
 
                 previousModuleComplete = moduleCompleted;
+                moduleIndex++;
             }
 
-            String deadlineLabel = assignment.getDueDate() != null ? dateFormatter.format(assignment.getDueDate()) : "No deadline";
-            Long daysLeft = calculateDaysLeft(assignment);
-            String daysRemainingLabel = daysLeft != null ? (daysLeft >= 0 ? daysLeft + " days remaining" : Math.abs(daysLeft) + " days overdue") : "";
-            
+            String deadlineLabel     = assignment.getDueDate() != null
+                    ? dateFormatter.format(assignment.getDueDate()) : "No deadline";
+            Long daysLeft            = calculateDaysLeft(assignment);
+            String daysRemainingLabel = daysLeft != null
+                    ? (daysLeft >= 0 ? daysLeft + " days remaining" : Math.abs(daysLeft) + " days overdue")
+                    : "";
+
             int estimatedMins = track.getEstimatedMins() != null ? track.getEstimatedMins() : 0;
+            // FIX 4: actual computed remaining from incomplete lessons
+            String remainingLabel = remainingMinsTotal > 0
+                    ? "~" + remainingMinsTotal + " min remaining"
+                    : "All done!";
 
             result.add(new LearningPathResponse(
                     track.getId(),
                     track.getTitle(),
                     "v" + track.getVersion(),
                     track.getDescription(),
-                    true, // Defaulting mandatory to true for assignments
+                    true,
                     "~" + estimatedMins + " min total",
                     completedModulesCount,
                     totalModulesCount,
-                    "~" + (estimatedMins / 2) + " min remaining", // Mock remaining
+                    remainingLabel,            // FIX 4
                     deadlineLabel,
                     daysRemainingLabel,
                     timelineItems,
@@ -273,6 +360,7 @@ public class LearnerDashboardService {
 
         return result;
     }
+
     @Transactional(readOnly = true)
     public LearnerDashboardResponse getDashboard(UUID userId) {
         tenantSchemaService.applyCurrentTenantSearchPath();
@@ -476,5 +564,25 @@ public class LearnerDashboardService {
             cursor = cursor.minusDays(1);
         }
         return streak;
+    }
+
+    /**
+     * Converts a StepType enum name to a human-readable topic label.
+     * Used to populate the `topics` list in the learning-path response
+     * when a lesson is step-based (new architecture).
+     *
+     * Examples: CONCEPT → "Concept", DO_DONT → "Do & Don't", QUIZ → "Quiz"
+     */
+    private String humanizeStepType(String stepTypeName) {
+        return switch (stepTypeName) {
+            case "CONCEPT"  -> "Concept";
+            case "SCENARIO" -> "Scenario";
+            case "QUIZ"     -> "Quiz";
+            case "DO_DONT"  -> "Do & Don't";
+            case "SUMMARY"  -> "Summary";
+            case "HOOK"     -> "Hook";
+            case "VIDEO"    -> "Video";
+            default         -> stepTypeName.charAt(0) + stepTypeName.substring(1).toLowerCase().replace('_', ' ');
+        };
     }
 }

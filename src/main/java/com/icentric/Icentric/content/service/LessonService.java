@@ -153,8 +153,10 @@ public class LessonService {
                     step.getLessonId(),
                     step.getStepType().name(),
                     step.getTitle(),
-                    step.getContentJson(),
-                    step.getSortOrder()
+                    extractDuration(step.getContentJson()),
+                    false, // isCompleted — driven by learner progress, not content
+                    step.getSortOrder(),
+                    step.getContentJson() // full payload for single-step endpoint
             ))
             .orElseThrow(() -> new NoSuchElementException("Step not found or does not belong to lesson"));
     }
@@ -171,8 +173,8 @@ public class LessonService {
                 step.getId(),
                 step.getStepType().name(),
                 step.getTitle(),
-                "0:00", // Computed or fetched from payload
-                false // Dynamic based on progress
+                extractDuration(step.getContentJson()),
+                false // isCompleted — driven by learner's progress
             )
         ).toList();
 
@@ -216,6 +218,25 @@ public class LessonService {
         var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         Object userIdRaw = authentication != null ? authentication.getDetails() : null;
         return userIdRaw == null ? null : UUID.fromString(userIdRaw.toString());
+    }
+
+    /**
+     * Reads the optional `durationFormatted` key from a stored contentJson blob.
+     * Falls back to "0:00" if the key is absent or the JSON is malformed.
+     */
+    private String extractDuration(String contentJson) {
+        if (contentJson == null || contentJson.isBlank()) return "0:00";
+        try {
+            // Lightweight extraction — avoids pulling in a full ObjectMapper dependency
+            int idx = contentJson.indexOf("\"durationFormatted\"");
+            if (idx < 0) return "0:00";
+            int colon = contentJson.indexOf(':', idx);
+            int open  = contentJson.indexOf('"', colon);
+            int close = contentJson.indexOf('"', open + 1);
+            return contentJson.substring(open + 1, close);
+        } catch (Exception e) {
+            return "0:00";
+        }
     }
 
     private void assertTrackEditableByLesson(Lesson lesson) {
