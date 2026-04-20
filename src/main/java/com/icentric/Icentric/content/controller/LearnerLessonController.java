@@ -51,9 +51,11 @@ public class LearnerLessonController {
     @PreAuthorize("hasRole('LEARNER')")
     @GetMapping("/{lessonId}")
     public LessonDetailResponse getLesson(
-            @Parameter(description = "UUID of the lesson") @PathVariable UUID lessonId
+            @Parameter(description = "UUID of the lesson") @PathVariable UUID lessonId,
+            Authentication authentication
     ) {
-        return service.getLesson(lessonId);
+        UUID userId = extractUserId(authentication);
+        return service.getLesson(lessonId, userId);
     }
 
     // ── GET lesson step detail ──────────────────────────────────────────────────
@@ -71,9 +73,11 @@ public class LearnerLessonController {
     @GetMapping("/{lessonId}/steps/{stepId}")
     public com.icentric.Icentric.content.dto.LessonStepResponse getLessonStep(
             @Parameter(description = "UUID of the lesson") @PathVariable UUID lessonId,
-            @Parameter(description = "UUID of the step") @PathVariable UUID stepId
+            @Parameter(description = "UUID of the step") @PathVariable UUID stepId,
+            Authentication authentication
     ) {
-        return service.getLessonStep(lessonId, stepId);
+        UUID userId = extractUserId(authentication);
+        return service.getLessonStep(lessonId, stepId, userId);
     }
 
     // ── POST quiz attempt ──────────────────────────────────────────────────────
@@ -139,5 +143,13 @@ public class LearnerLessonController {
             @Parameter(description = "UUID of the lesson") @PathVariable UUID lessonId
     ) {
         return service.publishLesson(lessonId);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private UUID extractUserId(Authentication authentication) {
+        if (authentication == null) return null;
+        Object raw = authentication.getDetails();
+        return raw == null ? null : UUID.fromString(raw.toString());
     }
 }

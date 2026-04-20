@@ -3,10 +3,9 @@ package com.icentric.Icentric.content.dto;
 import java.util.UUID;
 
 /**
- * Returned for both the outline list (inside LessonDetailResponse)
- * and the individual step fetch endpoint (GET /lessons/{id}/steps/{stepId}).
+ * Returned by GET /api/v1/lessons/{lessonId}/steps/{stepId}.
  *
- * The raw `contentJson` field holds a serialized JSON object whose
+ * The `data` field is a fully parsed JSON object (not a raw string) whose
  * schema depends on `stepType`:
  *  - CONCEPT  → { title, description, keyPoints[], principle, keyInsight }
  *  - SCENARIO → { badgeText, contextLabel, scenarioText, options[] }
@@ -22,6 +21,7 @@ public record LessonStepResponse(
         String durationFormatted,
         boolean isCompleted,
         int sortOrder,
-        /** Full step payload — only populated on the single-step endpoint, null in outline. */
-        String contentJson
+        /** Fully deserialized content object — the frontend receives structured JSON, not a string. */
+        Object data
 ) {}
+

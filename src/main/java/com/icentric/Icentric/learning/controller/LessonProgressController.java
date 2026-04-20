@@ -51,4 +51,31 @@ public class LessonProgressController {
 
         return service.updateProgress(userId, request);
     }
+
+    @Operation(summary = "Complete Lesson Step", description = "Marks a specific step as completed for the currently authenticated learner. Enforces sequential completion of previous steps.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully marked step as completed"),
+            @ApiResponse(responseCode = "400", description = "Sequential lock exception - previous step not completed"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - learner role required"),
+            @ApiResponse(responseCode = "404", description = "Lesson or Step not found")
+    })
+    @PostMapping("/{lessonId}/steps/{stepId}/complete")
+    @PreAuthorize("hasRole('LEARNER')")
+    public LessonProgress completeStep(
+            @PathVariable UUID lessonId,
+            @PathVariable UUID stepId
+    ) {
+        Authentication authentication = org.springframework.security.core.context
+                .SecurityContextHolder
+                .getContext()
+                .getAuthentication();
+        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
+        if (userIdRaw == null) {
+            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
+        }
+        UUID userId = UUID.fromString(userIdRaw.toString());
+
+        return service.completeStep(userId, lessonId, stepId);
+    }
 }

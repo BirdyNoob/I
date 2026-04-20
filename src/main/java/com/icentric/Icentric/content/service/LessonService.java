@@ -1,5 +1,7 @@
 package com.icentric.Icentric.content.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.icentric.Icentric.audit.constants.AuditAction;
 import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.audit.service.AuditService;
@@ -12,10 +14,13 @@ import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.LessonStepRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.learning.repository.LessonProgressRepository;
+import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -26,23 +31,32 @@ public class LessonService {
     private final ModuleRepository moduleRepository;
     private final TrackRepository trackRepository;
     private final LessonStepRepository lessonStepRepository;
+    private final LessonProgressRepository progressRepository;
     private final AuditService auditService;
     private final AuditMetadataService auditMetadataService;
+    private final ObjectMapper objectMapper;
+    private final TenantSchemaService tenantSchemaService;
 
     public LessonService(
             LessonRepository repository,
             ModuleRepository moduleRepository,
             TrackRepository trackRepository,
             LessonStepRepository lessonStepRepository,
+            LessonProgressRepository progressRepository,
             AuditService auditService,
-            AuditMetadataService auditMetadataService
+            AuditMetadataService auditMetadataService,
+            ObjectMapper objectMapper,
+            TenantSchemaService tenantSchemaService
     ) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
         this.trackRepository = trackRepository;
         this.lessonStepRepository = lessonStepRepository;
+        this.progressRepository = progressRepository;
         this.auditService = auditService;
         this.auditMetadataService = auditMetadataService;
+        this.objectMapper = objectMapper;
+        this.tenantSchemaService = tenantSchemaService;
     }
 
     /**
@@ -80,17 +94,24 @@ public class LessonService {
         }
 
         logLessonAction(AuditAction.CREATE_LESSON, saved, "created lesson");
-        return toDetailResponse(saved);
+        return toDetailResponse(saved, null); // admin create — no learner context
     }
 
     /**
-     * Returns full lesson detail for a learner to consume (content, video URL, etc.)
+     * Returns full lesson detail for a learner to consume.
+     * isCompleted in outline and steps is resolved against the calling learner's progress.
+     *
+     * @param lessonId the lesson to load
+     * @param userId   the authenticated learner's UUID (null = guest/admin preview, isCompleted always false)
      */
     @Transactional(readOnly = true)
-    public LessonDetailResponse getLesson(UUID lessonId) {
+    public LessonDetailResponse getLesson(UUID lessonId, UUID userId) {
+        if (userId != null) {
+            tenantSchemaService.applyCurrentTenantSearchPath();
+        }
         Lesson lesson = repository.findById(lessonId)
                 .orElseThrow(() -> new NoSuchElementException("Lesson not found: " + lessonId));
-        return toDetailResponse(lesson);
+        return toDetailResponse(lesson, userId);
     }
 
     /**
@@ -124,7 +145,7 @@ public class LessonService {
         }
 
         logLessonAction(AuditAction.UPDATE_LESSON, saved, "updated lesson");
-        return toDetailResponse(saved);
+        return toDetailResponse(saved, null); // admin update — no learner context
     }
 
     /**
@@ -138,14 +159,30 @@ public class LessonService {
         lesson.setIsPublished(true);
         Lesson saved = repository.save(lesson);
         logLessonAction(AuditAction.PUBLISH_LESSON, saved, "published lesson");
-        return toDetailResponse(saved);
+        return toDetailResponse(saved, null); // admin publish — no learner context
     }
 
     /**
      * Fetches a specific step within a lesson.
+     *
+     * @param lessonId the parent lesson
+     * @param stepId   the step to load
+     * @param userId   the authenticated learner's UUID (null = isCompleted always false)
      */
     @Transactional(readOnly = true)
-    public com.icentric.Icentric.content.dto.LessonStepResponse getLessonStep(UUID lessonId, UUID stepId) {
+    public com.icentric.Icentric.content.dto.LessonStepResponse getLessonStep(UUID lessonId, UUID stepId, UUID userId) {
+        if (userId != null) {
+            tenantSchemaService.applyCurrentTenantSearchPath();
+        }
+        
+        boolean stepDone = false;
+        if (userId != null) {
+            stepDone = progressRepository.findByUserIdAndLessonId(userId, lessonId)
+                    .map(p -> p.getCompletedStepIds().contains(stepId))
+                    .orElse(false);
+        }
+
+        boolean finalStepDone = stepDone;
         return lessonStepRepository.findById(stepId)
             .filter(step -> step.getLessonId().equals(lessonId))
             .map(step -> new com.icentric.Icentric.content.dto.LessonStepResponse(
@@ -154,40 +191,98 @@ public class LessonService {
                     step.getStepType().name(),
                     step.getTitle(),
                     extractDuration(step.getContentJson()),
-                    false, // isCompleted — driven by learner progress, not content
+                    finalStepDone,
                     step.getSortOrder(),
-                    step.getContentJson() // full payload for single-step endpoint
+                    parseContentJson(step.getContentJson())  // structured Object, not raw string
             ))
             .orElseThrow(() -> new NoSuchElementException("Step not found or does not belong to lesson"));
     }
 
+    /**
+     * Deserializes the stored contentJson blob into a Map so Jackson serializes it
+     * as a proper nested JSON object in the response (not a double-encoded string).
+     */
+    @SuppressWarnings("unchecked")
+    private Object parseContentJson(String contentJson) {
+        if (contentJson == null || contentJson.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(contentJson, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return contentJson; // Fallback — return as-is so nothing is lost
+        }
+    }
+
+
     // ── Mapper ─────────────────────────────────────────────────────────────────
 
-    private LessonDetailResponse toDetailResponse(Lesson lesson) {
+    private LessonDetailResponse toDetailResponse(Lesson lesson, UUID userId) {
         CourseModule module = moduleRepository.findById(lesson.getModuleId()).orElse(null);
         String moduleTitle = module != null ? module.getTitle() : "";
         var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
-        
+
+        // Resolve progress tracking at the step level
+        java.util.List<UUID> completedStepIds = new java.util.ArrayList<>();
+        boolean lessonDone = false;
+        if (userId != null) {
+            progressRepository.findByUserIdAndLessonId(userId, lesson.getId())
+                    .ifPresent(p -> {
+                        if (p.getCompletedStepIds() != null) {
+                            completedStepIds.addAll(p.getCompletedStepIds());
+                        }
+                    });
+            lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
+        }
+
+        // ── Outline (sidebar) — lightweight, NO content payloads embedded ──────
+        // Frontend renders the sidebar from this. Each step's content is loaded
+        // on demand via GET /lessons/{lessonId}/steps/{stepId}.
         java.util.List<LessonDetailResponse.OutlineItem> outline = steps.stream().map(step ->
             new LessonDetailResponse.OutlineItem(
                 step.getId(),
                 step.getStepType().name(),
                 step.getTitle(),
                 extractDuration(step.getContentJson()),
-                false // isCompleted — driven by learner's progress
+                completedStepIds.contains(step.getId())
             )
         ).toList();
+
+        // currentStepId = first incomplete step so the frontend knows which to load first;
+        // if the lesson is fully done, point to the last step.
+        UUID currentStepId = null;
+        if (!steps.isEmpty()) {
+            if (lessonDone || completedStepIds.size() >= steps.size()) {
+                currentStepId = steps.get(steps.size() - 1).getId();
+            } else {
+                for (com.icentric.Icentric.content.entity.LessonStep step : steps) {
+                    if (!completedStepIds.contains(step.getId())) {
+                        currentStepId = step.getId();
+                        break;
+                    }
+                }
+                // Fallback (should never be reached if counts are correct)
+                if (currentStepId == null) currentStepId = steps.get(steps.size() - 1).getId();
+            }
+        }
+
+        Integer estimatedTimeLeftMinutes = computeEstimatedTimeLeftMinutes(
+                lesson,
+                steps,
+                completedStepIds,
+                lessonDone
+        );
 
         return new LessonDetailResponse(
                 lesson.getId(),
                 moduleTitle,
                 lesson.getTitle(),
-                lesson.getEstimatedMins(),
+                estimatedTimeLeftMinutes,
                 steps.size(),
-                steps.isEmpty() ? null : steps.get(0).getId(),
+                currentStepId,
                 outline
         );
     }
+
+
 
     private void logLessonAction(AuditAction action, Lesson lesson, String verb) {
         UUID actorId = currentActorUserId();
@@ -237,6 +332,60 @@ public class LessonService {
         } catch (Exception e) {
             return "0:00";
         }
+    }
+
+    private Integer computeEstimatedTimeLeftMinutes(
+            Lesson lesson,
+            java.util.List<com.icentric.Icentric.content.entity.LessonStep> steps,
+            java.util.List<UUID> completedStepIds,
+            boolean lessonDone
+    ) {
+        if (lessonDone) {
+            return 0;
+        }
+        if (steps.isEmpty()) {
+            return lesson.getEstimatedMins();
+        }
+        if (completedStepIds.size() >= steps.size()) {
+            return 0;
+        }
+
+        long remainingSeconds = 0;
+        for (com.icentric.Icentric.content.entity.LessonStep step : steps) {
+            if (completedStepIds.contains(step.getId())) {
+                continue;
+            }
+            remainingSeconds += durationToSeconds(extractDuration(step.getContentJson()));
+        }
+
+        if (remainingSeconds > 0) {
+            return (int) Math.ceil(remainingSeconds / 60.0);
+        }
+        return lesson.getEstimatedMins();
+    }
+
+    private long durationToSeconds(String durationFormatted) {
+        if (durationFormatted == null || durationFormatted.isBlank()) {
+            return 0;
+        }
+
+        String[] parts = durationFormatted.trim().split(":");
+        try {
+            if (parts.length == 2) {
+                long minutes = Long.parseLong(parts[0]);
+                long seconds = Long.parseLong(parts[1]);
+                return Math.max(0, (minutes * 60) + seconds);
+            }
+            if (parts.length == 3) {
+                long hours = Long.parseLong(parts[0]);
+                long minutes = Long.parseLong(parts[1]);
+                long seconds = Long.parseLong(parts[2]);
+                return Math.max(0, (hours * 3600) + (minutes * 60) + seconds);
+            }
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+        return 0;
     }
 
     private void assertTrackEditableByLesson(Lesson lesson) {

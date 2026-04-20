@@ -76,32 +76,44 @@ public class LearnerDashboardService {
         List<UserAssignment> assignments =
                 assignmentRepository.findByUserId(userId);
 
+        if (assignments.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> trackIds = assignments.stream()
+                .map(UserAssignment::getTrackId)
+                .distinct()
+                .toList();
+
+        Map<UUID, String> trackTitles = new HashMap<>();
+        Map<UUID, Long> totalLessonsByTrack = new HashMap<>();
+        Map<UUID, Long> completedLessonsByTrack = new HashMap<>();
+
+        trackRepository.findAllById(trackIds)
+                .forEach(track -> trackTitles.put(track.getId(), track.getTitle()));
+
+        lessonRepository.countLessonsInTracks(trackIds)
+                .forEach(row -> totalLessonsByTrack.put((UUID) row[0], (Long) row[1]));
+
+        progressRepository.countCompletedLessonsByTrack(userId, trackIds)
+                .forEach(row -> completedLessonsByTrack.put((UUID) row[0], (Long) row[1]));
+
         return assignments.stream().map(a -> {
-
-            var track = trackRepository.findById(a.getTrackId()).orElseThrow();
-
-            long completedLessons =
-                    progressRepository.countByUserIdAndStatus(userId, "COMPLETED");
-
-            long totalLessons =
-                    progressRepository.countByUserId(userId);
-
-            double completionPercent =
-                    totalLessons == 0 ? 0 :
-                            (completedLessons * 100.0) / totalLessons;
+            long completedLessons = completedLessonsByTrack.getOrDefault(a.getTrackId(), 0L);
+            long totalLessons = totalLessonsByTrack.getOrDefault(a.getTrackId(), 0L);
+            double completionPercent = totalLessons == 0 ? 0 : (completedLessons * 100.0) / totalLessons;
 
             return new LearnerAssignmentResponse(
                     a.getId(),
                     a.getTrackId(),
-                    track.getTitle(),
+                    trackTitles.getOrDefault(a.getTrackId(), "Unknown Track"),
                     a.getAssignedAt(),
                     a.getDueDate(),
-                    a.getStatus(),
+                    resolveAssignmentStatus(a),
                     (int) totalLessons,
                     (int) completedLessons,
                     completionPercent
             );
-
         }).toList();
     }
     @Transactional(readOnly = true)
@@ -194,32 +206,48 @@ public class LearnerDashboardService {
                 boolean previousLessonComplete = true;
 
                 for (var lesson : lessons) {
-                    boolean lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(
-                            userId, lesson.getId(), "COMPLETED");
+                    boolean lessonDone = false;
+                    java.util.List<UUID> completedStepIds = new java.util.ArrayList<>();
+                    progressRepository.findByUserIdAndLessonId(userId, lesson.getId())
+                            .ifPresent(p -> {
+                                if (p.getCompletedStepIds() != null) {
+                                    completedStepIds.addAll(p.getCompletedStepIds());
+                                }
+                            });
+                    lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
 
                     var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
 
                     if (!steps.isEmpty()) {
                         // ── NEW architecture: lesson wraps steps ──────────────────────────
-                        // Topics = step type labels (CONCEPT → "Concept" etc.)
                         steps.forEach(s -> topicSet.add(humanizeStepType(s.getStepType().name())));
                         totalDisplayItems += steps.size();
 
-                        if (lessonDone) {
+                        if (lessonDone || completedStepIds.size() >= steps.size()) {
                             // All steps show as completed
-                            completedLessonsInModule++;
+                            completedLessonsInModule += steps.size();
                             steps.forEach(s -> lessonItems.add(new LearningPathResponse.LessonItem(
                                     lesson.getId(), s.getTitle(), "COMPLETED", "Done", "Review"
                             )));
                         } else if (previousLessonComplete && previousModuleComplete) {
-                            // First step IN_PROGRESS, rest UPCOMING (progress is at lesson level)
-                            lessonItems.add(new LearningPathResponse.LessonItem(
-                                    lesson.getId(), steps.get(0).getTitle(), "IN_PROGRESS", "Next up", "Continue"
-                            ));
-                            for (int si = 1; si < steps.size(); si++) {
-                                lessonItems.add(new LearningPathResponse.LessonItem(
-                                        lesson.getId(), steps.get(si).getTitle(), "UPCOMING", "Upcoming", "Locked"
-                                ));
+                            // Find the edge between completed steps and upcoming steps
+                            boolean firstIncompleteFound = false;
+                            for (var s : steps) {
+                                if (completedStepIds.contains(s.getId())) {
+                                    completedLessonsInModule++;
+                                    lessonItems.add(new LearningPathResponse.LessonItem(
+                                            lesson.getId(), s.getTitle(), "COMPLETED", "Done", "Review"
+                                    ));
+                                } else if (!firstIncompleteFound) {
+                                    firstIncompleteFound = true;
+                                    lessonItems.add(new LearningPathResponse.LessonItem(
+                                            lesson.getId(), s.getTitle(), "IN_PROGRESS", "Next up", "Continue"
+                                    ));
+                                } else {
+                                    lessonItems.add(new LearningPathResponse.LessonItem(
+                                            lesson.getId(), s.getTitle(), "UPCOMING", "Upcoming", "Locked"
+                                    ));
+                                }
                             }
                             remainingMinsTotal += (lesson.getEstimatedMins() != null ? lesson.getEstimatedMins() : 0);
                         } else {
@@ -229,10 +257,9 @@ public class LearnerDashboardService {
                             )));
                             remainingMinsTotal += (lesson.getEstimatedMins() != null ? lesson.getEstimatedMins() : 0);
                         }
-
+                        previousLessonComplete = lessonDone;
                     } else {
                         // ── OLD architecture: lesson is the atomic unit ───────────────────
-                        // Topics = word before ':' in lesson title ("Concept: Intro" → "Concept")
                         String t = lesson.getTitle();
                         int colon = t.indexOf(':');
                         topicSet.add(colon >= 0 ? t.substring(0, colon).trim() : t);
@@ -263,8 +290,8 @@ public class LearnerDashboardService {
 
                 List<String> topics = topicSet.isEmpty() ? List.of("General") : new ArrayList<>(topicSet);
 
-                boolean moduleCompleted = (totalLessonsInModule > 0
-                        && completedLessonsInModule == totalLessonsInModule);
+                boolean moduleCompleted = (totalDisplayItems > 0
+                        && completedLessonsInModule >= totalDisplayItems);
                 if (moduleCompleted) completedModulesCount++;
 
                 String moduleStatus;
@@ -278,9 +305,7 @@ public class LearnerDashboardService {
 
                 int progressPercent = totalDisplayItems == 0
                         ? 0
-                        : (completedLessonsInModule * totalLessonsInModule == 0
-                           ? 0
-                           : (completedLessonsInModule * 100) / totalLessonsInModule);
+                        : Math.min(100, (completedLessonsInModule * 100) / totalDisplayItems);
 
                 String moduleMeta;
                 if (moduleCompleted) {
@@ -372,7 +397,7 @@ public class LearnerDashboardService {
                 .orElse("Learner");
         int learningStreakDays = calculateLearningStreak(userId);
         Instant nextDeadline = assignments.stream()
-                .filter(a -> a.getDueDate() != null && a.getStatus() != AssignmentStatus.COMPLETED)
+                .filter(a -> a.getDueDate() != null && resolveAssignmentStatus(a) != AssignmentStatus.COMPLETED)
                 .map(UserAssignment::getDueDate)
                 .min(Comparator.naturalOrder())
                 .orElse(null);
@@ -400,6 +425,7 @@ public class LearnerDashboardService {
         }
 
         for (UserAssignment a : assignments) {
+            AssignmentStatus status = resolveAssignmentStatus(a);
 
             long completed = completedLessonsByTrack.getOrDefault(a.getTrackId(), 0L);
 
@@ -413,7 +439,7 @@ public class LearnerDashboardService {
             trainings.add(new TrainingItem(
                     a.getTrackId(),
                     trackTitles.getOrDefault(a.getTrackId(), "Unknown Track"),
-                    a.getStatus(),
+                    status,
                     a.getDueDate(),
                     daysLeft,
                     progress
@@ -535,6 +561,18 @@ public class LearnerDashboardService {
             case COMPLETED -> 4;
             default -> 5;
         };
+    }
+
+    private AssignmentStatus resolveAssignmentStatus(UserAssignment assignment) {
+        AssignmentStatus status = assignment.getStatus();
+        if (status == AssignmentStatus.COMPLETED || status == AssignmentStatus.FAILED) {
+            return status;
+        }
+        Instant dueDate = assignment.getDueDate();
+        if (dueDate != null && dueDate.isBefore(Instant.now())) {
+            return AssignmentStatus.OVERDUE;
+        }
+        return status == null ? AssignmentStatus.ASSIGNED : status;
     }
 
     private int calculateLearningStreak(UUID userId) {

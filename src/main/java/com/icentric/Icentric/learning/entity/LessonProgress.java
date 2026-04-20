@@ -27,6 +27,10 @@ public class LessonProgress {
 
     private Instant createdAt;
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "completed_step_ids", columnDefinition = "jsonb")
+    private java.util.List<UUID> completedStepIds = new java.util.ArrayList<>();
+
     public LessonProgress() {}
 
     // getters setters
