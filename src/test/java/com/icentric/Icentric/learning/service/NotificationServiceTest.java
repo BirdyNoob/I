@@ -1,5 +1,8 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.common.mail.EmailService;
+import com.icentric.Icentric.identity.entity.User;
+import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.constants.NotificationType;
 import com.icentric.Icentric.learning.dto.NotificationResponse;
 import com.icentric.Icentric.learning.entity.NotificationEvent;
@@ -21,14 +24,15 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
-import com.icentric.Icentric.identity.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -41,6 +45,9 @@ class NotificationServiceTest {
 
     @Mock
     TenantSchemaService tenantSchemaService;
+
+    @Mock
+    EmailService emailService;
 
     @InjectMocks
     NotificationService notificationService;
@@ -120,5 +127,63 @@ class NotificationServiceTest {
 
         verify(tenantSchemaService).applyCurrentTenantSearchPath();
         verify(repository).markAllAsRead(userId);
+    }
+
+    @Test
+    @DisplayName("processNotifications: sends SMTP email and marks event sent")
+    void processNotifications_sendsEmailAndMarksSent() {
+        UUID userId = UUID.randomUUID();
+        NotificationEvent event = notification(userId, NotificationType.REMINDER, "Due soon");
+        User user = user(userId, "Aryan", "aryan@example.com");
+
+        when(repository.findBySentFalse()).thenReturn(List.of(event));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(emailService.sendHtmlEmail(eq("aryan@example.com"), eq("Training reminder"), contains("Due soon")))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        notificationService.processNotifications();
+
+        verify(tenantSchemaService).applyCurrentTenantSearchPath();
+        verify(emailService).sendHtmlEmail(eq("aryan@example.com"), eq("Training reminder"), contains("Due soon"));
+        assertThat(event.getSent()).isTrue();
+        verify(repository).save(event);
+    }
+
+    @Test
+    @DisplayName("processNotifications: does not mark event sent when SMTP fails")
+    void processNotifications_keepsEventQueuedWhenEmailFails() {
+        UUID userId = UUID.randomUUID();
+        NotificationEvent event = notification(userId, NotificationType.OVERDUE, "Training overdue");
+        User user = user(userId, "Aryan", "aryan@example.com");
+
+        when(repository.findBySentFalse()).thenReturn(List.of(event));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(emailService.sendHtmlEmail(eq("aryan@example.com"), eq("Training overdue"), contains("Training overdue")))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("SMTP down")));
+
+        notificationService.processNotifications();
+
+        assertThat(event.getSent()).isFalse();
+        verify(repository, never()).save(event);
+    }
+
+    private NotificationEvent notification(UUID userId, NotificationType type, String message) {
+        NotificationEvent event = new NotificationEvent();
+        event.setId(UUID.randomUUID());
+        event.setUserId(userId);
+        event.setType(type);
+        event.setMessage(message);
+        event.setSent(false);
+        event.setIsRead(false);
+        event.setCreatedAt(Instant.now());
+        return event;
+    }
+
+    private User user(UUID userId, String name, String email) {
+        User user = new User();
+        user.setId(userId);
+        user.setName(name);
+        user.setEmail(email);
+        return user;
     }
 }

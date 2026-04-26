@@ -29,7 +29,7 @@ public class TenantSchemaService {
             schema = "tenant_" + tenant;
         }
 
-        entityManager.createNativeQuery("SET LOCAL search_path TO " + schema)
+        entityManager.createNativeQuery("SET search_path TO " + schema)
                 .executeUpdate();
     }
 }
