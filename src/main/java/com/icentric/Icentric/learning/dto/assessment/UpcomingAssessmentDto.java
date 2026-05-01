@@ -14,4 +14,5 @@ public class UpcomingAssessmentDto {
     private Integer lastScore;
     private Integer passingScore;
     private String retakeAvailableAt; // ISO-8601, null if immediately available
+    private String status;
 }

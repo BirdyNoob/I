@@ -8,6 +8,8 @@ import com.icentric.Icentric.learning.dto.assessment.CreateAssessmentConfigReque
 
 import com.icentric.Icentric.learning.dto.assessment.SubmitAssessmentRequest;
 import com.icentric.Icentric.learning.dto.assessment.SubmitAssessmentResponse;
+import com.icentric.Icentric.learning.dto.assessment.SaveAssessmentProgressRequest;
+import com.icentric.Icentric.learning.dto.assessment.SaveAssessmentProgressResponse;
 
 import java.util.UUID;
 
@@ -15,6 +17,7 @@ public interface AssessmentService {
     AssessmentDashboardResponse getAssessmentDashboard(UUID userId);
     AssessmentDataResponse generateAssessment(String trackId, UUID userId);
     AssessmentRenderResponse getAssessmentForRender(String assessmentId, UUID userId);
+    SaveAssessmentProgressResponse saveAssessmentProgress(String assessmentId, SaveAssessmentProgressRequest request, UUID userId);
     SubmitAssessmentResponse submitAssessment(String assessmentId, SubmitAssessmentRequest request, UUID userId);
     
     void createAssessmentConfig(String trackId, JsonNode request);

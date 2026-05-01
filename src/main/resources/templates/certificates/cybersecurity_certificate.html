@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cybersecurity Certificate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f7f7f5;
+      --text-primary: #1a1a18;
+      --text-secondary: #5f5e5a;
+      --text-tertiary: #888780;
+      --border-light: rgba(0,0,0,0.10);
+      --border-mid: rgba(0,0,0,0.18);
+      --blue-dark: #185FA5;
+      --blue-mid: #378ADD;
+      --blue-bg: #E6F1FB;
+      --blue-text: #0C447C;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--bg-secondary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      color: var(--text-primary);
+    }
+
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      width: 100%;
+      max-width: 720px;
+    }
+
+    /* ── Certificate ── */
+    .cert {
+      width: 100%;
+      background: var(--bg-primary);
+      border: 0.5px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .cert-top-bar {
+      height: 4px;
+      background: var(--blue-dark);
+      width: 100%;
+    }
+
+    .cert-inner {
+      padding: 44px 52px 40px;
+    }
+
+    .cert-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 36px;
+    }
+
+    .cert-logo-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .lock-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--blue-bg);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .cert-org-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.01em;
+    }
+
+    .cert-org-sub {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+      letter-spacing: 0.04em;
+    }
+
+    .cert-id-block { text-align: right; }
+
+    .cert-id-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+      margin-bottom: 3px;
+    }
+
+    .cert-id-value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--blue-dark);
+      letter-spacing: 0.06em;
+    }
+
+    .cert-id-learner {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+      letter-spacing: 0.04em;
+    }
+
+    .cert-divider {
+      height: 0.5px;
+      background: var(--border-light);
+      margin-bottom: 32px;
+    }
+
+    .cert-presented {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+      margin-bottom: 8px;
+    }
+
+    .cert-recipient {
+      font-family: 'Syne', sans-serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.05;
+      margin-bottom: 28px;
+      letter-spacing: -0.01em;
+    }
+
+    .cert-body-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 48px;
+      margin-bottom: 28px;
+    }
+
+    .cert-track-block { flex: 1; }
+
+    .cert-track-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+      margin-bottom: 5px;
+    }
+
+    .cert-track-name {
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .cert-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--blue-bg);
+      color: var(--blue-text);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 3px 9px;
+      border-radius: 4px;
+      letter-spacing: 0.06em;
+      margin-top: 8px;
+      text-transform: uppercase;
+    }
+
+    .cert-date-block {}
+
+    .cert-date-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+      margin-bottom: 5px;
+    }
+
+    .cert-date-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .cert-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 0.5px solid var(--border-light);
+      padding-top: 20px;
+    }
+
+    .cert-verify {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cert-verify-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--blue-dark);
+      flex-shrink: 0;
+    }
+
+    .cert-verify-text {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .cert-verify-text strong {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .cert-watermark {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+    }
+
+    /* ── Print styles ── */
+    @media print {
+      body { background: #fff; padding: 0; }
+      .fields-panel { display: none; }
+      .cert { border: 1px solid #ddd; box-shadow: none; }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .fields-grid { grid-template-columns: 1fr 1fr; }
+      .cert-inner { padding: 28px 24px; }
+      .cert-recipient { font-size: 26px; }
+      .cert-body-row { flex-direction: column; gap: 20px; }
+      .cert-head { flex-direction: column; gap: 16px; }
+      .cert-id-block { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+
+    <!-- Certificate -->
+    <div class="cert">
+      <div class="cert-top-bar"></div>
+      <div class="cert-inner">
+
+        <div class="cert-head">
+          <div class="cert-logo-area">
+            <div class="lock-icon">
+              <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
+                <rect x="2" y="7" width="10" height="8" rx="2" stroke="#185FA5" stroke-width="1.3"/>
+                <path d="M4.5 7V5a2.5 2.5 0 015 0v2" stroke="#185FA5" stroke-width="1.3" stroke-linecap="round"/>
+                <circle cx="7" cy="11" r="1.2" fill="#185FA5"/>
+              </svg>
+            </div>
+            <div>
+              <div class="cert-org-name">CyberShield</div>
+              <div class="cert-org-sub">Security Training Platform</div>
+            </div>
+          </div>
+          <div class="cert-id-block">
+            <div class="cert-id-label">Certificate ID</div>
+            <div class="cert-id-value" id="c-certid">{{certificateId}}</div>
+            <div class="cert-id-learner" id="c-learner">{{learnerId}}</div>
+          </div>
+        </div>
+
+        <div class="cert-divider"></div>
+
+        <div class="cert-presented">Certificate of Completion — Presented to</div>
+        <div class="cert-recipient" id="c-name">{{recipientName}}</div>
+
+        <div class="cert-body-row">
+          <div class="cert-track-block">
+            <div class="cert-track-label">Track completed</div>
+            <div class="cert-track-name" id="c-track">{{trackTitle}}</div>
+            <div class="cert-tag">
+              <svg width="7" height="7" viewBox="0 0 7 7"><circle cx="3.5" cy="3.5" r="3" fill="#185FA5"/></svg>
+              Verified
+            </div>
+          </div>
+          <div class="cert-date-block">
+            <div class="cert-date-label">Issued on</div>
+            <div class="cert-date-value" id="c-date">{{issuedDate}}</div>
+          </div>
+        </div>
+
+        <div class="cert-footer">
+          <div class="cert-verify">
+            <div class="cert-verify-dot"></div>
+            <div class="cert-verify-text">Issued by <strong>CyberShield Training Platform</strong> · Digitally authenticated</div>
+          </div>
+          <div class="cert-watermark">cybershield.io/verify</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

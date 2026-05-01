@@ -11,6 +11,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class FinalAssessmentDto {
     private String id;
+    private String trackId;         // used by frontend to route to lesson review
     private String trackName;
     private String title;
     private String status;          // PASSED | AVAILABLE | LOCKED | FAILED | COOLDOWN

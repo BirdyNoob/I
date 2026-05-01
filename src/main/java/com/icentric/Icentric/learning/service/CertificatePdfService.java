@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 public class CertificatePdfService {
     private static final DateTimeFormatter ISSUE_DATE_FORMAT =
             DateTimeFormatter.ofPattern("dd MMM uuuu").withZone(ZoneOffset.UTC);
-    private static final String TEMPLATE_PATH = "templates/certificates/aisafe-certificate.html";
+    private static final String TEMPLATE_PATH = "templates/certificates/cybersecurity_certificate.html";
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{([a-zA-Z0-9]+)}}");
 
     public byte[] generateCertificate(CertificateDownloadData data) {

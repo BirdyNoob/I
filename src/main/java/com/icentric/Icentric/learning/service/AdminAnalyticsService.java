@@ -11,7 +11,7 @@ import com.icentric.Icentric.learning.entity.IssuedCertificate;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
-import com.icentric.Icentric.learning.repository.QuizAttemptRepository;
+import com.icentric.Icentric.learning.repository.AssessmentAttemptRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
@@ -38,7 +38,7 @@ public class AdminAnalyticsService {
     private final TenantUserRepository tenantUserRepository;
     private final TenantRepository tenantRepository;
     private final UserAssignmentRepository assignmentRepository;
-    private final QuizAttemptRepository quizAttemptRepository;
+    private final AssessmentAttemptRepository assessmentAttemptRepository;
     private final IssuedCertificateRepository issuedCertificateRepository;
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
@@ -49,7 +49,7 @@ public class AdminAnalyticsService {
             TenantUserRepository tenantUserRepository,
             TenantRepository tenantRepository,
             UserAssignmentRepository assignmentRepository,
-            QuizAttemptRepository quizAttemptRepository,
+            AssessmentAttemptRepository assessmentAttemptRepository,
             IssuedCertificateRepository issuedCertificateRepository,
             LessonProgressRepository progressRepository,
             LessonRepository lessonRepository,
@@ -59,7 +59,7 @@ public class AdminAnalyticsService {
         this.tenantUserRepository = tenantUserRepository;
         this.tenantRepository = tenantRepository;
         this.assignmentRepository = assignmentRepository;
-        this.quizAttemptRepository = quizAttemptRepository;
+        this.assessmentAttemptRepository = assessmentAttemptRepository;
         this.issuedCertificateRepository = issuedCertificateRepository;
         this.progressRepository = progressRepository;
         this.lessonRepository = lessonRepository;
@@ -82,7 +82,7 @@ public class AdminAnalyticsService {
                 totalAssignments == 0 ? 0 :
                         (completedAssignments * 100.0) / totalAssignments;
 
-        Double avgScore = quizAttemptRepository.getAverageScore();
+        Double avgScore = assessmentAttemptRepository.getAverageScore();
 
         return new AdminAnalyticsResponse(
                 totalUsers,
@@ -120,7 +120,7 @@ public class AdminAnalyticsService {
                     total == 0 ? 0 : (completed * 100.0) / total;
 
             Double avgScore =
-                    quizAttemptRepository.getAverageScoreByUser(userId);
+                    assessmentAttemptRepository.getAverageScoreByUser(userId);
 
             double score = avgScore == null ? 0 : avgScore * 100;
 
@@ -154,7 +154,7 @@ public class AdminAnalyticsService {
     public List<WeakLessonResponse> getWeakLessons() {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        List<Object[]> stats = quizAttemptRepository.getLessonStats();
+        List<Object[]> stats = assessmentAttemptRepository.getAssessmentStats();
 
         List<WeakLessonResponse> result = new ArrayList<>();
 
@@ -226,7 +226,7 @@ public class AdminAnalyticsService {
                         .size();
 
                 Double avg =
-                        quizAttemptRepository.getAverageScoreByUser(userId);
+                        assessmentAttemptRepository.getAverageScoreByUser(userId);
 
                 if (avg != null) {
                     totalScore += avg;
@@ -287,10 +287,10 @@ public class AdminAnalyticsService {
                 .filter(a -> a.getStatus() == AssignmentStatus.OVERDUE && a.getDueDate() != null && !a.getDueDate().isBefore(sevenDaysAgo))
                 .count();
 
-        Double avgScoreCurrent = quizAttemptRepository.getAverageScore();
-        double avgAssessmentScorePercent = avgScoreCurrent == null ? 0 : avgScoreCurrent * 100;
-        Double thisWeekScore = quizAttemptRepository.getAverageScoreBetween(sevenDaysAgo, now);
-        Double prevWeekScore = quizAttemptRepository.getAverageScoreBetween(fourteenDaysAgo, sevenDaysAgo);
+        Double avgScoreCurrent = assessmentAttemptRepository.getAverageScore();
+        double avgAssessmentScorePercent = avgScoreCurrent == null ? 0 : avgScoreCurrent;
+        Double thisWeekScore = assessmentAttemptRepository.getAverageScoreBetween(sevenDaysAgo, now);
+        Double prevWeekScore = assessmentAttemptRepository.getAverageScoreBetween(fourteenDaysAgo, sevenDaysAgo);
         double avgAssessmentTrendPoints = ((thisWeekScore == null ? 0 : thisWeekScore) - (prevWeekScore == null ? 0 : prevWeekScore)) * 100;
 
         Instant monthStart = LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).atStartOfDay().toInstant(ZoneOffset.UTC);
@@ -344,24 +344,24 @@ public class AdminAnalyticsService {
                 now
         );
 
-        List<AdminOverviewResponse.QuizPerformanceByDepartment> quizPerformanceByDepartment = quizAttemptRepository
-                .getQuizPerformanceByDepartment(tenant.getId())
+        List<AdminOverviewResponse.QuizPerformanceByDepartment> quizPerformanceByDepartment = assessmentAttemptRepository
+                .getAssessmentPerformanceByDepartment(tenant.getId())
                 .stream()
                 .map(row -> new AdminOverviewResponse.QuizPerformanceByDepartment(
                         (String) row[0],
-                        row[1] == null ? 0 : ((Double) row[1]) * 100,
-                        row[2] == null ? 0 : ((Double) row[2]) * 100
+                        row[1] == null ? 0 : (Double) row[1],   // already 0-100
+                        row[2] == null ? 0 : ((Double) row[2]) * 100 // passRate 0-1 → 0-100
                 ))
                 .sorted(Comparator.comparing(AdminOverviewResponse.QuizPerformanceByDepartment::department, String.CASE_INSENSITIVE_ORDER))
                 .toList();
 
-        List<AdminOverviewResponse.HighestFailureLesson> highestFailureLessons = quizAttemptRepository
-                .getLessonFailureRateByDepartment(tenant.getId())
+        List<AdminOverviewResponse.HighestFailureLesson> highestFailureLessons = assessmentAttemptRepository
+                .getAssessmentFailureRateByDepartment(tenant.getId())
                 .stream()
                 .limit(10)
                 .map(row -> new AdminOverviewResponse.HighestFailureLesson(
-                        (String) row[0],
-                        (String) row[1],
+                        (String) row[0],   // assessmentConfigId (used as label)
+                        (String) row[1],   // department
                         row[2] == null ? 0 : ((Double) row[2])
                 ))
                 .toList();
@@ -409,7 +409,7 @@ public class AdminAnalyticsService {
             long total = userAssgn.size();
 
             double completionPercent = total == 0 ? 0 : (completed * 100.0) / total;
-            Double avgScore = quizAttemptRepository.getAverageScoreByUser(userId);
+            Double avgScore = assessmentAttemptRepository.getAverageScoreByUser(userId);
             double score = avgScore == null ? 0 : avgScore * 100;
 
             boolean overdueFlag =

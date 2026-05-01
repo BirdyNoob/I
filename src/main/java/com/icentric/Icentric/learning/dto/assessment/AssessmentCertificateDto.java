@@ -10,4 +10,7 @@ import lombok.Data;
 public class AssessmentCertificateDto {
     private String certificateId;
     private String downloadUrl;
+    private java.time.Instant issuedAt;
+    private String recipientName;
+    private String trackTitle;
 }

@@ -11,6 +11,7 @@ import com.icentric.Icentric.learning.dto.CertificateDownloadResult;
 import com.icentric.Icentric.learning.dto.CertificateResponse;
 import com.icentric.Icentric.learning.dto.CertificateVerificationData;
 import com.icentric.Icentric.learning.dto.CertificateVerificationResponse;
+import com.icentric.Icentric.learning.entity.Certificate;
 import com.icentric.Icentric.learning.entity.IssuedCertificate;
 import com.icentric.Icentric.learning.repository.CertificateRepository;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
@@ -94,16 +95,26 @@ public class CertificateService {
         long completed =
                 progressRepository.countCompletedLessons(userId, trackId);
 
-        long total =
-                lessonRepository.countLessonsInTrack(trackId);
+        long total = lessonRepository.countLessonsInTrack(trackId);
 
-        if (completed == total && total > 0) {
+        // A track is ready for certificate if all lessons are completed.
+        // If total is 0, it's a special track (e.g. assessment-only) and we allow issuance.
+        boolean allLessonsDone = (total == 0) || (completed >= total);
+
+        if (allLessonsDone) {
 
             var certificate = certificateRepository
                     .findByTrackId(trackId)
-                    .orElse(null);
-
-            if (certificate == null) return;
+                    .orElseGet(() -> {
+                        Certificate newCert = new Certificate();
+                        newCert.setId(UUID.randomUUID());
+                        newCert.setTrackId(trackId);
+                        var track = trackRepository.findById(trackId).orElse(null);
+                        newCert.setTitle(track != null ? track.getTitle() + " Certificate" : "Certificate of Completion");
+                        newCert.setDescription("Awarded for successful completion of the track requirements.");
+                        newCert.setCreatedAt(Instant.now());
+                        return certificateRepository.save(newCert);
+                    });
 
             IssuedCertificate issued = existing != null ? existing : new IssuedCertificate();
             if (issued.getId() == null) {
@@ -142,19 +153,17 @@ public class CertificateService {
                             + " for " + auditMetadataService.describeTrack(trackId)
                             + ". Generation queued asynchronously."
             );
-            var assignment = assignmentRepository
-                    .findByUserIdAndTrackId(userId, trackId)
-                    .orElseThrow();
-
-            var track = trackRepository.findById(trackId)
-                    .orElseThrow();
-
-// 🔥 RESET RETRAINING STATE
-            assignment.setContentVersionAtAssignment(track.getVersion());
-            assignment.setRequiresRetraining(false);
-            assignment.setStatus(AssignmentStatus.COMPLETED);
-
-            assignmentRepository.save(assignment);
+            // ── Update assignment status if it exists ────────────────────────
+            assignmentRepository.findByUserIdAndTrackId(userId, trackId)
+                    .ifPresent(assignment -> {
+                        var track = trackRepository.findById(trackId).orElse(null);
+                        if (track != null) {
+                            assignment.setContentVersionAtAssignment(track.getVersion());
+                        }
+                        assignment.setRequiresRetraining(false);
+                        assignment.setStatus(AssignmentStatus.COMPLETED);
+                        assignmentRepository.save(assignment);
+                    });
         }
 
     }

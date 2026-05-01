@@ -55,6 +55,14 @@ public class AssessmentController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{assessmentId}/save-progress")
+    public ResponseEntity<com.icentric.Icentric.learning.dto.assessment.SaveAssessmentProgressResponse> saveAssessmentProgress(
+            @PathVariable String assessmentId,
+            @RequestBody com.icentric.Icentric.learning.dto.assessment.SaveAssessmentProgressRequest request) {
+        com.icentric.Icentric.learning.dto.assessment.SaveAssessmentProgressResponse response = assessmentService.saveAssessmentProgress(assessmentId, request, currentUserId());
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{assessmentId}/submit")
     public ResponseEntity<SubmitAssessmentResponse> submitAssessment(
             @PathVariable String assessmentId,

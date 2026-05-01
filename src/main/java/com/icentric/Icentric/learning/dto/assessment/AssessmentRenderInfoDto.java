@@ -17,4 +17,10 @@ public class AssessmentRenderInfoDto {
     private String retakesAllowed;
     private Integer attemptNumber;
     private List<String> guidelines;
+    
+    // Resume state fields
+    private String attemptId;
+    private String status;
+    private Integer timeRemainingSeconds;
+    private List<AnswerSubmissionDto> savedAnswers;
 }

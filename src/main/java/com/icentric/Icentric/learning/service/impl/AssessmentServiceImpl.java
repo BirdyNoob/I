@@ -7,14 +7,17 @@ import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.LessonStepRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.assessment.*;
 import com.icentric.Icentric.learning.entity.AssessmentAssignment;
 import com.icentric.Icentric.learning.entity.AssessmentAttempt;
 import com.icentric.Icentric.learning.entity.AssessmentConfig;
 import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.entity.IssuedCertificate;
 import com.icentric.Icentric.learning.repository.*;
 import com.icentric.Icentric.learning.service.AssessmentService;
+import com.icentric.Icentric.learning.service.CertificateService;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,9 @@ public class AssessmentServiceImpl implements AssessmentService {
     private final LessonRepository lessonRepository;
     private final LessonStepRepository lessonStepRepository;
     private final LessonProgressRepository lessonProgressRepository;
+    private final IssuedCertificateRepository issuedCertificateRepository;
+    private final UserRepository userRepository;
+    private final CertificateService certificateService;
     private final ObjectMapper objectMapper;
     private final TenantSchemaService tenantSchemaService;
 
@@ -96,11 +102,11 @@ public class AssessmentServiceImpl implements AssessmentService {
             if (!isExplicit && !hasTrackAssignment) continue; // not relevant to this user
 
             // ── Resolve track name ─────────────────────────────────────────────
-            String trackName = cfgData.path("trackName").asText("");
-            if (trackId != null) {
-                trackName = trackRepository.findById(trackId)
-                        .map(Track::getTitle).orElse(trackName);
-            }
+            final String trackName = (trackId != null)
+                    ? trackRepository.findById(trackId).map(Track::getTitle).orElse(cfgData.path("trackName").asText("Track"))
+                    : cfgData.path("trackName").asText("Track");
+
+
 
             // ── Eligibility (module completion) ────────────────────────────────
             int totalModules     = 0;
@@ -139,8 +145,17 @@ public class AssessmentServiceImpl implements AssessmentService {
                     .max(Comparator.comparing(AssessmentAttempt::getDateCompleted))
                     .orElse(bestAttempt);
 
+            boolean hasInProgress = attempts.stream()
+                    .anyMatch(a -> "IN_PROGRESS".equals(a.getStatus()));
+
             // ── Resolved status ────────────────────────────────────────────────
             String currentStatus = baseStatus;
+            
+            // Priority 1: PASSED (Terminal)
+            // Priority 2: IN_PROGRESS (Active)
+            // Priority 3: FAILED (Terminal, no retakes)
+            // Priority 4: AVAILABLE/LOCKED (Base)
+
             if (bestAttempt != null) {
                 assessmentsAttempted++;
                 int sc = bestAttempt.getScore() != null ? bestAttempt.getScore() : 0;
@@ -159,8 +174,12 @@ public class AssessmentServiceImpl implements AssessmentService {
                             if (attemptCount >= allowed) currentStatus = "FAILED";
                         } catch (NumberFormatException ignored) {}
                     }
-                    // If still under retake limit, keep baseStatus (AVAILABLE/LOCKED)
                 }
+            }
+
+            // Override with IN_PROGRESS if we are not already PASSED or FAILED (no retakes)
+            if (hasInProgress && !"PASSED".equals(currentStatus) && !"FAILED".equals(currentStatus)) {
+                currentStatus = "IN_PROGRESS";
             }
 
             JsonNode configObj = cfgData.path("config");
@@ -194,32 +213,83 @@ public class AssessmentServiceImpl implements AssessmentService {
             AssessmentCertificateDto certificate = null;
             if ("PASSED".equals(currentStatus) && bestAttempt != null
                     && bestAttempt.getCertificateId() != null) {
-                certificate = AssessmentCertificateDto.builder()
-                        .certificateId(bestAttempt.getCertificateId())
-                        .downloadUrl("/api/certificates/" + bestAttempt.getCertificateId())
-                        .build();
+                UUID certId = UUID.fromString(bestAttempt.getCertificateId());
+                certificate = issuedCertificateRepository.findById(certId)
+                        .map(ic -> {
+                            String rName = userRepository.findById(userId)
+                                    .map(com.icentric.Icentric.identity.entity.User::getName)
+                                    .orElse("Learner");
+                            return AssessmentCertificateDto.builder()
+                                    .certificateId(ic.getId().toString())
+                                    .downloadUrl(ic.getDownloadUrl())
+                                    .issuedAt(ic.getIssuedAt())
+                                    .recipientName(rName)
+                                    .trackTitle(trackName)
+                                    .build();
+                        })
+                        .orElse(null);
             }
 
-            // ── Topic breakdown from track lesson steps ────────────────────────
+            // ── Topic breakdown — lesson cards from the assigned track ───────────
+            // Each entry mirrors the lesson card shape the frontend already renders.
+            // Shows every lesson STEP in the track as a "topic".
             List<TopicBreakdownDto> topicBreakdown = new ArrayList<>();
-            if (trackId != null && "PASSED".equals(currentStatus)) {
-                List<com.icentric.Icentric.content.entity.CourseModule> mods = moduleRepository.findByTrackIdOrderBySortOrder(trackId);
+            if (trackId != null) {
+                List<com.icentric.Icentric.content.entity.CourseModule> mods =
+                        moduleRepository.findByTrackIdOrderBySortOrder(trackId);
                 for (var mod : mods) {
-                    List<com.icentric.Icentric.content.entity.Lesson> lessns = lessonRepository.findByModuleIdOrderBySortOrder(mod.getId());
-                    for (var l : lessns) {
+                    List<com.icentric.Icentric.content.entity.Lesson> lessons =
+                            lessonRepository.findByModuleIdOrderBySortOrder(mod.getId());
+                    for (var lesson : lessons) {
+                        com.icentric.Icentric.learning.entity.LessonProgress lp = lessonProgressRepository
+                                .findByUserIdAndLessonId(userId, lesson.getId())
+                                .orElse(null);
+
+                        java.util.List<UUID> completedStepIds = (lp != null && lp.getCompletedStepIds() != null)
+                                ? lp.getCompletedStepIds() : Collections.emptyList();
+                        boolean lessonCompleted = lp != null && "COMPLETED".equals(lp.getStatus());
+
                         List<com.icentric.Icentric.content.entity.LessonStep> steps =
-                                lessonStepRepository.findByLessonIdOrderBySortOrderAsc(l.getId());
+                                lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+
+                        boolean foundInProgress = false;
+
                         for (var step : steps) {
+                            String stepStatus;
+                            if (lessonCompleted || completedStepIds.contains(step.getId())) {
+                                stepStatus = "COMPLETED";
+                            } else if (!foundInProgress && lp != null && "IN_PROGRESS".equals(lp.getStatus())) {
+                                stepStatus = "IN_PROGRESS";
+                                foundInProgress = true;
+                            } else if (!foundInProgress && lp == null) {
+                                stepStatus = "NOT_STARTED";
+                                // The very first step of a NOT_STARTED lesson stays NOT_STARTED
+                            } else {
+                                stepStatus = "NOT_STARTED";
+                            }
+
+                            String meta;
+                            String actionLabel;
+                            switch (stepStatus) {
+                                case "COMPLETED"   -> { meta = "Done";         actionLabel = "Review";   }
+                                case "IN_PROGRESS" -> { meta = "In Progress";  actionLabel = "Continue"; }
+                                default            -> { meta = "Not Started";  actionLabel = "Start";    }
+                            }
+
                             topicBreakdown.add(TopicBreakdownDto.builder()
-                                    .topic(step.getTitle())
-                                    .score(bestAttempt != null && bestAttempt.getScore() != null ? bestAttempt.getScore() : 100)
+                                    .stepId(step.getId().toString())
+                                    .lessonId(lesson.getId().toString())
+                                    .title(step.getTitle())
+                                    .status(stepStatus)
+                                    .meta(meta)
+                                    .actionLabel(actionLabel)
                                     .build());
                         }
                     }
                 }
-            } else if (!"PASSED".equals(currentStatus)) {
-                topicBreakdown = Collections.emptyList();
             }
+
+
 
             // ── Eligibility ────────────────────────────────────────────────────
             AssessmentEligibilityDto eligibility = null;
@@ -231,12 +301,13 @@ public class AssessmentServiceImpl implements AssessmentService {
             }
 
             // Apply COOLDOWN status override if retakeAvailableAt is set
-            if (retakeAvailableAt != null && !"PASSED".equals(currentStatus) && !"FAILED".equals(currentStatus)) {
+            if (retakeAvailableAt != null && !"PASSED".equals(currentStatus) && !"FAILED".equals(currentStatus) && !"IN_PROGRESS".equals(currentStatus)) {
                 currentStatus = "COOLDOWN";
             }
 
             FinalAssessmentDto dto = FinalAssessmentDto.builder()
                     .id(configId)
+                    .trackId(trackId != null ? trackId.toString() : null)
                     .trackName(trackName)
                     .title(cfgData.path("title").asText("Final Assessment"))
                     .status(currentStatus)
@@ -257,8 +328,8 @@ public class AssessmentServiceImpl implements AssessmentService {
                     .topicBreakdown(topicBreakdown)
                     .build();
 
-            // ── Upcoming: first AVAILABLE assessment ───────────────────────────
-            if (upcoming == null && ("AVAILABLE".equals(currentStatus) || "COOLDOWN".equals(currentStatus))) {
+            // ── Upcoming: first AVAILABLE or IN_PROGRESS assessment ───────────
+            if (upcoming == null && ("AVAILABLE".equals(currentStatus) || "COOLDOWN".equals(currentStatus) || "IN_PROGRESS".equals(currentStatus))) {
                 Integer lastScore = latestAttempt != null ? latestAttempt.getScore() : null;
                 upcoming = UpcomingAssessmentDto.builder()
                         .assessmentId(configId)
@@ -267,6 +338,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                         .lastScore(lastScore)
                         .passingScore(passingScore)
                         .retakeAvailableAt(retakeAvailableAt != null ? retakeAvailableAt.toString() : null)
+                        .status(currentStatus)
                         .build();
             }
 
@@ -342,7 +414,27 @@ public class AssessmentServiceImpl implements AssessmentService {
         JsonNode configObj = configData.path("config");
 
         List<AssessmentAttempt> attempts = assessmentAttemptRepository.findByUserIdAndAssessmentConfigId(userId, assessmentId);
-        int attemptNumber = attempts.size() + 1;
+        int attemptNumber = attempts.size() + 1; // Default for a new attempt
+
+        // Check if there is an IN_PROGRESS attempt to resume
+        AssessmentAttempt inProgressAttempt = attempts.stream()
+                .filter(a -> "IN_PROGRESS".equals(a.getStatus()))
+                .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+
+        String resumeAttemptId = null;
+        String currentStatus = "NEW";
+        Integer timeRemaining = null;
+        List<AnswerSubmissionDto> savedAnswers = null;
+
+        if (inProgressAttempt != null) {
+            resumeAttemptId = inProgressAttempt.getId().toString();
+            currentStatus = "IN_PROGRESS";
+            timeRemaining = inProgressAttempt.getTimeRemainingSeconds();
+            savedAnswers = inProgressAttempt.getSavedAnswers();
+            // Do not increment attempt number if we are resuming
+            attemptNumber = inProgressAttempt.getAttemptNumber() != null ? inProgressAttempt.getAttemptNumber() : attemptNumber;
+        }
 
         AssessmentRenderInfoDto info = AssessmentRenderInfoDto.builder()
                 .id(config.getId())
@@ -355,6 +447,10 @@ public class AssessmentServiceImpl implements AssessmentService {
                 .attemptNumber(attemptNumber)
                 .guidelines(List.of("You cannot pause the timer once started.",
                         "All answers are final once submitted."))
+                .attemptId(resumeAttemptId)
+                .status(currentStatus)
+                .timeRemainingSeconds(timeRemaining)
+                .savedAnswers(savedAnswers)
                 .build();
 
         List<AssessmentRenderQuestionDto> questions = new ArrayList<>();
@@ -387,6 +483,60 @@ public class AssessmentServiceImpl implements AssessmentService {
         return AssessmentRenderResponse.builder()
                 .assessment(info)
                 .questions(questions)
+                .build();
+    }
+
+    // ── Save assessment progress ───────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public SaveAssessmentProgressResponse saveAssessmentProgress(String assessmentId, SaveAssessmentProgressRequest request, UUID userId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        AssessmentAttempt attempt = null;
+        if (request.getAttemptId() != null && !request.getAttemptId().isBlank()) {
+            try {
+                UUID attemptId = UUID.fromString(request.getAttemptId());
+                attempt = assessmentAttemptRepository.findById(attemptId).orElse(null);
+            } catch (IllegalArgumentException ignored) {}
+        }
+
+        // If no attempt specified, look for an existing IN_PROGRESS attempt
+        if (attempt == null) {
+            List<AssessmentAttempt> attempts = assessmentAttemptRepository.findByUserIdAndAssessmentConfigId(userId, assessmentId);
+            attempt = attempts.stream()
+                    .filter(a -> "IN_PROGRESS".equals(a.getStatus()))
+                    .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
+                    .orElse(null);
+            
+            // If still no attempt, create a new one
+            if (attempt == null) {
+                attempt = new AssessmentAttempt();
+                attempt.setId(UUID.randomUUID());
+                attempt.setUserId(userId);
+                attempt.setAssessmentConfigId(assessmentId);
+                attempt.setAttemptNumber(attempts.size() + 1);
+            }
+        }
+
+        attempt.setStatus("IN_PROGRESS");
+        attempt.setSavedAnswers(request.getAnswers());
+        attempt.setTimeRemainingSeconds(request.getTimeRemainingSeconds());
+        attempt.setLastSavedAt(Instant.now());
+
+        // Update total answered for stats if we want, or wait until submit
+        if (request.getAnswers() != null) {
+            long answeredCount = request.getAnswers().stream()
+                    .filter(a -> a.getSelectedOptionId() != null && !a.getSelectedOptionId().isBlank())
+                    .count();
+            attempt.setQuestionsAnswered((int) answeredCount);
+        }
+
+        assessmentAttemptRepository.save(attempt);
+
+        return SaveAssessmentProgressResponse.builder()
+                .attemptId(attempt.getId().toString())
+                .status(attempt.getStatus())
                 .build();
     }
 
@@ -467,42 +617,83 @@ public class AssessmentServiceImpl implements AssessmentService {
             improvementPercent = score > 0 ? 100 : 0;
         }
 
-        String certificateId = null;
-        if ("PASSED".equals(status)) {
-            certificateId = "AS-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        // ── Persist attempt ──────────────────────────────────────────────────────
+        AssessmentAttempt attempt = null;
+        if (request.getAttemptId() != null && !request.getAttemptId().isBlank()) {
+            try {
+                UUID attemptId = UUID.fromString(request.getAttemptId());
+                attempt = assessmentAttemptRepository.findById(attemptId).orElse(null);
+            } catch (IllegalArgumentException ignored) {}
+        }
+        
+        // If not explicitly provided, see if there is an IN_PROGRESS attempt we should finalize
+        if (attempt == null) {
+            attempt = existing.stream()
+                    .filter(a -> "IN_PROGRESS".equals(a.getStatus()))
+                    .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
+                    .orElse(null);
         }
 
-        AssessmentAttempt attempt = new AssessmentAttempt();
-        UUID attemptIdToUse;
-        try {
-            attemptIdToUse = (request.getAttemptId() != null && !request.getAttemptId().isBlank()) 
-                ? UUID.fromString(request.getAttemptId()) 
-                : UUID.randomUUID();
-        } catch (IllegalArgumentException e) {
-            attemptIdToUse = UUID.randomUUID();
+        if (attempt == null) {
+            attempt = new AssessmentAttempt();
+            attempt.setId(UUID.randomUUID());
+            attempt.setUserId(userId);
+            attempt.setAssessmentConfigId(assessmentId);
+            attempt.setAttemptNumber(attemptNumber);
         }
-        attempt.setId(attemptIdToUse);
-        attempt.setUserId(userId);
-        attempt.setAssessmentConfigId(assessmentId);
+
         attempt.setStatus(status);
         attempt.setScore(score);
-        attempt.setAttemptNumber(attemptNumber);
         attempt.setDateCompleted(Instant.now());
         attempt.setQuestionsAnswered(request.getAnswers() != null ? request.getAnswers().size() : 0);
         attempt.setTotalQuestions(totalQuestions);
-        attempt.setCertificateId(certificateId);
+        
+        // Optional: clear savedAnswers on submit, or keep them for historical purposes. 
+        // We will keep them, but update timeRemainingSeconds to 0 since it's completed.
+        if (request.getTimeTakenSeconds() != null) {
+            // Since they passed timeTakenSeconds, maybe we compute timeRemaining if we want.
+            // Or just set it to 0.
+            attempt.setTimeRemainingSeconds(0);
+        }
+        
         assessmentAttemptRepository.save(attempt);
 
+        // ── Certificate: trigger real issuance via CertificateService ──────────
         CertificateResultDto certDto = null;
-        if (certificateId != null) {
-            String trackName = cfgData.path("trackName").asText("Track");
-            certDto = CertificateResultDto.builder()
-                    .id(certificateId)
-                    .recipientName(userId.toString()) // resolved from user profile in future
-                    .trackName(trackName)
-                    .issuedDate(LocalDate.now().toString())
-                    .downloadUrl("/api/certificates/" + certificateId)
-                    .build();
+        if ("PASSED".equals(status) && config.getTrackId() != null && !config.getTrackId().isBlank() && !"null".equals(config.getTrackId())) {
+            UUID trackUuid = null;
+            try {
+                trackUuid = UUID.fromString(config.getTrackId());
+                certificateService.checkAndIssue(userId, trackUuid);
+            } catch (Exception e) {
+                // Log but don't fail the submission if certificate generation errors or UUID parsing fails
+            }
+
+            if (trackUuid != null) {
+                IssuedCertificate issued = issuedCertificateRepository
+                        .findByUserIdAndTrackId(userId, trackUuid)
+                        .orElse(null);
+
+                if (issued != null) {
+                    // Store the real issued-certificate UUID on the attempt for dashboard lookup
+                    attempt.setCertificateId(issued.getId().toString());
+                    assessmentAttemptRepository.save(attempt);
+
+                    String recipientName = userRepository.findById(userId)
+                            .map(com.icentric.Icentric.identity.entity.User::getName)
+                            .orElse("Learner");
+
+                    certDto = CertificateResultDto.builder()
+                            .id(issued.getId().toString())
+                            .recipientName(recipientName)
+                            .trackName(cfgData.path("trackName").asText("Track"))
+                            .issuedDate(issued.getIssuedAt() != null
+                                    ? issued.getIssuedAt().toString()
+                                    : LocalDate.now().toString())
+                            .downloadUrl(issued.getDownloadUrl())
+                            .build();
+                }
+            }
         }
 
         return SubmitAssessmentResponse.builder()

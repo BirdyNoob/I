@@ -42,4 +42,14 @@ public class AssessmentAttempt {
     
     @Column(name = "certificate_id")
     private String certificateId;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "saved_answers", columnDefinition = "jsonb")
+    private java.util.List<com.icentric.Icentric.learning.dto.assessment.AnswerSubmissionDto> savedAnswers;
+
+    @Column(name = "time_remaining_seconds")
+    private Integer timeRemainingSeconds;
+
+    @Column(name = "last_saved_at")
+    private Instant lastSavedAt;
 }

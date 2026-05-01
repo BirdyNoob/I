@@ -3,17 +3,16 @@ package com.icentric.Icentric.content.controller;
 import com.icentric.Icentric.content.dto.CreateLessonRequest;
 import com.icentric.Icentric.content.dto.LessonDetailResponse;
 import com.icentric.Icentric.content.service.LessonService;
-import com.icentric.Icentric.learning.dto.QuizResultResponse;
-import com.icentric.Icentric.learning.dto.QuizSubmissionRequest;
-import com.icentric.Icentric.learning.service.QuizService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,8 +20,8 @@ import java.util.UUID;
 
 /**
  * Learner-facing lesson endpoints:
- * - GET  /api/v1/lessons/{lessonId}             — fetch lesson content
- * - POST /api/v1/lessons/{lessonId}/quiz-attempt — submit quiz answers
+ * - GET  /api/v1/lessons/{lessonId}               — fetch lesson content
+ * - GET  /api/v1/lessons/{lessonId}/steps/{stepId} — fetch step detail
  */
 @RestController
 @RequestMapping("/api/v1/lessons")
@@ -30,11 +29,9 @@ import java.util.UUID;
 public class LearnerLessonController {
 
     private final LessonService service;
-    private final QuizService quizService;
 
-    public LearnerLessonController(LessonService service, QuizService quizService) {
+    public LearnerLessonController(LessonService service) {
         this.service = service;
-        this.quizService = quizService;
     }
 
     // ── GET lesson detail ──────────────────────────────────────────────────────
@@ -78,34 +75,6 @@ public class LearnerLessonController {
     ) {
         UUID userId = extractUserId(authentication);
         return service.getLessonStep(lessonId, stepId, userId);
-    }
-
-    // ── POST quiz attempt ──────────────────────────────────────────────────────
-
-    @Operation(
-            summary = "Submit quiz attempt",
-            description = "Submits a learner's answers for the QUIZ lesson and returns the score + pass/fail. " +
-                          "Requires the preceding VIDEO_CONCEPT, INTERACTIVE_SCENARIO, and DOS_AND_DONTS lessons " +
-                          "to be COMPLETED — otherwise the sequential lock will return HTTP 403.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Quiz attempt evaluated"),
-            @ApiResponse(responseCode = "400", description = "Invalid request payload"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized"),
-            @ApiResponse(responseCode = "403", description = "Lesson locked — complete preceding lessons first")
-    })
-    @PreAuthorize("hasRole('LEARNER')")
-    @PostMapping("/{lessonId}/quiz-attempt")
-    public QuizResultResponse submitQuiz(
-            @Parameter(description = "UUID of the QUIZ lesson") @PathVariable UUID lessonId,
-            @Valid @RequestBody QuizSubmissionRequest request,
-            Authentication authentication
-    ) {
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        if (userIdRaw == null) {
-            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
-        }
-        UUID userId = UUID.fromString(userIdRaw.toString());
-        return quizService.submitQuiz(userId, request);
     }
 
     // ── PATCH update lesson content (platform admin) ──────────────────────────
