@@ -1,14 +1,24 @@
 package com.icentric.Icentric.identity.service;
 
+import com.icentric.Icentric.audit.service.AuditMetadataService;
+import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.common.enums.Department;
+import com.icentric.Icentric.common.mail.EmailService;
+import com.icentric.Icentric.content.repository.LessonRepository;
+import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
 import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
+import com.icentric.Icentric.learning.repository.LessonProgressRepository;
+import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantContext;
+import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +49,16 @@ class UserServiceTest {
     @Mock private TenantUserRepository tenantUserRepository;
     @Mock private TenantRepository tenantRepository;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private AuditService auditService;
+    @Mock private AuditMetadataService auditMetadataService;
+    @Mock private TenantAccessGuard tenantAccessGuard;
+    @Mock private EmailService emailService;
+    @Mock private TrackRepository trackRepository;
+    @Mock private UserAssignmentRepository userAssignmentRepository;
+    @Mock private LessonProgressRepository lessonProgressRepository;
+    @Mock private IssuedCertificateRepository issuedCertificateRepository;
+    @Mock private LessonRepository lessonRepository;
+    @Mock private TenantSchemaService tenantSchemaService;
 
     private UserService userService;
     private Tenant tenant;
@@ -48,9 +68,19 @@ class UserServiceTest {
         userService = new UserService(
                 userRepository,
                 tenantUserRepository,
-                tenantRepository,
                 passwordEncoder,
-                "ChangeMe@123"
+                "ChangeMe@123",
+                auditService,
+                auditMetadataService,
+                tenantAccessGuard,
+                emailService,
+                "http://localhost:8080",
+                trackRepository,
+                userAssignmentRepository,
+                lessonProgressRepository,
+                issuedCertificateRepository,
+                lessonRepository,
+                tenantSchemaService
         );
 
         tenant = new Tenant("acme", "Acme Corp");
@@ -65,7 +95,7 @@ class UserServiceTest {
     @Test
     @DisplayName("createUser stores normalized name and returns it in response")
     void createUser_includesName() {
-        when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(tenant));
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
         when(passwordEncoder.encode("secret123")).thenReturn("encoded-password");
         when(userRepository.findByEmail("aryan@example.com")).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0, User.class));
@@ -76,7 +106,9 @@ class UserServiceTest {
                 "aryan@example.com",
                 "secret123",
                 "LEARNER",
-                "Engineering"
+                Department.ENGINEERING,
+                null,
+                false
         );
 
         var response = userService.createUser(request);
@@ -94,7 +126,7 @@ class UserServiceTest {
     @Test
     @DisplayName("updateUser updates name when present")
     void updateUser_updatesName() {
-        when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(tenant));
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
 
         UUID userId = UUID.randomUUID();
         User user = new User();
@@ -105,7 +137,7 @@ class UserServiceTest {
         user.setCreatedAt(Instant.now());
 
         TenantUser mapping = new TenantUser(userId, tenant.getId(), "LEARNER");
-        mapping.setDepartment("Engineering");
+        mapping.setDepartment(Department.ENGINEERING);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(tenantUserRepository.findByUserIdAndTenantId(userId, tenant.getId()))
@@ -115,7 +147,7 @@ class UserServiceTest {
 
         var response = userService.updateUser(
                 userId,
-                new UpdateUserRequest("  New Name  ", null, null, null)
+                new UpdateUserRequest("  New Name  ", null, null, null, null)
         );
 
         assertThat(user.getName()).isEqualTo("New Name");
@@ -125,7 +157,7 @@ class UserServiceTest {
     @Test
     @DisplayName("bulkUploadUsers accepts CSV files with UTF-8 BOM header")
     void bulkUploadUsers_acceptsUtf8BomHeader() {
-        when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(tenant));
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -141,7 +173,7 @@ class UserServiceTest {
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0, User.class));
         when(tenantUserRepository.save(any(TenantUser.class))).thenAnswer(inv -> inv.getArgument(0, TenantUser.class));
 
-        var response = userService.bulkUploadUsers(file);
+        var response = userService.bulkUploadUsers(file, true);
 
         assertThat(response.total()).isEqualTo(1);
         assertThat(response.success()).isEqualTo(1);
@@ -152,7 +184,7 @@ class UserServiceTest {
     @Test
     @DisplayName("bulkUploadUsers keeps invalid header errors as bad request input")
     void bulkUploadUsers_rethrowsInvalidHeaderAsIllegalArgument() {
-        when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(tenant));
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
 
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -161,7 +193,7 @@ class UserServiceTest {
                 "full_name,email,role,department\nAryan,aryan@example.com,LEARNER,Engineering\n".getBytes()
         );
 
-        assertThatThrownBy(() -> userService.bulkUploadUsers(file))
+        assertThatThrownBy(() -> userService.bulkUploadUsers(file, true))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("CSV must contain name, email, role, and department headers");
     }

@@ -65,6 +65,7 @@ class CertificateServiceTest {
         UUID trackId = UUID.randomUUID();
         CertificateDownloadData data = new CertificateDownloadData(
                 UUID.randomUUID(),
+                UUID.randomUUID(),
                 userId,
                 "Aryan Kundal",
                 "aryan@example.com",

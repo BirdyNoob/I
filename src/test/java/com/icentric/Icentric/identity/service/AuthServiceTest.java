@@ -1,5 +1,6 @@
 package com.icentric.Icentric.identity.service;
 
+import com.icentric.Icentric.audit.constants.AuditAction;
 import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.identity.dto.LoginRequest;
 import com.icentric.Icentric.identity.dto.LoginResponse;
@@ -80,7 +81,7 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("jwt-access");
         assertThat(response.refreshToken()).isEqualTo("opaque-refresh");
         assertThat(response.tenants()).isNull();
-        verify(auditService).log(any(), eq("LOGIN"), eq("USER"), any(), any());
+        verify(auditService).log(any(), eq(AuditAction.LOGIN), eq("USER"), any(), any());
     }
 
     @Test
