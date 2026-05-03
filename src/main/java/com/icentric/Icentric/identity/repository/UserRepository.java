@@ -1,5 +1,7 @@
 package com.icentric.Icentric.identity.repository;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.icentric.Icentric.identity.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -49,7 +51,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     """)
     Page<com.icentric.Icentric.identity.dto.UserResponse> findTenantUsers(
             @Param("tenantId") UUID tenantId,
-            @Param("department") String department,
+            @Param("department") Department department,
             @Param("role") String role,
             @Param("isActive") Boolean isActive,
             Pageable pageable
@@ -70,7 +72,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     """)
     Page<com.icentric.Icentric.identity.dto.UserResponse> searchTenantUsers(
             @Param("tenantId") UUID tenantId,
-            @Param("department") String department,
+            @Param("department") Department department,
             @Param("role") String role,
             @Param("isActive") Boolean isActive,
             @Param("name") String name,

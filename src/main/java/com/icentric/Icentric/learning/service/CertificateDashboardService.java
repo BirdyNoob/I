@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.icentric.Icentric.content.entity.CourseModule;
 import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.repository.LessonRepository;
@@ -92,7 +94,7 @@ public class CertificateDashboardService {
                 .orElseThrow(() -> new java.util.NoSuchElementException("User not found: " + userId));
 
         String tenantSlug = TenantContext.getTenant();
-        String department = tenantUserRepository.findByUserId(userId)
+        Department department = tenantUserRepository.findByUserId(userId)
                 .stream()
                 .findFirst()
                 .map(TenantUser::getDepartment)
@@ -172,7 +174,8 @@ public class CertificateDashboardService {
                     : ic.getId().toString();
 
             earned.add(CertificateDashboardResponse.EarnedCertificate.builder()
-                    .certificateId(certDisplayId)
+                    .certificateId(ic.getId().toString())
+                    .displayId(certDisplayId)
                     .trackName(trackName)
                     .certificateTitle(certTitle)
                     .score(bestScore)
@@ -234,11 +237,32 @@ public class CertificateDashboardService {
                     .toList();
 
             boolean hasPassed = false;
+            String pendingCertId = null;
             if (!configIds.isEmpty()) {
-                hasPassed = assessmentAttemptRepository
+                var passedAttempt = assessmentAttemptRepository
                         .findByUserIdAndStatus(userId, "PASSED")
                         .stream()
-                        .anyMatch(a -> configIds.contains(a.getAssessmentConfigId()));
+                        .filter(a -> configIds.contains(a.getAssessmentConfigId()))
+                        .findFirst();
+                
+                if (passedAttempt.isPresent()) {
+                    hasPassed = true;
+                    pendingCertId = passedAttempt.get().getCertificateId();
+                }
+            }
+
+            // Find matching issued certificate record (e.g. FAILED status)
+            IssuedCertificate matchingCert = issued.stream()
+                    .filter(ic -> trackId.equals(ic.getTrackId()))
+                    .findFirst()
+                    .orElse(null);
+
+            String currentCertId = matchingCert != null ? matchingCert.getId().toString() : pendingCertId;
+            String currentDisplayId = null;
+            if (matchingCert != null) {
+                currentDisplayId = matchingCert.getVerificationToken() != null
+                        ? matchingCert.getVerificationToken().toString().toUpperCase().replace("-", "").substring(0, 16)
+                        : matchingCert.getId().toString();
             }
 
             String unlockRequirement = hasPassed
@@ -248,6 +272,8 @@ public class CertificateDashboardService {
             String actionUrl = "/api/v1/learner/assessments/generate/" + trackId;
 
             inProgress.add(CertificateDashboardResponse.InProgressCertificate.builder()
+                    .certificateId(currentCertId)
+                    .displayId(currentDisplayId)
                     .trackName(track.getTitle())
                     .progress(CertificateDashboardResponse.Progress.builder()
                             .modulesCompleted(completedModules)

@@ -30,4 +30,17 @@ public interface TrackRepository
     """)
     List<Track> findLatestPublishedTracks();
 
+    @Query("""
+        SELECT t FROM Track t
+        WHERE t.isPublished = true
+          AND t.department = :department
+          AND t.version = (
+            SELECT MAX(t2.version) FROM Track t2
+            WHERE t2.slug = t.slug
+              AND t2.isPublished = true
+          )
+        ORDER BY t.title ASC
+    """)
+    List<Track> findLatestPublishedTracksByDepartment(@org.springframework.data.repository.query.Param("department") com.icentric.Icentric.common.enums.Department department);
+
 }

@@ -106,13 +106,43 @@ public class NotificationService {
         }
 
         String subject = notificationSubject(event.getType());
-        String htmlBody = notificationEmailBody(
-                user.getName() != null && !user.getName().isBlank() ? user.getName() : recipient,
-                event
+        String displayName = user.getName() != null && !user.getName().isBlank() ? user.getName() : recipient;
+
+        // Note: the notification message may contain the course name and due date.
+        // It comes from the job that creates the notification.
+        String safeMessage = event.getMessage() != null ? event.getMessage().replace("\n", "<br>") : "";
+        
+        String pillText = "🔔  NOTIFICATION";
+        String title = "You have a new notification";
+        switch (event.getType()) {
+            case REMINDER -> {
+                pillText = "⏰  REMINDER";
+                title = "Training Reminder";
+            }
+            case OVERDUE -> {
+                pillText = "🔴  OVERDUE";
+                title = "Training is Overdue";
+            }
+            case ESCALATION -> {
+                pillText = "⚠️  ESCALATION";
+                title = "Training Escalation Alert";
+            }
+            case FAILED -> {
+                pillText = "❌  FAILED";
+                title = "Assessment Failed";
+            }
+        }
+
+        Map<String, Object> variables = Map.of(
+                "tenantName", "AISafe", // Default if no tenant info is on the notification directly
+                "notificationPill", pillText,
+                "displayName", displayName,
+                "title", title,
+                "message", safeMessage
         );
 
         try {
-            emailService.sendHtmlEmail(recipient, subject, htmlBody).join();
+            emailService.sendTemplateEmail(recipient, subject, "AISafe_Email_Notification", variables).join();
         } catch (CompletionException ex) {
             throw new IllegalStateException("SMTP send failed for notification " + event.getId(), ex.getCause());
         }
@@ -128,48 +158,7 @@ public class NotificationService {
         return subjects.getOrDefault(type, "Training notification");
     }
 
-    private String notificationEmailBody(String displayName, NotificationEvent event) {
-        String safeName = escapeHtml(displayName);
-        String safeType = escapeHtml(event.getType().name());
-        String safeMessage = escapeHtml(event.getMessage() == null ? "" : event.getMessage()).replace("\n", "<br>");
-
-        return """
-                <!doctype html>
-                <html>
-                <body style="margin:0;padding:0;background:#f6f7fb;font-family:Arial,sans-serif;color:#1f2937;">
-                  <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" style="background:#f6f7fb;padding:24px 0;">
-                    <tr>
-                      <td align="center">
-                        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
-                          <tr>
-                            <td style="padding:24px 28px;background:#0f172a;color:#ffffff;">
-                              <h1 style="margin:0;font-size:20px;line-height:28px;">AISafe Notification</h1>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style="padding:28px;">
-                              <p style="margin:0 0 16px;font-size:16px;line-height:24px;">Hi %s,</p>
-                              <p style="margin:0 0 18px;font-size:15px;line-height:23px;">%s</p>
-                              <p style="margin:0;color:#6b7280;font-size:13px;line-height:20px;">Notification type: %s</p>
-                            </td>
-                          </tr>
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
-                </body>
-                </html>
-                """.formatted(safeName, safeMessage, safeType);
-    }
-
-    private String escapeHtml(String value) {
-        return value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#39;");
-    }
+    // `notificationEmailBody` and `escapeHtml` are removed as they are no longer needed.
     @Transactional(readOnly = true)
     public Page<AdminNotificationResponse> getAdminNotifications(UUID userId, Pageable pageable) {
         tenantSchemaService.applyCurrentTenantSearchPath();

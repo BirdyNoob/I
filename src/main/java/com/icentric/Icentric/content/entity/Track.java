@@ -22,7 +22,8 @@ public class Track {
 
     private String description;
 
-    private String department;
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    private com.icentric.Icentric.common.enums.Department department;
 
     private String trackType;
 

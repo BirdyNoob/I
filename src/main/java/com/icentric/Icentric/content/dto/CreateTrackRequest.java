@@ -1,5 +1,7 @@
 package com.icentric.Icentric.content.dto;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -17,9 +19,8 @@ public record CreateTrackRequest(
         @NotBlank
         @Size(max = 2000)
         String description,
-        @NotBlank
-        @Size(max = 100)
-        String department,
+        @NotNull
+        Department department,
         @NotBlank
         @Size(max = 50)
         String trackType,

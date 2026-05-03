@@ -1,5 +1,7 @@
 package com.icentric.Icentric.identity.dto;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -9,7 +11,7 @@ public record UserResponse(
         String email,
         String location,
         String role,
-        String department,
+        Department department,
         boolean isActive,
         Instant createdAt,
         Instant lastLogin

@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.ReportRow;
 import com.icentric.Icentric.learning.entity.UserAssignment;
@@ -51,7 +53,7 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public List<ReportRow> getReportData(
-            String department,
+            Department department,
             UUID trackId,
             List<AssignmentStatus> statuses
     ) {
@@ -66,7 +68,7 @@ public class ReportService {
 
     private List<Object[]> loadReportData(
             UUID tenantId,
-            String department,
+            Department department,
             UUID trackId,
             List<AssignmentStatus> statuses
     ) {
@@ -105,7 +107,12 @@ public class ReportService {
             String learnerName = (String) row[1];
             String userEmail = (String) row[2];
             String role = (String) row[3];
-            String department = (String) row[4];
+            String department = "UNKNOWN";
+            if (row[4] instanceof Department d) {
+                department = d.getDisplayName();
+            } else if (row[4] != null) {
+                department = row[4].toString();
+            }
             String courseName = (String) row[5];
 
             long totalLessons = totalLessonsByTrack.getOrDefault(ua.getTrackId(), 0L);

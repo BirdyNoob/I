@@ -1,5 +1,6 @@
 package com.icentric.Icentric.identity.entity;
 
+import com.icentric.Icentric.common.enums.Department;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -36,7 +37,9 @@ public class TenantUser {
     @Column(nullable = false)
     private String role;
 
-    private String department;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "department")
+    private Department department;
 
     @Column(name = "joined_at", nullable = false)
     private Instant joinedAt = Instant.now();

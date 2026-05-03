@@ -17,8 +17,10 @@ import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.common.mail.EmailService;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.tenant.TenantSchemaService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +45,8 @@ public class AssignmentService {
     private final TenantSchemaService tenantSchemaService;
     private final AuditMetadataService auditMetadataService;
     private final TenantAccessGuard tenantAccessGuard;
+    private final EmailService emailService;
+    private final String publicBaseUrl;
 
     public AssignmentService(
             UserAssignmentRepository repository,
@@ -54,7 +58,9 @@ public class AssignmentService {
             LessonProgressRepository lessonProgressRepository,
             TenantSchemaService tenantSchemaService,
             AuditMetadataService auditMetadataService,
-            TenantAccessGuard tenantAccessGuard
+            TenantAccessGuard tenantAccessGuard,
+            EmailService emailService,
+            @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl
     ) {
         this.repository = repository;
         this.trackRepository = trackRepository;
@@ -66,6 +72,8 @@ public class AssignmentService {
         this.tenantSchemaService = tenantSchemaService;
         this.auditMetadataService = auditMetadataService;
         this.tenantAccessGuard = tenantAccessGuard;
+        this.emailService = emailService;
+        this.publicBaseUrl = publicBaseUrl;
     }
 
     @Transactional
@@ -120,6 +128,12 @@ public class AssignmentService {
                             + (request.dueDate() != null ? " with due date " + request.dueDate() : "")
             );
         }
+
+        // Send email notification to the learner
+        Tenant tenant = tenantAccessGuard.currentTenant();
+        userRepository.findById(request.userId()).ifPresent(u ->
+                sendTrackAssignedNotification(u, track.getTitle(), tenant.getCompanyName(), tenant.getSlug(), request.dueDate())
+        );
 
         return saved;
     }
@@ -206,6 +220,8 @@ public class AssignmentService {
                                     + (request.dueDate() != null ? " with due date " + request.dueDate() : "")
                     );
                 }
+                // Send email notification to the learner
+                sendTrackAssignedNotification(user, track.getTitle(), tenant.getCompanyName(), tenant.getSlug(), request.dueDate());
                 success++;
             } catch (Exception e) {
                 if (adminUserId != null) {
@@ -340,6 +356,48 @@ public class AssignmentService {
         return userIdRaw instanceof String
                 ? UUID.fromString((String) userIdRaw)
                 : UUID.fromString(userIdRaw.toString());
+    }
+
+    /**
+     * Sends the AISafe_Email_Notification template to a learner when a track is assigned.
+     * Failures are swallowed so they never roll back the assignment transaction.
+     */
+    public void sendTrackAssignedNotification(
+            User user,
+            String trackTitle,
+            String tenantName,
+            String tenantSlug,
+            java.time.Instant dueDate
+    ) {
+        try {
+            String displayName = user.getName() != null ? user.getName() : user.getEmail();
+            String dueLine = dueDate != null
+                    ? "<br><strong>Due by:</strong> " + dueDate.toString().substring(0, 10)
+                    : "";
+            String message = "You have been assigned a new learning track: <strong>" + trackTitle + "</strong>."
+                    + dueLine
+                    + "<br>Log in to your portal to start learning.";
+
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("tenantName", tenantName);
+            vars.put("notificationPill", "🎓\u00a0NEW TRACK ASSIGNED");
+            vars.put("displayName", displayName);
+            vars.put("title", "New track assigned: " + trackTitle);
+            vars.put("message", message);
+            vars.put("actionUrl", publicBaseUrl + "/login?tenant=" + tenantSlug);
+            vars.put("actionText", "Start Learning →");
+
+            emailService.sendTemplateEmail(
+                    user.getEmail(),
+                    "New Track Assigned: " + trackTitle,
+                    "AISafe_Email_Notification",
+                    vars
+            );
+        } catch (Exception ex) {
+            // Log but never propagate — email failure must not roll back the assignment
+            org.slf4j.LoggerFactory.getLogger(AssignmentService.class)
+                    .warn("Failed to send track-assignment email to {}: {}", user.getEmail(), ex.getMessage());
+        }
     }
 
 }

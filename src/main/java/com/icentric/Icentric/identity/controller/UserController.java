@@ -1,5 +1,7 @@
 package com.icentric.Icentric.identity.controller;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.icentric.Icentric.identity.dto.BulkUploadResponse;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
@@ -49,7 +51,7 @@ public class UserController {
     })
     @GetMapping("/users")
     public Page<UserResponse> getUsers(
-            @Parameter(description = "Filter by department name") @RequestParam(required = false) String department,
+            @Parameter(description = "Filter by department name") @RequestParam(required = false) Department department,
             @Parameter(description = "Filter by user role") @RequestParam(required = false) String role,
             @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive,
             @Parameter(description = "Page number (0-indexed)") @RequestParam(defaultValue = "0") @PositiveOrZero int page,
@@ -108,9 +110,10 @@ public class UserController {
     })
     @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public BulkUploadResponse uploadUsers(
-            @Parameter(description = "CSV file containing user data") @RequestParam("file") @NotNull MultipartFile file
+            @Parameter(description = "CSV file containing user data") @RequestParam("file") @NotNull MultipartFile file,
+            @Parameter(description = "Whether to auto-assign department-specific tracks to uploaded users") @RequestParam(required = false, defaultValue = "true") Boolean autoAssignTracks
     ) {
-        return service.bulkUploadUsers(file);
+        return service.bulkUploadUsers(file, autoAssignTracks);
     }
 
     @Operation(summary = "Get bulk upload template", description = "Downloads a CSV template format required for the bulk upload API.")
@@ -137,7 +140,7 @@ public class UserController {
     public Page<UserResponse> searchUsers(
             @Parameter(description = "Filter by user name") @RequestParam(required = false) String name,
             @Parameter(description = "Filter by email address") @RequestParam(required = false) String email,
-            @Parameter(description = "Filter by department") @RequestParam(required = false) String department,
+            @Parameter(description = "Filter by department") @RequestParam(required = false) Department department,
             @Parameter(description = "Filter by user role") @RequestParam(required = false) String role,
             @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean isActive,
             @Parameter(description = "Page number (0-indexed)") @RequestParam(defaultValue = "0") @PositiveOrZero int page,

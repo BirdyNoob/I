@@ -32,14 +32,14 @@
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+<body style="margin:0;padding:0;background-color:#F8FAFC;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
 
   <!-- Preview text -->
-  <div class="preview-text">
-    Arjun, your AI safety training is assigned and waiting. Complete it before March 15. &nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌
+  <div class="preview-text" th:text="|${userName}, your AI safety training is assigned and waiting. &nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌|">
+    Arjun, your AI safety training is assigned and waiting. &nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌
   </div>
 
-  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#0A0A0F;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F8FAFC;">
     <tr>
       <td align="center" style="padding:32px 16px;">
 
@@ -51,23 +51,23 @@
             <td>
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
-                  <td style="padding:18px 28px;background-color:#111118;border-radius:12px 12px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none;">
+                  <td style="padding:18px 28px;background-color:#FFFFFF;border-radius:12px 12px 0 0;border:1px solid #E2E8F0;border-bottom:none;">
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                       <tr>
                         <td valign="middle">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                             <tr>
                               <td valign="middle" style="padding-right:9px;">
-                                <div style="width:30px;height:30px;background:linear-gradient(135deg,rgba(224,32,32,0.15),rgba(224,32,32,0.05));border:1px solid rgba(224,32,32,0.3);border-radius:7px;display:inline-block;text-align:center;line-height:30px;font-size:15px;">🛡</div>
+                                <div style="width:30px;height:30px;background:linear-gradient(135deg,rgba(37,99,235,0.15),rgba(37,99,235,0.05));border:1px solid rgba(37,99,235,0.3);border-radius:7px;display:inline-block;text-align:center;line-height:30px;font-size:15px;">🛡</div>
                               </td>
                               <td valign="middle">
-                                <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:19px;font-weight:700;letter-spacing:-0.02em;color:#F4F4F5;">AI<span style="color:#E02020;">Safe</span></span>
+                                <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:19px;font-weight:700;letter-spacing:-0.02em;color:#1E293B;">AI<span style="color:#2563EB;">Safe</span></span>
                               </td>
                             </tr>
                           </table>
                         </td>
                         <td align="right" valign="middle">
-                          <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#52525B;letter-spacing:0.08em;text-transform:uppercase;">Acme Corp</span>
+                          <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#64748B;letter-spacing:0.08em;text-transform:uppercase;" th:text="${tenantName}">Acme Corp</span>
                         </td>
                       </tr>
                     </table>
@@ -79,61 +79,35 @@
 
           <!-- ── HERO ───────────────────────────────────────────────────── -->
           <tr>
-            <td style="background-color:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07);">
+            <td style="background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
 
               <!-- Blue top accent (learner = blue, not red) -->
-              <div style="height:3px;background:linear-gradient(90deg,#3B82F6,rgba(59,130,246,0.3),transparent);"></div>
+              <div style="height:3px;background:linear-gradient(90deg,#1E293B,rgba(30,41,59,0.3),transparent);"></div>
 
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td class="pad-mobile" style="padding:36px 40px 28px;">
 
                     <!-- Greeting -->
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:#A1A1AA;margin:0 0 10px 0;letter-spacing:0.01em;">
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:#475569;margin:0 0 10px 0;letter-spacing:0.01em;" th:text="|Hi ${userName} 👋|">
                       Hi Arjun 👋
                     </p>
 
                     <!-- Headline -->
-                    <h1 class="hero-name" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:30px;font-weight:700;line-height:1.2;letter-spacing:-0.03em;color:#F4F4F5;margin:0 0 14px 0;">
+                    <h1 class="hero-name" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:30px;font-weight:700;line-height:1.2;letter-spacing:-0.03em;color:#1E293B;margin:0 0 14px 0;">
                       Your AI safety training<br>
                       is ready to begin.
                     </h1>
 
                     <!-- Body -->
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 0 12px 0;max-width:440px;">
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#475569;margin:0 0 12px 0;max-width:440px;" th:text="|${tenantName} has enrolled you in AI security training on AISafe. It covers how to use AI tools safely — protecting company data, your customers, and yourself.|">
                       Acme Corp has enrolled you in AI security training on AISafe. It covers how to use AI tools safely — protecting company data, your customers, and yourself.
                     </p>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 0 24px 0;max-width:440px;">
-                      Most learners finish in <span style="color:#F4F4F5;font-weight:500;">under 2 hours</span>, broken across short sessions. You can pause and resume any time.
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#475569;margin:0 0 24px 0;max-width:440px;">
+                      Most learners finish in <span style="color:#1E293B;font-weight:500;">under 2 hours</span>, broken across short sessions. You can pause and resume any time.
                     </p>
 
-                    <!-- Deadline notice -->
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:24px;">
-                      <tr>
-                        <td style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px 16px;">
-                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                            <tr>
-                              <td valign="middle" style="padding-right:8px;font-size:14px;">⏰</td>
-                              <td valign="middle">
-                                <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:#FCD34D;font-weight:500;">Complete by March 15, 2026</span>
-                                <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#A1A1AA;"> · 12 days remaining</span>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </table>
 
-                    <!-- CTA -->
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                      <tr>
-                        <td style="border-radius:8px;background-color:#3B82F6;background-image:linear-gradient(135deg,#3B82F6,#2563EB);">
-                          <a href="https://acmecorp.aisafe.io/dashboard" target="_blank" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;padding:13px 28px;display:inline-block;border-radius:8px;letter-spacing:0.01em;">
-                            Start training →
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
 
                   </td>
                 </tr>
@@ -141,60 +115,15 @@
             </td>
           </tr>
 
-          <!-- ── ASSIGNED TRACKS ────────────────────────────────────────── -->
-          <tr>
-            <td class="pad-mobile" style="background-color:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07);padding:0 40px 32px;">
 
-              <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#52525B;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 14px 0;">Your assigned tracks</p>
-
-              <!-- Track 1 — Core -->
-              <table class="track-row" role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#18181F;border:1px solid rgba(255,255,255,0.07);border-left:3px solid #3B82F6;border-radius:0 8px 8px 0;margin-bottom:10px;">
-                <tr>
-                  <td style="padding:14px 16px;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                      <tr>
-                        <td valign="middle">
-                          <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;color:#F4F4F5;margin:0 0 3px 0;">Core AI Security Track</p>
-                          <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;margin:0;">5 modules &nbsp;·&nbsp; ~60 min &nbsp;·&nbsp; All employees</p>
-                        </td>
-                        <td align="right" valign="middle" class="track-right" style="padding-left:16px;white-space:nowrap;">
-                          <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#93C5FD;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.2);padding:3px 10px;border-radius:9999px;">Mandatory</span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Track 2 — Engineering -->
-              <table class="track-row" role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#18181F;border:1px solid rgba(255,255,255,0.07);border-left:3px solid #6366F1;border-radius:0 8px 8px 0;margin-bottom:10px;">
-                <tr>
-                  <td style="padding:14px 16px;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                      <tr>
-                        <td valign="middle">
-                          <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;color:#F4F4F5;margin:0 0 3px 0;">Engineering AI Safety Track</p>
-                          <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;margin:0;">8 modules &nbsp;·&nbsp; ~2.5 hours &nbsp;·&nbsp; Engineering &amp; DevOps</p>
-                        </td>
-                        <td align="right" valign="middle" class="track-right" style="padding-left:16px;white-space:nowrap;">
-                          <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#A5B4FC;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.2);padding:3px 10px;border-radius:9999px;">Your dept</span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
 
           <!-- ── WHAT TO EXPECT ─────────────────────────────────────────── -->
           <tr>
-            <td style="background-color:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07);padding:0 28px 28px;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#0A0A0F;border:1px solid rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;">
+            <td style="background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;padding:0 28px 28px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
                 <tr>
                   <td style="padding:16px 20px 8px;">
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#52525B;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 14px 0;">What each lesson looks like</p>
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#64748B;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 14px 0;">What each lesson looks like</p>
                     <!-- 4 items 2x2 -->
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                       <tr>
@@ -203,8 +132,8 @@
                             <tr>
                               <td valign="top" style="padding-right:8px;font-size:16px;line-height:1;">🎬</td>
                               <td valign="top">
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#F4F4F5;margin:0 0 2px 0;">Short videos</p>
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;margin:0;line-height:1.4;">2–3 min clips, no lectures</p>
+                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#1E293B;margin:0 0 2px 0;">Short videos</p>
+                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.4;">2–3 min clips, no lectures</p>
                               </td>
                             </tr>
                           </table>
@@ -214,8 +143,8 @@
                             <tr>
                               <td valign="top" style="padding-right:8px;font-size:16px;line-height:1;">🎮</td>
                               <td valign="top">
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#F4F4F5;margin:0 0 2px 0;">Real scenarios</p>
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;margin:0;line-height:1.4;">What would you do?</p>
+                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#1E293B;margin:0 0 2px 0;">Real scenarios</p>
+                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.4;">What would you do?</p>
                               </td>
                             </tr>
                           </table>
@@ -227,8 +156,8 @@
                             <tr>
                               <td valign="top" style="padding-right:8px;font-size:16px;line-height:1;">📋</td>
                               <td valign="top">
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#F4F4F5;margin:0 0 2px 0;">Cheat sheets</p>
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;margin:0;line-height:1.4;">Save &amp; download any time</p>
+                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#1E293B;margin:0 0 2px 0;">Cheat sheets</p>
+                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.4;">Save &amp; download any time</p>
                               </td>
                             </tr>
                           </table>
@@ -238,8 +167,8 @@
                             <tr>
                               <td valign="top" style="padding-right:8px;font-size:16px;line-height:1;">🏅</td>
                               <td valign="top">
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#F4F4F5;margin:0 0 2px 0;">Certificate</p>
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;margin:0;line-height:1.4;">Downloadable &amp; LinkedIn shareable</p>
+                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#1E293B;margin:0 0 2px 0;">Certificate</p>
+                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.4;">Downloadable &amp; LinkedIn shareable</p>
                               </td>
                             </tr>
                           </table>
@@ -254,11 +183,11 @@
 
           <!-- ── CREDENTIALS BOX ───────────────────────────────────────── -->
           <tr>
-            <td class="pad-mobile" style="background-color:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07);padding:0 40px 36px;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#18181F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;">
+            <td class="pad-mobile" style="background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;padding:0 40px 36px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;">
                 <tr>
-                  <td style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.06);">
-                    <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#52525B;letter-spacing:0.1em;text-transform:uppercase;">Your login details</span>
+                  <td style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
+                    <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#64748B;letter-spacing:0.1em;text-transform:uppercase;">Your login details</span>
                   </td>
                 </tr>
                 <tr>
@@ -268,8 +197,8 @@
                         <td style="padding-bottom:10px;">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                             <tr>
-                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;">Training portal</span></td>
-                              <td><span style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#93C5FD;">acmecorp.aisafe.io</span></td>
+                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;">Training portal</span></td>
+                              <td><span style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#2563EB;" th:text="${portalUrl}">acmecorp.aisafe.io</span></td>
                             </tr>
                           </table>
                         </td>
@@ -278,8 +207,8 @@
                         <td style="padding-bottom:10px;">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                             <tr>
-                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;">Your email</span></td>
-                              <td><span style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#93C5FD;">arjun.kapoor@acmecorp.com</span></td>
+                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;">Your email</span></td>
+                              <td><span style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#2563EB;" th:text="${userEmail}">arjun.kapoor@acmecorp.com</span></td>
                             </tr>
                           </table>
                         </td>
@@ -288,12 +217,8 @@
                         <td style="padding-bottom:14px;">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                             <tr>
-                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;">Password</span></td>
-                              <td>
-                                <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#A1A1AA;">Set yours via &nbsp;</span>
-                                <a href="https://acmecorp.aisafe.io/set-password" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#3B82F6;text-decoration:underline;">this one-time link</a>
-                                <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#52525B;"> (expires in 48h)</span>
-                              </td>
+                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;">Password</span></td>
+                              <td><span style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#1E293B;font-weight:600;" th:text="${password}">YourPasswordHere</span></td>
                             </tr>
                           </table>
                         </td>
@@ -307,18 +232,18 @@
 
           <!-- ── FINAL CTA ──────────────────────────────────────────────── -->
           <tr>
-            <td class="pad-mobile" style="background-color:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07);padding:0 40px 40px;text-align:center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:linear-gradient(135deg,rgba(59,130,246,0.08),rgba(59,130,246,0.03));border:1px solid rgba(59,130,246,0.15);border-radius:10px;">
+            <td class="pad-mobile" style="background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;padding:0 40px 40px;text-align:center;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:10px;">
                 <tr>
                   <td style="padding:24px 20px;text-align:center;">
                     <!-- Trophy row -->
                     <p style="font-size:28px;margin:0 0 10px 0;">🏅</p>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#F4F4F5;margin:0 0 6px 0;">Finish and earn your certificate</p>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#A1A1AA;margin:0 0 20px 0;line-height:1.5;">A verified certificate of completion — downloadable, shareable on LinkedIn, and audit-ready.</p>
-                    <a href="https://acmecorp.aisafe.io/dashboard" target="_blank" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;background:#3B82F6;background-image:linear-gradient(135deg,#3B82F6,#2563EB);padding:13px 32px;border-radius:8px;display:inline-block;letter-spacing:0.01em;">
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#1E293B;margin:0 0 6px 0;">Finish and earn your certificate</p>
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#475569;margin:0 0 20px 0;line-height:1.5;">A verified certificate of completion — downloadable, shareable on LinkedIn, and audit-ready.</p>
+                    <a th:href="${portalUrl}" target="_blank" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;background:#1E293B;background-image:linear-gradient(135deg,#1E293B,#0F172A);padding:13px 32px;border-radius:8px;display:inline-block;letter-spacing:0.01em;">
                       Begin your training →
                     </a>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#52525B;margin:12px 0 0 0;">Takes less than 15 minutes to get started</p>
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#64748B;margin:12px 0 0 0;">Takes less than 15 minutes to get started</p>
                   </td>
                 </tr>
               </table>
@@ -327,22 +252,22 @@
 
           <!-- ── FOOTER ─────────────────────────────────────────────────── -->
           <tr>
-            <td style="background-color:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 12px 12px;padding:24px 28px;">
+            <td style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:0 0 12px 12px;padding:24px 28px;">
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;margin:0 0 5px 0;line-height:1.6;">
-                      This email was sent to <span style="color:#A1A1AA;">arjun.kapoor@acmecorp.com</span> by Acme Corp via AISafe.
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0 0 5px 0;line-height:1.6;" th:utext="|This email was sent to &lt;span style='color:#475569;'&gt;${userEmail}&lt;/span&gt; by ${tenantName} via AISafe.|">
+                      This email was sent to <span style="color:#475569;">arjun.kapoor@acmecorp.com</span> by Acme Corp via AISafe.
                     </p>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#52525B;margin:0;line-height:1.6;">
+                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.6;">
                       Questions? Contact your HR team or&nbsp;
-                      <a href="mailto:support@aisafe.io" style="color:#A1A1AA;text-decoration:underline;">support@aisafe.io</a>
+                      <a href="mailto:support@aisafe.io" style="color:#475569;text-decoration:underline;">support@aisafe.io</a>
                       &nbsp;·&nbsp;
-                      <a href="https://aisafe.io/privacy" style="color:#52525B;text-decoration:none;">Privacy policy</a>
+                      <a href="https://aisafe.io/privacy" style="color:#64748B;text-decoration:none;">Privacy policy</a>
                     </p>
                   </td>
                   <td align="right" valign="top" style="padding-left:16px;" class="hide-mobile">
-                    <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:-0.01em;color:#2A2A35;">AI<span style="color:#E02020;">Safe</span></span>
+                    <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:-0.01em;color:#1E293B;">AI<span style="color:#2563EB;">Safe</span></span>
                   </td>
                 </tr>
               </table>

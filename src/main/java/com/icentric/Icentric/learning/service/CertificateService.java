@@ -220,8 +220,13 @@ public class CertificateService {
                 .orElseThrow(() -> new NoSuchElementException("Certificate not found"));
 
         boolean valid = data.status() == CertificateStatus.READY;
+        String displayId = data.verificationToken() != null
+                ? data.verificationToken().toString().toUpperCase().replace("-", "").substring(0, 16)
+                : data.issuedCertificateId().toString();
+
         return new CertificateVerificationResponse(
                 data.issuedCertificateId(),
+                displayId,
                 data.verificationToken(),
                 data.userName(),
                 data.userEmail(),
@@ -302,6 +307,71 @@ public class CertificateService {
 
     private String currentTenantSlug() {
         return tenantAccessGuard.currentTenantSlug();
+    }
+
+    /**
+     * Admin: returns all issued certificates currently stuck in PENDING or FAILED state.
+     * These are candidates for manual regeneration.
+     */
+    @Transactional(readOnly = true)
+    public List<IssuedCertificate> listStuckCertificates() {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        List<IssuedCertificate> pending = issuedRepository.findByStatus(CertificateStatus.PENDING);
+        List<IssuedCertificate> failed  = issuedRepository.findByStatus(CertificateStatus.FAILED);
+        List<IssuedCertificate> combined = new java.util.ArrayList<>();
+        combined.addAll(pending);
+        combined.addAll(failed);
+        return combined;
+    }
+
+    /**
+     * Admin: re-triggers PDF generation for a specific issued certificate that is stuck
+     * in PENDING or FAILED state.  Resets the record back to PENDING so the async
+     * pipeline can complete it cleanly.
+     *
+     * @param issuedCertificateId the {@link IssuedCertificate#getId()} of the stuck record
+     * @throws NoSuchElementException   if no record with that id exists in this tenant
+     * @throws IllegalStateException    if the certificate is already READY (no need to retry)
+     */
+    @Transactional
+    public void regenerateCertificate(UUID issuedCertificateId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        IssuedCertificate issued = issuedRepository.findById(issuedCertificateId)
+                .orElseThrow(() -> new NoSuchElementException(
+                        "Issued certificate not found: " + issuedCertificateId));
+
+        if (issued.getStatus() == CertificateStatus.READY) {
+            throw new IllegalStateException(
+                    "Certificate " + issuedCertificateId + " is already READY — no regeneration needed.");
+        }
+
+        // Reset to PENDING so the async job can pick it up cleanly
+        issued.setStatus(CertificateStatus.PENDING);
+        issued.setGenerationError(null);
+        issued.setBlobPath(null);
+        issued.setFileName(null);
+        issued.setGeneratedAt(null);
+        issuedRepository.save(issued);
+
+        String tenantSlug = currentTenantSlug();
+        auditService.log(
+                issued.getUserId(),
+                AuditAction.CERTIFICATE_ISSUED,
+                "CERTIFICATE",
+                issued.getId().toString(),
+                "Admin manually triggered certificate regeneration for "
+                        + auditMetadataService.describeUserInCurrentTenant(issued.getUserId())
+                        + ". Generation re-queued."
+        );
+
+        // Fire the async generator after the transaction commits
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                certificateIssuanceAsyncService.generateAndStore(issued.getId(), tenantSlug);
+            }
+        });
     }
 
     private record LocatedCertificate(String tenantSlug, IssuedCertificate issuedCertificate) {

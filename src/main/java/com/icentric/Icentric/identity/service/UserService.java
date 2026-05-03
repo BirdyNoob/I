@@ -1,5 +1,7 @@
 package com.icentric.Icentric.identity.service;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.icentric.Icentric.audit.constants.AuditAction;
 import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.audit.service.AuditService;
@@ -12,6 +14,11 @@ import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.exception.UserNotFoundException;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.content.entity.Track;
+import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
+import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -59,6 +66,10 @@ public class UserService {
     private final AuditService auditService;
     private final AuditMetadataService auditMetadataService;
     private final TenantAccessGuard tenantAccessGuard;
+    private final com.icentric.Icentric.common.mail.EmailService emailService;
+    private final String publicBaseUrl;
+    private final TrackRepository trackRepository;
+    private final UserAssignmentRepository userAssignmentRepository;
 
     public UserService(
             UserRepository userRepository,
@@ -67,7 +78,11 @@ public class UserService {
             @Value("${app.bulk-upload.default-password:ChangeMe@123}") String bulkUploadDefaultPassword,
             AuditService auditService,
             AuditMetadataService auditMetadataService,
-            TenantAccessGuard tenantAccessGuard
+            TenantAccessGuard tenantAccessGuard,
+            com.icentric.Icentric.common.mail.EmailService emailService,
+            @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
+            TrackRepository trackRepository,
+            UserAssignmentRepository userAssignmentRepository
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
@@ -76,6 +91,10 @@ public class UserService {
         this.auditService = auditService;
         this.auditMetadataService = auditMetadataService;
         this.tenantAccessGuard = tenantAccessGuard;
+        this.emailService = emailService;
+        this.publicBaseUrl = publicBaseUrl;
+        this.trackRepository = trackRepository;
+        this.userAssignmentRepository = userAssignmentRepository;
     }
 
     // ── CREATE ───────────────────────────────────────────────────────────────
@@ -104,6 +123,11 @@ public class UserService {
         mapping.setDepartment(request.department());
         tenantUserRepository.save(mapping);
 
+        // Auto-assign department tracks if the toggle is enabled
+        if (Boolean.TRUE.equals(request.autoAssignTracks()) && request.department() != null) {
+            autoAssignDepartmentTracks(user, tenant, request.department());
+        }
+
         logAdminAction(
                 AuditAction.CREATE_USER,
                 "USER",
@@ -112,6 +136,41 @@ public class UserService {
                         + " in " + auditMetadataService.currentTenantLabel()
         );
 
+        String userName = user.getName() != null ? user.getName() : user.getEmail();
+        if ("LEARNER".equalsIgnoreCase(request.role())) {
+            java.util.Map<String, Object> variables = java.util.Map.of(
+                    "userName", userName,
+                    "tenantName", tenant.getCompanyName(),
+                    "portalUrl", publicBaseUrl + "/login?tenant=" + tenant.getSlug(),
+                    "userEmail", request.email(),
+                    "password", request.password()
+            );
+            emailService.sendTemplateEmail(
+                    user.getEmail(),
+                    "Welcome to AISafe - Learner Account Created",
+                    "AISafe_Email_Learner_Welcome",
+                    variables
+            );
+        } else {
+            java.util.Map<String, Object> variables = java.util.Map.of(
+                    "userName", userName,
+                    "tenantName", tenant.getCompanyName(),
+                    "adminEmail", request.email(),
+                    "adminPassword", request.password(),
+                    "portalUrl", tenant.getSlug() + ".icentric.com",
+                    "planName", "Enterprise",
+                    "seatLimit", 500,
+                    "setupUrl", publicBaseUrl + "/setup?tenant=" + tenant.getSlug(),
+                    "loginUrl", publicBaseUrl + "/login?tenant=" + tenant.getSlug()
+            );
+            emailService.sendTemplateEmail(
+                    user.getEmail(),
+                    "Welcome to AISafe - Administrator Account Created",
+                    "AISafe_Email_TenantAdmin_Welcome",
+                    variables
+            );
+        }
+
         return toResponse(user, mapping);
     }
 
@@ -119,7 +178,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(
-            String department,
+            Department department,
             String role,
             Boolean isActive,
             Pageable pageable
@@ -205,7 +264,7 @@ public class UserService {
     public Page<UserResponse> searchUsers(
             String name,
             String email,
-            String department,
+            Department department,
             String role,
             Boolean isActive,
             Pageable pageable
@@ -233,7 +292,27 @@ public class UserService {
     }
 
     @Transactional
-    public BulkUploadResponse bulkUploadUsers(MultipartFile file) {
+    public void changePassword(UUID userId, String oldPassword, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            throw new IllegalArgumentException("Incorrect old password");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        logAdminAction(
+                AuditAction.UPDATE_USER,
+                "USER",
+                user.getId().toString(),
+                actor -> actor + " changed their password in " + auditMetadataService.currentTenantLabel()
+        );
+    }
+
+    @Transactional
+    public BulkUploadResponse bulkUploadUsers(MultipartFile file, Boolean autoAssignTracks) {
         Tenant tenant = tenantAccessGuard.currentTenant();
         validateBulkUploadFile(file);
         validateBulkUploadDefaults();
@@ -270,7 +349,7 @@ public class UserService {
                     String emailVal = normalizeEmail(record.get("email"));
                     String nameVal = normalizeName(record.get("name"));
                     String roleVal = normalizeRole(record.get("role"));
-                    String departmentVal = normalizeDepartment(record.get("department"));
+                    Department departmentVal = normalizeDepartment(record.get("department"));
 
                     validateCandidate(nameVal, emailVal, roleVal);
 
@@ -346,6 +425,11 @@ public class UserService {
             TenantUser mapping = new TenantUser(user.getId(), tenant.getId(), candidate.role());
             mapping.setDepartment(candidate.department());
             tenantUserRepository.save(mapping);
+
+            // Auto-assign department tracks if the toggle is enabled
+            if (Boolean.TRUE.equals(autoAssignTracks) && candidate.department() != null) {
+                autoAssignDepartmentTracks(user, tenant, candidate.department());
+            }
 
             success++;
         }
@@ -490,10 +574,8 @@ public class UserService {
         return role.trim().toUpperCase(Locale.ROOT);
     }
 
-    private String normalizeDepartment(String department) {
-        if (department == null) return null;
-        String trimmed = department.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+    private Department normalizeDepartment(String department) {
+        return Department.fromString(department);
     }
 
     private String normalizeLocation(String location) {
@@ -512,11 +594,61 @@ public class UserService {
         return normalizeSearchText(email);
     }
 
+    private void autoAssignDepartmentTracks(User user, Tenant tenant, Department department) {
+        List<Track> departmentTracks = trackRepository.findLatestPublishedTracksByDepartment(department);
+        for (Track track : departmentTracks) {
+            boolean alreadyAssigned = userAssignmentRepository
+                    .findByUserIdAndTrackId(user.getId(), track.getId())
+                    .isPresent();
+            if (!alreadyAssigned) {
+                UserAssignment assignment = new UserAssignment();
+                assignment.setId(UUID.randomUUID());
+                assignment.setUserId(user.getId());
+                assignment.setTrackId(track.getId());
+                assignment.setAssignedAt(Instant.now());
+                assignment.setDueDate(null);
+                assignment.setStatus(AssignmentStatus.ASSIGNED);
+                assignment.setContentVersionAtAssignment(track.getVersion());
+                assignment.setRequiresRetraining(false);
+                userAssignmentRepository.save(assignment);
+
+                // Send email notification for the auto-assignment
+                sendTrackAssignedNotification(user, track.getTitle(), tenant.getCompanyName(), tenant.getSlug());
+            }
+        }
+    }
+
+    private void sendTrackAssignedNotification(User user, String trackTitle, String tenantName, String tenantSlug) {
+        try {
+            String displayName = user.getName() != null ? user.getName() : user.getEmail();
+            String message = "You have been assigned a new learning track: <strong>" + trackTitle + "</strong>."
+                    + "<br>Log in to your portal to start learning.";
+
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("tenantName", tenantName);
+            vars.put("notificationPill", "🎓\u00a0NEW TRACK ASSIGNED");
+            vars.put("displayName", displayName);
+            vars.put("title", "New track assigned: " + trackTitle);
+            vars.put("message", message);
+            vars.put("actionUrl", publicBaseUrl + "/login?tenant=" + tenantSlug);
+            vars.put("actionText", "Start Learning →");
+
+            emailService.sendTemplateEmail(
+                    user.getEmail(),
+                    "New Track Assigned: " + trackTitle,
+                    "AISafe_Email_Notification",
+                    vars
+            );
+        } catch (Exception ex) {
+            // Log and continue
+        }
+    }
+
     private record RowCandidate(
             long rowNumber,
             String name,
             String email,
             String role,
-            String department
+            Department department
     ) {}
 }

@@ -12,19 +12,25 @@ public class PlatformAssessmentController {
 
     private final AssessmentService assessmentService;
 
+    /**
+     * Creates an assessment config globally (stored in the system schema, not per-tenant).
+     * Requires PLATFORM_ADMIN role.
+     *
+     * @param trackId UUID of the track this assessment is linked to
+     */
     @PostMapping("/config/{trackId}")
     public ResponseEntity<Void> createAssessmentConfig(
             @PathVariable String trackId,
             @RequestBody java.util.Map<String, Object> requestMap) {
-        
+
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         com.fasterxml.jackson.databind.JsonNode requestNode = mapper.valueToTree(requestMap);
-        
+
         assessmentService.createAssessmentConfig(trackId, requestNode);
         return ResponseEntity.ok().build();
     }
-    
-    @GetMapping
+
+    @GetMapping("/config")
     public ResponseEntity<java.util.List<com.icentric.Icentric.learning.dto.assessment.AdminAssessmentConfigDto>> getAllAssessments() {
         return ResponseEntity.ok(assessmentService.getAllAssessmentConfigs());
     }

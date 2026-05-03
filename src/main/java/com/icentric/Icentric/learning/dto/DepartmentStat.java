@@ -1,9 +1,11 @@
 package com.icentric.Icentric.learning.dto;
 
+import com.icentric.Icentric.common.enums.Department;
+
 public record DepartmentStat(
 
         int rank,
-        String department,
+        Department department,
         long total,
         long completed,
         double completionRate

@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.dto;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 
 import java.time.Instant;
@@ -10,7 +12,7 @@ public record AdminAssignmentSearchResponse(
         UUID userId,
         String userName,
         String userEmail,
-        String department,
+        Department department,
         UUID trackId,
         String trackTitle,
         Instant assignedAt,

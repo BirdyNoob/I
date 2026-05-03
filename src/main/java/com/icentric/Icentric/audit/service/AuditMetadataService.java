@@ -62,8 +62,8 @@ public class AuditMetadataService {
 
         TenantUser tenantUser = membership.get();
         StringBuilder value = new StringBuilder(base);
-        if (tenantUser.getDepartment() != null && !tenantUser.getDepartment().isBlank()) {
-            value.append(", department=").append(tenantUser.getDepartment());
+        if (tenantUser.getDepartment() != null) {
+            value.append(", department=").append(tenantUser.getDepartment().getDisplayName());
         }
         if (tenantUser.getRole() != null && !tenantUser.getRole().isBlank()) {
             value.append(", role=").append(tenantUser.getRole());

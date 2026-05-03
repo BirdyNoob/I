@@ -8,7 +8,10 @@ import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.icentric.Icentric.common.mail.EmailService;
+
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -18,17 +21,19 @@ public class TenantService {
     private final TenantProvisioningService provisioningService;
     private final TenantUserBootstrapService bootstrapService;
     private final AuditService auditService;
-
+    private final EmailService emailService;
 
     public TenantService(
             TenantRepository tenantRepository,
             TenantProvisioningService provisioningService,
             TenantUserBootstrapService bootstrapService,
-            AuditService auditService) {
+            AuditService auditService,
+            EmailService emailService) {
         this.tenantRepository = tenantRepository;
         this.provisioningService = provisioningService;
         this.bootstrapService = bootstrapService;
         this.auditService = auditService;
+        this.emailService = emailService;
     }
 
     public Tenant createTenant(String slug, String companyName, String adminEmail, String adminPassword) {
@@ -57,6 +62,25 @@ public class TenantService {
                     "system"
             );
         }
+
+        // Send onboarding email with raw credentials
+        String platformUrl = "http://localhost:3000/login?tenant=" + slug; // Defaults to localhost, can be configured via app properties later
+        Map<String, Object> emailVars = Map.of(
+                "tenantName", companyName,
+                "portalUrl", slug + ".icentric.com",
+                "adminEmail", adminEmail,
+                "adminPassword", adminPassword,
+                "setupUrl", platformUrl,
+                "loginUrl", platformUrl,
+                "planName", "Enterprise",
+                "seatLimit", 500
+        );
+        emailService.sendTemplateEmail(
+                adminEmail,
+                "Welcome to AISafe — Your company is ready",
+                "AISafe_Email_TenantAdmin_Welcome",
+                emailVars
+        );
 
         return tenant;
     }

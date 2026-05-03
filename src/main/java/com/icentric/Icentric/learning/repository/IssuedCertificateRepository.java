@@ -16,6 +16,7 @@ public interface IssuedCertificateRepository
         extends JpaRepository<IssuedCertificate, UUID> {
 
     List<IssuedCertificate> findByUserId(UUID userId);
+    List<IssuedCertificate> findByStatus(com.icentric.Icentric.learning.constants.CertificateStatus status);
     long countByIssuedAtAfter(java.time.Instant issuedAt);
     boolean existsByUserIdAndTrackId(UUID userId, UUID trackId);
     Optional<IssuedCertificate> findByUserIdAndTrackId(UUID userId, UUID trackId);
@@ -24,6 +25,7 @@ public interface IssuedCertificateRepository
     @Query("""
 SELECT new com.icentric.Icentric.learning.dto.CertificateDownloadData(
     ic.id,
+    ic.verificationToken,
     ic.userId,
     u.name,
     u.email,

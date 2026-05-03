@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.dto;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
@@ -26,7 +28,7 @@ public class CertificateDashboardResponse {
     @Builder
     public static class LearnerInfo {
         private String fullName;
-        private String department;
+        private Department department;
         private String avatarInitials;
     }
 
@@ -41,7 +43,8 @@ public class CertificateDashboardResponse {
     @Builder
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class EarnedCertificate {
-        private String certificateId;       // human-readable verify token
+        private String certificateId;       // full UUID
+        private String displayId;           // human-readable verify token
         private String trackName;
         private String certificateTitle;
         private Integer score;              // 0-100, null if not stored
@@ -61,7 +64,10 @@ public class CertificateDashboardResponse {
 
     @Data
     @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class InProgressCertificate {
+        private String certificateId;
+        private String displayId;
         private String trackName;
         private Progress progress;
         private String unlockRequirement;

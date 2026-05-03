@@ -1,0 +1,62 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="margin:0;padding:0;background:#f6f7fb;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f7fb;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+          
+          <!-- Header -->
+          <tr><td style="padding-bottom:0">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="padding:16px 24px;background:#1E293B;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td valign="middle"><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                    <td align="right" valign="middle"><span style="font-family:'Courier New',monospace;font-size:10px;color:#A1A1AA;letter-spacing:.08em;text-transform:uppercase" th:text="${tenantName}">Acme Corp</span></td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>
+          </td></tr>
+
+          <!-- Accent Line & Body -->
+          <tr><td style="background:#ffffff;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;">
+            <div style="height:3px;background:linear-gradient(90deg,#2563EB,rgba(37,99,235,0.2),transparent)"></div>
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="padding:32px 32px 24px">
+
+                <!-- Alert pill -->
+                <div style="display:inline-block;margin-bottom:18px">
+                  <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:600;color:#1E293B;background:#f1f5f9;border:1px solid #cbd5e1;padding:4px 12px;border-radius:9999px;letter-spacing:.06em" th:text="${notificationPill}">🔔 &nbsp;NOTIFICATION</span>
+                </div>
+
+                <p style="font-size:13px;color:#64748b;margin:0 0 8px 0" th:text="'Hi ' + ${displayName} + ','">Hi Arjun,</p>
+                <h1 style="font-size:24px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#1E293B;margin:0 0 12px 0" th:text="${title}">You have a new notification.</h1>
+                <p style="font-size:14px;line-height:1.65;color:#475569;margin:0 0 24px 0" th:utext="${message}">Here is the message content.</p>
+
+                <!-- CTA -->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" th:if="${actionUrl != null}">
+                  <tr><td style="border-radius:8px;background:#1E293B;background-image:linear-gradient(135deg,#1E293B,#0F172A)">
+                    <a th:href="${actionUrl}" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#fff;text-decoration:none;padding:12px 26px;display:inline-block;border-radius:8px" th:text="${actionText}">View Details →</a>
+                  </td></tr>
+                </table>
+
+              </td></tr>
+            </table>
+          </td></tr>
+
+          <!-- Footer -->
+          <tr><td style="background:#f8fafc;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px;padding:18px 24px">
+            <p style="font-size:11px;color:#64748b;margin:0;line-height:1.6">
+              Powered by AISafe &nbsp;&middot;&nbsp; 
+              <a href="#" style="color:#2563EB;text-decoration:none">Privacy policy</a>
+            </p>
+          </td></tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -4,9 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cybersecurity Certificate</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <!-- Google Fonts removed: openhtmltopdf renders offline; external URLs fail silently
+       and bare 'crossorigin' is invalid XML. Font families fall back to system fonts below. -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -27,7 +26,7 @@
     }
 
     body {
-      font-family: 'IBM Plex Sans', sans-serif;
+      font-family: 'IBM Plex Sans', Helvetica, Arial, sans-serif;
       background: var(--bg-secondary);
       min-height: 100vh;
       display: flex;
@@ -91,7 +90,7 @@
     }
 
     .cert-org-name {
-      font-family: 'Syne', sans-serif;
+      font-family: 'Syne', Georgia, 'Times New Roman', serif;
       font-size: 13px;
       font-weight: 600;
       color: var(--text-primary);
@@ -108,7 +107,7 @@
     .cert-id-block { text-align: right; }
 
     .cert-id-label {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
       font-size: 9px;
       letter-spacing: 0.1em;
       text-transform: uppercase;
@@ -117,7 +116,7 @@
     }
 
     .cert-id-value {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
       font-size: 12px;
       font-weight: 500;
       color: var(--blue-dark);
@@ -125,7 +124,7 @@
     }
 
     .cert-id-learner {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
       font-size: 10px;
       color: var(--text-tertiary);
       margin-top: 4px;
@@ -148,7 +147,7 @@
     }
 
     .cert-recipient {
-      font-family: 'Syne', sans-serif;
+      font-family: 'Syne', Georgia, 'Times New Roman', serif;
       font-size: 36px;
       font-weight: 700;
       color: var(--text-primary);
@@ -176,7 +175,7 @@
     }
 
     .cert-track-name {
-      font-family: 'Syne', sans-serif;
+      font-family: 'Syne', Georgia, 'Times New Roman', serif;
       font-size: 18px;
       font-weight: 600;
       color: var(--text-primary);
@@ -210,7 +209,7 @@
     }
 
     .cert-date-value {
-      font-family: 'Syne', sans-serif;
+      font-family: 'Syne', Georgia, 'Times New Roman', serif;
       font-size: 18px;
       font-weight: 600;
       color: var(--text-primary);
@@ -249,7 +248,7 @@
     }
 
     .cert-watermark {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
       font-size: 9px;
       letter-spacing: 0.1em;
       color: var(--text-tertiary);
@@ -329,7 +328,10 @@
             <div class="cert-verify-dot"></div>
             <div class="cert-verify-text">Issued by <strong>CyberShield Training Platform</strong> · Digitally authenticated</div>
           </div>
-          <div class="cert-watermark">cybershield.io/verify</div>
+          <div class="cert-watermark">
+            <img src="data:image/png;base64,{{qrCode}}" style="width: 50px; height: 50px; vertical-align: middle; margin-right: 10px; border-radius: 4px;" alt="QR Code" />
+            <span style="vertical-align: middle;">cybershield.io/verify</span>
+          </div>
         </div>
 
       </div>

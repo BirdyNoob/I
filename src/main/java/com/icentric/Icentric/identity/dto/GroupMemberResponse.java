@@ -1,5 +1,7 @@
 package com.icentric.Icentric.identity.dto;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import java.util.UUID;
 
 public record GroupMemberResponse(
@@ -7,7 +9,7 @@ public record GroupMemberResponse(
         String name,
         String email,
         String role,
-        String department,
+        Department department,
         boolean isActive
 ) {
 }

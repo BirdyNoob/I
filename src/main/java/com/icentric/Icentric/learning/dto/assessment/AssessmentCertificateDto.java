@@ -9,6 +9,7 @@ import lombok.Data;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AssessmentCertificateDto {
     private String certificateId;
+    private String displayId;
     private String downloadUrl;
     private java.time.Instant issuedAt;
     private String recipientName;

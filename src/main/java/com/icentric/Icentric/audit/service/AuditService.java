@@ -254,7 +254,7 @@ public class AuditService {
                 log.getUserId(),
                 actor != null ? actor.getName() : null,
                 actor != null ? actor.getEmail() : null,
-                membership != null ? membership.getDepartment() : null,
+                membership != null && membership.getDepartment() != null ? membership.getDepartment().getDisplayName() : null,
                 membership != null ? membership.getRole() : null,
                 log.getTenantSlug(),
                 tenant != null ? tenant.getCompanyName() : null

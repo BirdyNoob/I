@@ -1,4 +1,6 @@
 package com.icentric.Icentric.learning.repository;
+
+import com.icentric.Icentric.common.enums.Department;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import org.springframework.data.domain.Page;
@@ -35,7 +37,7 @@ AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
     List<Object[]> fetchCompletionData(
             @Param("tenantId") UUID tenantId,
-            @Param("department") String department,
+            @Param("department") Department department,
             @Param("status") AssignmentStatus status,
             @Param("trackId") UUID trackId
     );
@@ -52,7 +54,7 @@ AND (:trackId IS NULL OR ua.trackId = :trackId)
     List<Object[]> fetchRiskData(
             @Param("tenantId") UUID tenantId,
             @Param("statuses") List<AssignmentStatus> statuses,
-            @Param("department") String department,
+            @Param("department") Department department,
             @Param("trackId") UUID trackId
     );
     @Query("""
@@ -68,7 +70,7 @@ AND (:trackId IS NULL OR ua.trackId = :trackId)
     List<Object[]> fetchReportDataByStatuses(
             @Param("tenantId") UUID tenantId,
             @Param("statuses") List<AssignmentStatus> statuses,
-            @Param("department") String department,
+            @Param("department") Department department,
             @Param("trackId") UUID trackId
     );
     List<UserAssignment> findByStatusInAndDueDateIsNotNull(List<AssignmentStatus> statuses);

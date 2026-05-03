@@ -5,6 +5,7 @@ import java.time.Instant;
 
 public record CertificateDownloadData(
         UUID certificateId,
+        UUID verificationToken,
         UUID learnerId,
         String userName,
         String userEmail,

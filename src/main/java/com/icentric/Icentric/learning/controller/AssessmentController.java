@@ -70,5 +70,10 @@ public class AssessmentController {
         SubmitAssessmentResponse response = assessmentService.submitAssessment(assessmentId, request, currentUserId());
         return ResponseEntity.ok(response);
     }
+    @GetMapping("/{assessmentId}/review")
+    public ResponseEntity<com.icentric.Icentric.learning.dto.assessment.AssessmentReviewResponse> getAssessmentReview(@PathVariable String assessmentId) {
+        com.icentric.Icentric.learning.dto.assessment.AssessmentReviewResponse response = assessmentService.getAssessmentReview(assessmentId, currentUserId());
+        return ResponseEntity.ok(response);
+    }
 
 }

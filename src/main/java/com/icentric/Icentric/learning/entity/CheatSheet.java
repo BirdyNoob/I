@@ -15,18 +15,26 @@ import java.time.Instant;
 
 @Data
 @Entity
-@Table(name = "assessment_config", schema = "system")
-public class AssessmentConfig {
+@Table(name = "cheat_sheets", schema = "system")
+public class CheatSheet {
 
     @Id
     private String id;
 
-    @Column(name = "track_id", nullable = false)
-    private String trackId;
+    @Column(nullable = false)
+    private String title;
+
+    @Column(name = "type_code", nullable = false)
+    private String type;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    private com.icentric.Icentric.common.enums.Department department;
+
+    private String description;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "config_data", columnDefinition = "jsonb", nullable = false)
-    private JsonNode configData;
+    @Column(name = "data", columnDefinition = "jsonb")
+    private JsonNode data;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

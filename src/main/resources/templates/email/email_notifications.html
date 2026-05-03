@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AISafe — Email Template Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Preview chrome ───────────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0D0D14;font-family:'DM Sans',sans-serif;min-height:100vh;display:flex}
+.sidebar{width:260px;background:#111118;border-right:1px solid rgba(255,255,255,0.07);flex-shrink:0;overflow-y:auto;position:fixed;top:0;bottom:0;left:0}
+.sidebar-header{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,0.07)}
+.sidebar-logo{font-family:'Sora',sans-serif;font-size:15px;font-weight:700;color:#F4F4F5}
+.sidebar-logo span{color:#E02020}
+.sidebar-sub{font-size:11px;color:#52525B;margin-top:3px;font-family:'JetBrains Mono',monospace}
+.sidebar-section{padding:14px 16px 4px;font-family:'JetBrains Mono',monospace;font-size:9px;color:#52525B;letter-spacing:.1em;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background .15s;border-left:2px solid transparent}
+.nav-item:hover{background:rgba(255,255,255,0.03)}
+.nav-item.active{background:rgba(224,32,32,0.08);border-left-color:#E02020}
+.nav-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.nav-label{font-size:12px;color:#A1A1AA;line-height:1.3}
+.nav-item.active .nav-label{color:#F4F4F5;font-weight:500}
+.nav-badge{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 7px;border-radius:9999px;margin-left:auto;flex-shrink:0}
+
+.main{margin-left:260px;flex:1;display:flex;flex-direction:column;align-items:center;padding:32px 24px;min-height:100vh}
+.preview-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:#52525B;letter-spacing:.1em;text-transform:uppercase;margin-bottom:16px;align-self:flex-start}
+.email-frame{width:100%;max-width:640px;background:#0A0A0F;border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,0.06),0 24px 64px rgba(0,0,0,0.6)}
+.frame-bar{background:#1a1a22;padding:12px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.frame-dot{width:10px;height:10px;border-radius:50%}
+.frame-meta{display:flex;flex-direction:column;margin-left:8px;flex:1;gap:2px}
+.frame-to{font-size:11px;color:#52525B;font-family:'JetBrains Mono',monospace}
+.frame-subject{font-size:12px;color:#A1A1AA;font-family:'DM Sans',sans-serif;font-weight:500}
+.email-body{display:none}
+.email-body.active{display:block}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">AI<span>Safe</span></div>
+    <div class="sidebar-sub">Email Templates · 8 types</div>
+  </div>
+
+  <div class="sidebar-section">Learner Notifications</div>
+  <div class="nav-item active" onclick="show(0)" id="ni0">
+    <div class="nav-dot" style="background:#F59E0B"></div>
+    <div class="nav-label">Deadline Reminder<br><span style="font-size:10px;color:#52525B">14 / 7 / 3 / 1 day</span></div>
+  </div>
+  <div class="nav-item" onclick="show(1)" id="ni1">
+    <div class="nav-dot" style="background:#EF4444"></div>
+    <div class="nav-label">Overdue Notice<br><span style="font-size:10px;color:#52525B">Daily until complete</span></div>
+  </div>
+  <div class="nav-item" onclick="show(2)" id="ni2">
+    <div class="nav-dot" style="background:#10B981"></div>
+    <div class="nav-label">Assessment Passed<br><span style="font-size:10px;color:#52525B">With certificate</span></div>
+  </div>
+  <div class="nav-item" onclick="show(3)" id="ni3">
+    <div class="nav-dot" style="background:#EF4444"></div>
+    <div class="nav-label">Assessment Failed<br><span style="font-size:10px;color:#52525B">With retry info</span></div>
+  </div>
+  <div class="nav-item" onclick="show(4)" id="ni4">
+    <div class="nav-dot" style="background:#F59E0B"></div>
+    <div class="nav-label">Retake Available<br><span style="font-size:10px;color:#52525B">After cooloff ends</span></div>
+  </div>
+
+  <div class="sidebar-section">Admin Notifications</div>
+  <div class="nav-item" onclick="show(5)" id="ni5">
+    <div class="nav-dot" style="background:#EF4444"></div>
+    <div class="nav-label">Overdue Escalation<br><span style="font-size:10px;color:#52525B">To admin / manager</span></div>
+  </div>
+  <div class="nav-item" onclick="show(6)" id="ni6">
+    <div class="nav-dot" style="background:#3B82F6"></div>
+    <div class="nav-label">Weekly Report<br><span style="font-size:10px;color:#52525B">Admin digest</span></div>
+  </div>
+  <div class="nav-item" onclick="show(7)" id="ni7">
+    <div class="nav-dot" style="background:#C9A84C"></div>
+    <div class="nav-label">Certificate Issued<br><span style="font-size:10px;color:#52525B">Learner receipt</span></div>
+  </div>
+</div>
+
+<!-- Main preview -->
+<div class="main">
+  <div class="preview-label" id="preview-label">Deadline Reminder · 14 days</div>
+
+  <div class="email-frame">
+    <div class="frame-bar">
+      <div class="frame-dot" style="background:#FF5F57"></div>
+      <div class="frame-dot" style="background:#FFBD2E"></div>
+      <div class="frame-dot" style="background:#28C840"></div>
+      <div class="frame-meta">
+        <div class="frame-to" id="frame-to">To: arjun.kapoor@acmecorp.com</div>
+        <div class="frame-subject" id="frame-subject">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         EMAIL 0 — DEADLINE REMINDER (14 / 7 / 3 / 1 day)
+    ═════════════════════════════════════════════════════════════════════ -->
+    <div class="email-body active" id="eb0">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+        <tr><td style="padding:28px 20px">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto">
+
+            <!-- Header -->
+            <tr><td style="padding-bottom:0">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:16px 24px;background:#111118;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                      <td valign="middle"><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                      <td align="right" valign="middle"><span style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;letter-spacing:.08em;text-transform:uppercase">Acme Corp</span></td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <!-- Amber accent + body -->
+            <tr><td style="background:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07)">
+              <div style="height:3px;background:linear-gradient(90deg,#F59E0B,rgba(245,158,11,0.2),transparent)"></div>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:32px 32px 24px">
+
+                  <!-- Urgency pill -->
+                  <div style="display:inline-block;margin-bottom:18px">
+                    <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:600;color:#FCD34D;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);padding:4px 12px;border-radius:9999px;letter-spacing:.06em">⏰ &nbsp;14 DAYS REMAINING</span>
+                  </div>
+
+                  <p style="font-size:13px;color:#A1A1AA;margin:0 0 8px 0">Hi Arjun,</p>
+                  <h1 style="font-size:24px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#F4F4F5;margin:0 0 12px 0">Your training deadline<br>is coming up.</h1>
+                  <p style="font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 0 24px 0">You have <strong style="color:#FCD34D">14 days</strong> to complete your assigned AI safety training. You're <strong style="color:#F4F4F5">43% through</strong> — a few short sessions and you'll be done.</p>
+
+                  <!-- Progress card -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:24px">
+                    <tr><td style="padding:16px 20px">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr>
+                          <td>
+                            <p style="font-size:12px;color:#52525B;margin:0 0 4px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Core AI Safety Track</p>
+                            <p style="font-size:14px;font-weight:600;color:#F4F4F5;margin:0 0 10px 0">3 of 7 modules complete</p>
+                            <!-- Progress bar -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(255,255,255,0.06);border-radius:3px;height:6px;overflow:hidden;margin-bottom:6px">
+                              <tr><td width="43%" style="background:#F59E0B;border-radius:3px;height:6px"></td><td></td></tr>
+                            </table>
+                            <p style="font-size:11px;color:#52525B;margin:0;font-family:'Courier New',monospace">43% · ~42 min remaining</p>
+                          </td>
+                          <td align="right" valign="top" style="padding-left:16px;white-space:nowrap">
+                            <p style="font-size:11px;color:#52525B;margin:0 0 2px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Deadline</p>
+                            <p style="font-size:13px;font-weight:600;color:#FCD34D;margin:0">Mar 15, 2026</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td></tr>
+                  </table>
+
+                  <!-- CTA -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr><td style="border-radius:8px;background:#3B82F6;background-image:linear-gradient(135deg,#3B82F6,#2563EB)">
+                      <a href="#" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#fff;text-decoration:none;padding:12px 26px;display:inline-block;border-radius:8px">Continue training →</a>
+                    </td></tr>
+                  </table>
+
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <!-- Footer -->
+            <tr><td style="background:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 10px 10px;padding:18px 24px">
+              <p style="font-size:11px;color:#52525B;margin:0;line-height:1.6">Assigned by Acme Corp · <a href="#" style="color:#52525B">Unsubscribe from reminders</a> · <a href="#" style="color:#52525B">Privacy policy</a></p>
+            </td></tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         EMAIL 1 — OVERDUE NOTICE
+    ═════════════════════════════════════════════════════════════════════ -->
+    <div class="email-body" id="eb1">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <tr><td style="padding:28px 20px">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto">
+
+            <tr><td style="padding-bottom:0">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:16px 24px;background:#111118;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                      <td><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                      <td align="right"><span style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;letter-spacing:.08em;text-transform:uppercase">Acme Corp</span></td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <tr><td style="background:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07)">
+              <div style="height:3px;background:linear-gradient(90deg,#EF4444,rgba(239,68,68,0.2),transparent)"></div>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:32px 32px 24px">
+
+                  <div style="display:inline-block;margin-bottom:18px">
+                    <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:600;color:#FCA5A5;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);padding:4px 12px;border-radius:9999px;letter-spacing:.06em">🔴 &nbsp;OVERDUE · 3 DAYS PAST DEADLINE</span>
+                  </div>
+
+                  <p style="font-size:13px;color:#A1A1AA;margin:0 0 8px 0">Hi Arjun,</p>
+                  <h1 style="font-size:24px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#F4F4F5;margin:0 0 12px 0">Your training deadline<br>has passed.</h1>
+                  <p style="font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 0 20px 0">Your <strong style="color:#F4F4F5">Core AI Safety Track</strong> was due <strong style="color:#FCA5A5">March 15, 2026</strong>. You have <strong style="color:#FCD34D">4 modules remaining</strong>. Your manager and HR have been notified.</p>
+
+                  <!-- Overdue card -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:10px;margin-bottom:24px">
+                    <tr><td style="padding:16px 20px">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr>
+                          <td>
+                            <p style="font-size:12px;color:#52525B;margin:0 0 4px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Core AI Safety Track</p>
+                            <p style="font-size:14px;font-weight:600;color:#F4F4F5;margin:0 0 10px 0">3 of 7 modules · 4 remaining</p>
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(255,255,255,0.06);border-radius:3px;height:6px;overflow:hidden;margin-bottom:6px">
+                              <tr><td width="43%" style="background:#EF4444;border-radius:3px;height:6px"></td><td></td></tr>
+                            </table>
+                          </td>
+                          <td align="right" valign="top" style="padding-left:16px;white-space:nowrap">
+                            <p style="font-size:11px;color:#52525B;margin:0 0 2px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Was due</p>
+                            <p style="font-size:13px;font-weight:600;color:#FCA5A5;margin:0">Mar 15, 2026</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td></tr>
+                  </table>
+
+                  <!-- Notice -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;margin-bottom:24px">
+                    <tr><td style="padding:12px 16px">
+                      <p style="font-size:13px;color:#A1A1AA;margin:0;line-height:1.55">⚠ &nbsp;This is a required compliance training. Your completion status is visible to your manager and Acme Corp's compliance team.</p>
+                    </td></tr>
+                  </table>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr><td style="border-radius:8px;background:#EF4444">
+                      <a href="#" style="font-size:14px;font-weight:600;color:#fff;text-decoration:none;padding:12px 26px;display:inline-block;border-radius:8px">Complete training now →</a>
+                    </td></tr>
+                  </table>
+
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <tr><td style="background:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 10px 10px;padding:18px 24px">
+              <p style="font-size:11px;color:#52525B;margin:0;line-height:1.6">You will receive daily reminders until this training is completed. · <a href="#" style="color:#52525B">Contact your HR team</a></p>
+            </td></tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         EMAIL 2 — ASSESSMENT PASSED + CERT ISSUED
+    ═════════════════════════════════════════════════════════════════════ -->
+    <div class="email-body" id="eb2">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <tr><td style="padding:28px 20px">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto">
+
+            <tr><td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="padding:16px 24px;background:#111118;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                    <td align="right"><span style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;letter-spacing:.08em;text-transform:uppercase">Acme Corp</span></td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table></td></tr>
+
+            <tr><td style="background:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07)">
+              <div style="height:3px;background:linear-gradient(90deg,#10B981,rgba(16,185,129,0.2),transparent)"></div>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:32px 32px 28px">
+
+                  <!-- Trophy -->
+                  <div style="text-align:center;margin-bottom:20px">
+                    <div style="font-size:44px;line-height:1;margin-bottom:12px">🏅</div>
+                    <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:600;color:#6EE7B7;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);padding:4px 14px;border-radius:9999px;letter-spacing:.06em">✓ &nbsp;ASSESSMENT PASSED</span>
+                  </div>
+
+                  <p style="font-size:13px;color:#A1A1AA;margin:0 0 8px 0;text-align:center">Congratulations, Arjun 🎉</p>
+                  <h1 style="font-size:23px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#F4F4F5;margin:0 0 12px 0;text-align:center">You've earned your certificate.</h1>
+                  <p style="font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 0 24px 0;text-align:center;max-width:420px;margin-left:auto;margin-right:auto">You passed the <strong style="color:#F4F4F5">Core AI Safety Track</strong> final assessment with a score of <strong style="color:#6EE7B7">93%</strong>. Your certificate has been issued and is ready to download.</p>
+
+                  <!-- Score card -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(16,185,129,0.2);border-radius:10px;margin-bottom:24px">
+                    <tr><td style="padding:18px 20px">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr>
+                          <td valign="top" width="33%" style="text-align:center;padding:0 8px;border-right:1px solid rgba(255,255,255,0.06)">
+                            <p style="font-size:10px;color:#52525B;margin:0 0 4px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Score</p>
+                            <p style="font-size:26px;font-weight:700;color:#6EE7B7;margin:0;line-height:1">93%</p>
+                          </td>
+                          <td valign="top" width="33%" style="text-align:center;padding:0 8px;border-right:1px solid rgba(255,255,255,0.06)">
+                            <p style="font-size:10px;color:#52525B;margin:0 0 4px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Attempt</p>
+                            <p style="font-size:26px;font-weight:700;color:#F4F4F5;margin:0;line-height:1">1st</p>
+                          </td>
+                          <td valign="top" width="34%" style="text-align:center;padding:0 8px">
+                            <p style="font-size:10px;color:#52525B;margin:0 0 4px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Pass mark</p>
+                            <p style="font-size:26px;font-weight:700;color:#F4F4F5;margin:0;line-height:1">80%</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td></tr>
+                  </table>
+
+                  <!-- Cert ID -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);border-radius:10px;margin-bottom:24px">
+                    <tr><td style="padding:14px 20px">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr>
+                          <td>
+                            <p style="font-size:11px;color:#A09860;margin:0 0 3px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Certificate ID</p>
+                            <p style="font-size:13px;color:#C9A84C;margin:0;font-family:'Courier New',monospace">AISF-2026-CORE-8A4F2C</p>
+                            <p style="font-size:11px;color:#52525B;margin:4px 0 0 0;font-family:'Courier New',monospace">Verify: verify.aisafe.io/cert/AISF-2026-CORE-8A4F2C</p>
+                          </td>
+                          <td align="right" valign="middle" style="padding-left:12px">
+                            <p style="font-size:22px;margin:0">🔐</p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td></tr>
+                  </table>
+
+                  <!-- CTAs -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                      <td style="padding-right:8px">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                          <tr><td style="border-radius:8px;background:#10B981;text-align:center">
+                            <a href="#" style="font-size:13px;font-weight:600;color:#fff;text-decoration:none;padding:11px 20px;display:block;border-radius:8px">⬇ Download Certificate</a>
+                          </td></tr>
+                        </table>
+                      </td>
+                      <td style="padding-left:8px">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                          <tr><td style="border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.12);text-align:center">
+                            <a href="#" style="font-size:13px;font-weight:600;color:#A1A1AA;text-decoration:none;padding:11px 20px;display:block;border-radius:8px">Share on LinkedIn ↗</a>
+                          </td></tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <tr><td style="background:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 10px 10px;padding:18px 24px">
+              <p style="font-size:11px;color:#52525B;margin:0;line-height:1.6">Certificate issued by AISafe on behalf of Acme Corp · March 4, 2026 · <a href="#" style="color:#52525B">Verify online</a></p>
+            </td></tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         EMAIL 3 — ASSESSMENT FAILED
+    ═════════════════════════════════════════════════════════════════════ -->
+    <div class="email-body" id="eb3">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <tr><td style="padding:28px 20px">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto">
+
+            <tr><td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="padding:16px 24px;background:#111118;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                    <td align="right"><span style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;letter-spacing:.08em;text-transform:uppercase">Acme Corp</span></td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table></td></tr>
+
+            <tr><td style="background:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07)">
+              <div style="height:3px;background:linear-gradient(90deg,#EF4444,rgba(239,68,68,0.2),transparent)"></div>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:32px 32px 24px">
+
+                  <div style="display:inline-block;margin-bottom:18px">
+                    <span style="font-family:'Courier New',monospace;font-size:11px;color:#FCA5A5;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);padding:4px 12px;border-radius:9999px;letter-spacing:.06em">✗ &nbsp;ASSESSMENT NOT PASSED</span>
+                  </div>
+
+                  <p style="font-size:13px;color:#A1A1AA;margin:0 0 8px 0">Hi Arjun,</p>
+                  <h1 style="font-size:23px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#F4F4F5;margin:0 0 12px 0">Not quite there yet — you can retake it.</h1>
+                  <p style="font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 0 24px 0">You scored <strong style="color:#FCA5A5">72%</strong> on the <strong style="color:#F4F4F5">Core AI Safety Final Assessment</strong>. The passing threshold is 80%. Don't worry — you have unlimited retakes and a 24-hour cooloff before your next attempt.</p>
+
+                  <!-- Score breakdown -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:16px">
+                    <tr><td style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06)">
+                      <p style="font-size:10px;color:#52525B;margin:0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Your score breakdown</p>
+                    </td></tr>
+                    <tr><td style="padding:4px 0">
+                      <!-- Topic rows -->
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr><td style="padding:9px 20px;border-bottom:1px solid rgba(255,255,255,0.04)">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td style="font-size:12px;color:#A1A1AA">AI Fundamentals</td>
+                              <td align="right">
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="background:rgba(255,255,255,0.06);border-radius:2px;width:80px;height:4px;overflow:hidden;display:inline-table">
+                                  <tr><td style="width:90%;background:#10B981;border-radius:2px;height:4px"></td><td></td></tr>
+                                </table>
+                                <span style="font-family:'Courier New',monospace;font-size:11px;color:#6EE7B7;margin-left:8px">90%</span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td></tr>
+                        <tr><td style="padding:9px 20px;border-bottom:1px solid rgba(255,255,255,0.04)">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td style="font-size:12px;color:#A1A1AA">Data Privacy</td>
+                              <td align="right">
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="background:rgba(255,255,255,0.06);border-radius:2px;width:80px;height:4px;overflow:hidden;display:inline-table">
+                                  <tr><td style="width:60%;background:#F59E0B;border-radius:2px;height:4px"></td><td></td></tr>
+                                </table>
+                                <span style="font-family:'Courier New',monospace;font-size:11px;color:#FCD34D;margin-left:8px">60%</span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td></tr>
+                        <tr><td style="padding:9px 20px">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td style="font-size:12px;color:#A1A1AA">Safe Prompting</td>
+                              <td align="right">
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="background:rgba(255,255,255,0.06);border-radius:2px;width:80px;height:4px;overflow:hidden;display:inline-table">
+                                  <tr><td style="width:67%;background:#F59E0B;border-radius:2px;height:4px"></td><td></td></tr>
+                                </table>
+                                <span style="font-family:'Courier New',monospace;font-size:11px;color:#FCD34D;margin-left:8px">67%</span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+
+                  <!-- Cooloff -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;margin-bottom:24px">
+                    <tr><td style="padding:12px 16px">
+                      <p style="font-size:13px;color:#FCD34D;font-weight:600;margin:0 0 3px 0">⏳ Retake available in 24 hours</p>
+                      <p style="font-size:12px;color:#A1A1AA;margin:0;line-height:1.5">Use this time to review the <strong style="color:#F4F4F5">Data Privacy</strong> and <strong style="color:#F4F4F5">Safe Prompting</strong> modules — those are your weakest areas.</p>
+                    </td></tr>
+                  </table>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr><td style="border-radius:8px;background:#3B82F6">
+                      <a href="#" style="font-size:14px;font-weight:600;color:#fff;text-decoration:none;padding:12px 26px;display:inline-block;border-radius:8px">Review weak areas →</a>
+                    </td></tr>
+                  </table>
+
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <tr><td style="background:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 10px 10px;padding:18px 24px">
+              <p style="font-size:11px;color:#52525B;margin:0;line-height:1.6">Unlimited retakes · 24h cooloff after 3 consecutive fails · <a href="#" style="color:#52525B">Need help?</a></p>
+            </td></tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         EMAIL 4 — RETAKE AVAILABLE (cooloff ended)
+    ═════════════════════════════════════════════════════════════════════ -->
+    <div class="email-body" id="eb4">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <tr><td style="padding:28px 20px">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto">
+
+            <tr><td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="padding:16px 24px;background:#111118;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                    <td align="right"><span style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;letter-spacing:.08em;text-transform:uppercase">Acme Corp</span></td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table></td></tr>
+
+            <tr><td style="background:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07)">
+              <div style="height:3px;background:linear-gradient(90deg,#3B82F6,rgba(59,130,246,0.2),transparent)"></div>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:32px 32px 24px">
+
+                  <div style="display:inline-block;margin-bottom:18px">
+                    <span style="font-family:'Courier New',monospace;font-size:11px;color:#93C5FD;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);padding:4px 12px;border-radius:9999px;letter-spacing:.06em">🔓 &nbsp;RETAKE UNLOCKED</span>
+                  </div>
+
+                  <p style="font-size:13px;color:#A1A1AA;margin:0 0 8px 0">Hi Arjun,</p>
+                  <h1 style="font-size:23px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#F4F4F5;margin:0 0 12px 0">Your retake is ready.<br>Give it another go.</h1>
+                  <p style="font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 0 24px 0">Your 24-hour cooloff period has ended. You can now retake the <strong style="color:#F4F4F5">Core AI Safety Final Assessment</strong>. Last attempt: <strong style="color:#FCA5A5">72%</strong>. You need <strong style="color:#F4F4F5">80%</strong> to pass.</p>
+
+                  <!-- Prep tips -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:24px">
+                    <tr><td style="padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06)">
+                      <p style="font-size:11px;color:#52525B;margin:0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Before you start — review these</p>
+                    </td></tr>
+                    <tr><td style="padding:12px 20px">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr><td style="padding-bottom:8px">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+                            <td style="padding-right:8px;color:#FCA5A5;font-size:13px">●</td>
+                            <td style="font-size:13px;color:#A1A1AA"><strong style="color:#F4F4F5">Module 2: Data Privacy</strong> — you scored 60% here last time</td>
+                          </tr></table>
+                        </td></tr>
+                        <tr><td>
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+                            <td style="padding-right:8px;color:#FCD34D;font-size:13px">●</td>
+                            <td style="font-size:13px;color:#A1A1AA"><strong style="color:#F4F4F5">Module 3: Safe Prompting</strong> — you scored 67% here last time</td>
+                          </tr></table>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr><td style="border-radius:8px;background:#3B82F6;background-image:linear-gradient(135deg,#3B82F6,#2563EB)">
+                      <a href="#" style="font-size:14px;font-weight:600;color:#fff;text-decoration:none;padding:12px 26px;display:inline-block;border-radius:8px">Retake assessment →</a>
+                    </td></tr>
+                  </table>
+
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <tr><td style="background:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 10px 10px;padding:18px 24px">
+              <p style="font-size:11px;color:#52525B;margin:0;line-height:1.6">This is attempt 2 of unlimited. Deadline: March 15, 2026 · <a href="#" style="color:#52525B">Contact support</a></p>
+            </td></tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         EMAIL 5 — ADMIN OVERDUE ESCALATION
+    ═════════════════════════════════════════════════════════════════════ -->
+    <div class="email-body" id="eb5">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <tr><td style="padding:28px 20px">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto">
+
+            <tr><td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="padding:16px 24px;background:#111118;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                    <td align="right"><span style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;letter-spacing:.08em;text-transform:uppercase">Admin Alert</span></td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table></td></tr>
+
+            <tr><td style="background:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07)">
+              <div style="height:3px;background:linear-gradient(90deg,#E02020,rgba(224,32,32,0.2),transparent)"></div>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:28px 32px 24px">
+
+                  <div style="display:inline-block;margin-bottom:18px">
+                    <span style="font-family:'Courier New',monospace;font-size:11px;color:#FCA5A5;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);padding:4px 12px;border-radius:9999px;letter-spacing:.06em">⚠ &nbsp;ADMIN ESCALATION — 8 OVERDUE USERS</span>
+                  </div>
+
+                  <p style="font-size:13px;color:#A1A1AA;margin:0 0 8px 0">Hi Priya,</p>
+                  <h1 style="font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#F4F4F5;margin:0 0 10px 0">8 employees are overdue on their AI safety training.</h1>
+                  <p style="font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 0 22px 0">The deadline for the <strong style="color:#F4F4F5">Core AI Safety Track</strong> passed 3 days ago. The following users have not completed their training.</p>
+
+                  <!-- Overdue table -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;overflow:hidden;margin-bottom:22px">
+                    <tr style="background:#0D0D14"><td style="padding:10px 16px">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr>
+                          <td style="font-size:10px;color:#52525B;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em;width:44%">Employee</td>
+                          <td style="font-size:10px;color:#52525B;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em;width:28%">Department</td>
+                          <td style="font-size:10px;color:#52525B;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em;width:28%;text-align:right">Days overdue</td>
+                        </tr>
+                      </table>
+                    </td></tr>
+                    <!-- rows -->
+                    <tr><td style="padding:0 16px"><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)"><td style="padding:9px 0;font-size:12px;color:#F4F4F5;width:44%">Arjun Kapoor</td><td style="font-size:12px;color:#A1A1AA;width:28%">Engineering</td><td style="font-size:12px;font-family:'Courier New',monospace;color:#FCA5A5;text-align:right;width:28%">3 days</td></tr>
+                      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)"><td style="padding:9px 0;font-size:12px;color:#F4F4F5">Sanya Gupta</td><td style="font-size:12px;color:#A1A1AA">HR</td><td style="font-size:12px;font-family:'Courier New',monospace;color:#FCA5A5;text-align:right">3 days</td></tr>
+                      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)"><td style="padding:9px 0;font-size:12px;color:#F4F4F5">Vikram Tiwari</td><td style="font-size:12px;color:#A1A1AA">Finance</td><td style="font-size:12px;font-family:'Courier New',monospace;color:#FCD34D;text-align:right">1 day</td></tr>
+                      <tr style="border-bottom:1px solid rgba(255,255,255,0.04)"><td style="padding:9px 0;font-size:12px;color:#F4F4F5">Meera Iyer</td><td style="font-size:12px;color:#A1A1AA">Legal</td><td style="font-size:12px;font-family:'Courier New',monospace;color:#FCA5A5;text-align:right">3 days</td></tr>
+                      <tr><td style="padding:9px 0;font-size:12px;color:#52525B" colspan="3">+ 4 more employees ↗</td></tr>
+                    </table></td></tr>
+                  </table>
+
+                  <!-- Stats row -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:22px">
+                    <tr>
+                      <td width="33%" style="padding-right:6px">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.06);border-radius:8px;text-align:center;padding:12px 8px">
+                          <tr><td>
+                            <p style="font-size:22px;font-weight:700;color:#F4F4F5;margin:0;line-height:1">67%</p>
+                            <p style="font-size:10px;color:#52525B;margin:4px 0 0 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Completion</p>
+                          </td></tr>
+                        </table>
+                      </td>
+                      <td width="33%" style="padding:0 3px">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;text-align:center;padding:12px 8px">
+                          <tr><td>
+                            <p style="font-size:22px;font-weight:700;color:#FCA5A5;margin:0;line-height:1">8</p>
+                            <p style="font-size:10px;color:#52525B;margin:4px 0 0 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Overdue</p>
+                          </td></tr>
+                        </table>
+                      </td>
+                      <td width="33%" style="padding-left:6px">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.06);border-radius:8px;text-align:center;padding:12px 8px">
+                          <tr><td>
+                            <p style="font-size:22px;font-weight:700;color:#F4F4F5;margin:0;line-height:1">24</p>
+                            <p style="font-size:10px;color:#52525B;margin:4px 0 0 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Complete</p>
+                          </td></tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td style="padding-right:8px"><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td style="border-radius:8px;background:#E02020"><a href="#" style="font-size:13px;font-weight:600;color:#fff;text-decoration:none;padding:11px 22px;display:inline-block;border-radius:8px">Send reminders →</a></td></tr></table></td>
+                      <td><table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td style="border-radius:8px;border:1px solid rgba(255,255,255,0.12)"><a href="#" style="font-size:13px;font-weight:600;color:#A1A1AA;text-decoration:none;padding:11px 22px;display:inline-block;border-radius:8px">View all in dashboard ↗</a></td></tr></table></td>
+                    </tr>
+                  </table>
+
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <tr><td style="background:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 10px 10px;padding:18px 24px">
+              <p style="font-size:11px;color:#52525B;margin:0;line-height:1.6">Sent to admin@acmecorp.com · AISafe Admin Alerts · <a href="#" style="color:#52525B">Manage alert preferences</a></p>
+            </td></tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         EMAIL 6 — WEEKLY ADMIN DIGEST
+    ═════════════════════════════════════════════════════════════════════ -->
+    <div class="email-body" id="eb6">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <tr><td style="padding:28px 20px">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto">
+
+            <tr><td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="padding:16px 24px;background:#111118;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                    <td align="right"><span style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;letter-spacing:.08em;text-transform:uppercase">Weekly Digest</span></td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table></td></tr>
+
+            <tr><td style="background:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07)">
+              <div style="height:3px;background:linear-gradient(90deg,#3B82F6,rgba(59,130,246,0.2),transparent)"></div>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:28px 32px 24px">
+
+                  <p style="font-size:13px;color:#A1A1AA;margin:0 0 6px 0">Week of March 3–9, 2026</p>
+                  <h1 style="font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#F4F4F5;margin:0 0 20px 0">Acme Corp Training Digest</h1>
+
+                  <!-- KPI row -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:22px">
+                    <tr>
+                      <td width="25%" style="padding-right:5px"><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.06);border-radius:8px;text-align:center;padding:14px 6px"><tr><td>
+                        <p style="font-size:24px;font-weight:700;color:#6EE7B7;margin:0;line-height:1">24</p>
+                        <p style="font-size:9px;color:#52525B;margin:4px 0 0 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Completions</p>
+                      </td></tr></table></td>
+                      <td width="25%" style="padding:0 3px"><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.06);border-radius:8px;text-align:center;padding:14px 6px"><tr><td>
+                        <p style="font-size:24px;font-weight:700;color:#C9A84C;margin:0;line-height:1">12</p>
+                        <p style="font-size:9px;color:#52525B;margin:4px 0 0 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Certs issued</p>
+                      </td></tr></table></td>
+                      <td width="25%" style="padding:0 3px"><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:8px;text-align:center;padding:14px 6px"><tr><td>
+                        <p style="font-size:24px;font-weight:700;color:#FCA5A5;margin:0;line-height:1">8</p>
+                        <p style="font-size:9px;color:#52525B;margin:4px 0 0 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Overdue</p>
+                      </td></tr></table></td>
+                      <td width="25%" style="padding-left:5px"><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.06);border-radius:8px;text-align:center;padding:14px 6px"><tr><td>
+                        <p style="font-size:24px;font-weight:700;color:#F4F4F5;margin:0;line-height:1">67%</p>
+                        <p style="font-size:9px;color:#52525B;margin:4px 0 0 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Completion</p>
+                      </td></tr></table></td>
+                    </tr>
+                  </table>
+
+                  <!-- Department breakdown -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#18181F;border:1px solid rgba(255,255,255,0.07);border-radius:10px;margin-bottom:22px">
+                    <tr><td style="padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+                      <p style="font-size:10px;color:#52525B;margin:0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.08em">Department progress this week</p>
+                    </td></tr>
+                    <tr><td style="padding:6px 0">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <!-- dept rows -->
+                        <tr><td style="padding:8px 18px;border-bottom:1px solid rgba(255,255,255,0.03)">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"><tr>
+                            <td style="font-size:12px;color:#A1A1AA;width:120px">Engineering</td>
+                            <td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(255,255,255,0.06);border-radius:2px;height:4px;overflow:hidden"><tr><td style="width:82%;background:#10B981;height:4px"></td><td></td></tr></table></td>
+                            <td align="right" style="padding-left:10px;width:40px;font-family:'Courier New',monospace;font-size:11px;color:#6EE7B7">82%</td>
+                          </tr></table>
+                        </td></tr>
+                        <tr><td style="padding:8px 18px;border-bottom:1px solid rgba(255,255,255,0.03)">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"><tr>
+                            <td style="font-size:12px;color:#A1A1AA;width:120px">Finance</td>
+                            <td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(255,255,255,0.06);border-radius:2px;height:4px;overflow:hidden"><tr><td style="width:45%;background:#F59E0B;height:4px"></td><td></td></tr></table></td>
+                            <td align="right" style="padding-left:10px;width:40px;font-family:'Courier New',monospace;font-size:11px;color:#FCD34D">45%</td>
+                          </tr></table>
+                        </td></tr>
+                        <tr><td style="padding:8px 18px;border-bottom:1px solid rgba(255,255,255,0.03)">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"><tr>
+                            <td style="font-size:12px;color:#A1A1AA;width:120px">Legal</td>
+                            <td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(255,255,255,0.06);border-radius:2px;height:4px;overflow:hidden"><tr><td style="width:91%;background:#10B981;height:4px"></td><td></td></tr></table></td>
+                            <td align="right" style="padding-left:10px;width:40px;font-family:'Courier New',monospace;font-size:11px;color:#6EE7B7">91%</td>
+                          </tr></table>
+                        </td></tr>
+                        <tr><td style="padding:8px 18px">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"><tr>
+                            <td style="font-size:12px;color:#A1A1AA;width:120px">HR</td>
+                            <td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:rgba(255,255,255,0.06);border-radius:2px;height:4px;overflow:hidden"><tr><td style="width:60%;background:#F59E0B;height:4px"></td><td></td></tr></table></td>
+                            <td align="right" style="padding-left:10px;width:40px;font-family:'Courier New',monospace;font-size:11px;color:#FCD34D">60%</td>
+                          </tr></table>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                    <tr><td style="border-radius:8px;background:#E02020"><a href="#" style="font-size:13px;font-weight:600;color:#fff;text-decoration:none;padding:11px 22px;display:inline-block;border-radius:8px">Open admin dashboard →</a></td></tr>
+                  </table>
+
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <tr><td style="background:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 10px 10px;padding:18px 24px">
+              <p style="font-size:11px;color:#52525B;margin:0;line-height:1.6">Weekly digest sent to admin@acmecorp.com every Monday · <a href="#" style="color:#52525B">Manage preferences</a></p>
+            </td></tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         EMAIL 7 — CERTIFICATE ISSUED (Learner)
+    ═════════════════════════════════════════════════════════════════════ -->
+    <div class="email-body" id="eb7">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#0A0A0F;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif">
+        <tr><td style="padding:28px 20px">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:600px;margin:0 auto">
+
+            <tr><td><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr><td style="padding:16px 24px;background:#111118;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.07);border-bottom:none">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                  <tr>
+                    <td><span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#F4F4F5">AI<span style="color:#E02020">Safe</span></span></td>
+                    <td align="right"><span style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;letter-spacing:.08em;text-transform:uppercase">Acme Corp</span></td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table></td></tr>
+
+            <tr><td style="background:#111118;border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07)">
+              <!-- Gold accent -->
+              <div style="height:3px;background:linear-gradient(90deg,#C9A84C,rgba(201,168,76,0.2),transparent)"></div>
+
+              <!-- Gold top pattern strip -->
+              <div style="height:40px;background:linear-gradient(135deg,rgba(201,168,76,0.06) 0%,transparent 60%);border-bottom:1px solid rgba(201,168,76,0.1)"></div>
+
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr><td style="padding:24px 32px 28px;text-align:center">
+
+                  <div style="font-size:48px;line-height:1;margin-bottom:14px">🏅</div>
+                  <div style="display:inline-block;margin-bottom:16px">
+                    <span style="font-family:'Courier New',monospace;font-size:11px;color:#C9A84C;background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.25);padding:4px 14px;border-radius:9999px;letter-spacing:.06em">✓ &nbsp;CERTIFICATE ISSUED</span>
+                  </div>
+
+                  <p style="font-size:13px;color:#A1A1AA;margin:0 0 8px 0">Congratulations, Arjun!</p>
+                  <h1 style="font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-.02em;color:#F4F4F5;margin:0 0 12px 0">Your AI safety certificate<br>has been issued.</h1>
+                  <p style="font-size:14px;line-height:1.65;color:#A1A1AA;margin:0 auto 24px;max-width:400px">You've successfully completed the <strong style="color:#F4F4F5">Core AI Safety Track</strong> and your verifiable certificate is ready.</p>
+
+                  <!-- Certificate preview block -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:linear-gradient(135deg,rgba(201,168,76,0.08),rgba(201,168,76,0.03));border:1px solid rgba(201,168,76,0.2);border-radius:12px;margin-bottom:22px;text-align:left">
+                    <tr><td style="padding:20px 22px">
+                      <p style="font-family:'Courier New',monospace;font-size:9px;color:#A09860;margin:0 0 6px 0;text-transform:uppercase;letter-spacing:.12em">Certificate of Completion</p>
+                      <p style="font-size:17px;font-weight:700;color:#F4F4F5;margin:0 0 4px 0;letter-spacing:-.01em">Core AI Safety Track</p>
+                      <p style="font-size:13px;color:#A1A1AA;margin:0 0 14px 0">Awarded to <strong style="color:#C9A84C">Arjun Kapoor</strong> · Engineering</p>
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                        <tr>
+                          <td width="33%" style="text-align:center;border-right:1px solid rgba(201,168,76,0.15)">
+                            <p style="font-size:10px;color:#52525B;margin:0 0 3px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Score</p>
+                            <p style="font-size:18px;font-weight:700;color:#6EE7B7;margin:0;line-height:1">93%</p>
+                          </td>
+                          <td width="34%" style="text-align:center;border-right:1px solid rgba(201,168,76,0.15)">
+                            <p style="font-size:10px;color:#52525B;margin:0 0 3px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Issued</p>
+                            <p style="font-size:13px;font-weight:600;color:#F4F4F5;margin:0;line-height:1">Mar 4, 2026</p>
+                          </td>
+                          <td width="33%" style="text-align:center">
+                            <p style="font-size:10px;color:#52525B;margin:0 0 3px 0;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:.06em">Valid</p>
+                            <p style="font-size:13px;font-weight:600;color:#C9A84C;margin:0;line-height:1">Forever</p>
+                          </td>
+                        </tr>
+                      </table>
+                      <div style="height:1px;background:rgba(201,168,76,0.15);margin:14px 0"></div>
+                      <p style="font-family:'Courier New',monospace;font-size:10px;color:#52525B;margin:0">ID: AISF-2026-CORE-8A4F2C &nbsp;·&nbsp; verify.aisafe.io/cert/AISF-2026-CORE-8A4F2C</p>
+                    </td></tr>
+                  </table>
+
+                  <!-- CTAs -->
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr>
+                      <td style="padding-right:6px"><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"><tr><td style="border-radius:8px;background:#C9A84C;background-image:linear-gradient(135deg,#C9A84C,#B8933C);text-align:center"><a href="#" style="font-size:13px;font-weight:600;color:#0C0C0E;text-decoration:none;padding:11px 16px;display:block;border-radius:8px">⬇ Download PDF</a></td></tr></table></td>
+                      <td style="padding:0 3px"><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"><tr><td style="border-radius:8px;background:rgba(10,102,194,0.15);border:1px solid rgba(10,102,194,0.3);text-align:center"><a href="#" style="font-size:13px;font-weight:600;color:#93C5FD;text-decoration:none;padding:11px 12px;display:block;border-radius:8px">🔗 LinkedIn</a></td></tr></table></td>
+                      <td style="padding-left:6px"><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"><tr><td style="border-radius:8px;border:1px solid rgba(255,255,255,0.1);text-align:center"><a href="#" style="font-size:13px;font-weight:600;color:#A1A1AA;text-decoration:none;padding:11px 12px;display:block;border-radius:8px">🔍 Verify</a></td></tr></table></td>
+                    </tr>
+                  </table>
+
+                </td></tr>
+              </table>
+            </td></tr>
+
+            <tr><td style="background:#0D0D14;border:1px solid rgba(255,255,255,0.06);border-radius:0 0 10px 10px;padding:18px 24px">
+              <p style="font-size:11px;color:#52525B;margin:0;line-height:1.6">Issued by AISafe on behalf of Acme Corp · Digitally signed · Publicly verifiable forever</p>
+            </td></tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </div>
+
+  </div><!-- /email-frame -->
+</div><!-- /main -->
+
+<script>
+const meta = [
+  {to:'arjun.kapoor@acmecorp.com', subj:'⏰ 14 days left to complete your AI safety training', label:'Deadline Reminder · 14 days'},
+  {to:'arjun.kapoor@acmecorp.com', subj:'🔴 Action required — your training is overdue', label:'Overdue Notice · Day 3'},
+  {to:'arjun.kapoor@acmecorp.com', subj:'🏅 You passed! Your certificate is ready — Core AI Safety Track', label:'Assessment Passed · Certificate issued'},
+  {to:'arjun.kapoor@acmecorp.com', subj:'You scored 72% — review these modules and retake when ready', label:'Assessment Failed · With score breakdown'},
+  {to:'arjun.kapoor@acmecorp.com', subj:'🔓 Your retake is available — Core AI Safety Assessment', label:'Retake Available · Cooloff ended'},
+  {to:'admin@acmecorp.com', subj:'⚠ 8 employees overdue — action required', label:'Admin Alert · Overdue Escalation'},
+  {to:'admin@acmecorp.com', subj:'Acme Corp weekly training digest — week of Mar 3', label:'Admin Digest · Weekly report'},
+  {to:'arjun.kapoor@acmecorp.com', subj:'🏅 Certificate issued — Core AI Safety Track — Arjun Kapoor', label:'Certificate Issued · Download ready'},
+];
+
+function show(n) {
+  document.querySelectorAll('.email-body').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('eb' + n).classList.add('active');
+  document.getElementById('ni' + n).classList.add('active');
+  document.getElementById('frame-to').textContent = 'To: ' + meta[n].to;
+  document.getElementById('frame-subject').textContent = meta[n].subj;
+  document.getElementById('preview-label').textContent = meta[n].label;
+  window.scrollTo(0, 0);
+}
+
+// Init
+show(0);
+</script>
+</body>
+</html>

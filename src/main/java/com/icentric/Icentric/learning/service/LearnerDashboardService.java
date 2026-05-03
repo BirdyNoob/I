@@ -472,13 +472,66 @@ public class LearnerDashboardService {
                         ))
                         .toList();
 
+        int modulesCompleted = 0;
+        int totalModules = 0;
+        if (!trackIds.isEmpty()) {
+            int[] stats = calculateModuleStats(userId, trackIds);
+            modulesCompleted = stats[0];
+            totalModules = stats[1];
+        }
+
         return new LearnerDashboardResponse(
                 learnerName,
                 learningStreakDays,
+                modulesCompleted,
+                totalModules,
                 nextDeadline,
                 trainings,
                 certificates
         );
+    }
+
+    private int[] calculateModuleStats(UUID userId, List<UUID> trackIds) {
+        int completedCount = 0;
+        int totalCount = 0;
+        for (UUID trackId : trackIds) {
+            var modules = moduleRepository.findByTrackIdOrderBySortOrder(trackId);
+            totalCount += modules.size();
+            for (CourseModule module : modules) {
+                var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+                if (lessons.isEmpty()) continue;
+
+                int totalDisplayItems = 0;
+                int completedDisplayItems = 0;
+
+                for (var lesson : lessons) {
+                    boolean lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
+                    var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+
+                    if (!steps.isEmpty()) {
+                        totalDisplayItems += steps.size();
+                        if (lessonDone) {
+                            completedDisplayItems += steps.size();
+                        } else {
+                            var pOpt = progressRepository.findByUserIdAndLessonId(userId, lesson.getId());
+                            if (pOpt.isPresent() && pOpt.get().getCompletedStepIds() != null) {
+                                completedDisplayItems += pOpt.get().getCompletedStepIds().size();
+                            }
+                        }
+                    } else {
+                        totalDisplayItems++;
+                        if (lessonDone) {
+                            completedDisplayItems++;
+                        }
+                    }
+                }
+
+                if (totalDisplayItems > 0 && completedDisplayItems >= totalDisplayItems) {
+                    completedCount++;
+                }
+            }
+        }
+        return new int[]{completedCount, totalCount};
     }
 
     @Transactional(readOnly = true)

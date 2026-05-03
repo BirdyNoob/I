@@ -1,16 +1,19 @@
 package com.icentric.Icentric.platform.tenant.service;
 
+import com.icentric.Icentric.common.mail.EmailService;
 import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -30,17 +33,23 @@ public class TenantUserBootstrapService {
     private final TenantUserRepository tenantUserRepository;
     private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
+    private final String publicBaseUrl;
 
     public TenantUserBootstrapService(
             UserRepository userRepository,
             TenantUserRepository tenantUserRepository,
             TenantRepository tenantRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            EmailService emailService,
+            @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
         this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
+        this.publicBaseUrl = publicBaseUrl;
     }
 
     /**
@@ -79,5 +88,20 @@ public class TenantUserBootstrapService {
                             tenantUserRepository.save(mapping);
                         }
                 );
+
+        // Send Welcome Email
+        Map<String, Object> variables = Map.of(
+                "userName", email, // Using email as name since name is not captured during tenant signup
+                "tenantName", tenant.getCompanyName(),
+                "setupUrl", publicBaseUrl + "/setup?tenant=" + slug,
+                "loginUrl", publicBaseUrl + "/login?tenant=" + slug
+        );
+
+        emailService.sendTemplateEmail(
+                email,
+                "Welcome to AISafe - Administrator Account Created",
+                "AISafe_Email_TenantAdmin_Welcome",
+                variables
+        );
     }
 }

@@ -28,6 +28,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
+import jakarta.persistence.EntityManager;
 
 @Service
 @RequiredArgsConstructor
@@ -47,8 +48,8 @@ public class AssessmentServiceImpl implements AssessmentService {
     private final CertificateService certificateService;
     private final ObjectMapper objectMapper;
     private final TenantSchemaService tenantSchemaService;
+    private final EntityManager entityManager;
 
-    /** Platform-wide retake cooldown: learners must wait this long after a failed attempt. */
     private static final int RETAKE_COOLDOWN_HOURS = 24;
 
     // ── Dashboard ──────────────────────────────────────────────────────────────
@@ -167,7 +168,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                     passedCount++;
                 } else {
                     // All failed — check retake limit
-                    String retakePolicy = cfgData.path("retakePolicy").asText("UNLIMITED");
+                    String retakePolicy = cfgData.path("config").path("retakePolicy").asText("UNLIMITED");
                     if (!"UNLIMITED".equalsIgnoreCase(retakePolicy)) {
                         try {
                             int allowed = Integer.parseInt(retakePolicy);
@@ -184,26 +185,26 @@ public class AssessmentServiceImpl implements AssessmentService {
 
             JsonNode configObj = cfgData.path("config");
             
-            // ── Retake policy & cooldown (24h enforced in code) ───────────────────
+            // ── Retake policy & cooldown ───────────────────────────────────────
             String retakePolicyText = configObj.path("retakePolicy").asText("UNLIMITED").toUpperCase();
             boolean retakeAllowed;
+            Instant retakeAvailableAt = null;
             try {
                 int limit = Integer.parseInt(retakePolicyText);
                 retakeAllowed = attemptCount < limit;
+                
+                if (!retakeAllowed && latestAttempt != null && latestAttempt.getDateCompleted() != null && !"PASSED".equals(currentStatus)) {
+                    Instant cooldownEnd = latestAttempt.getDateCompleted().plus(RETAKE_COOLDOWN_HOURS, ChronoUnit.HOURS);
+                    if (Instant.now().isBefore(cooldownEnd)) {
+                        retakeAvailableAt = cooldownEnd;
+                    } else {
+                        // Cooldown expired, grant a new attempt
+                        retakeAllowed = true;
+                    }
+                }
             } catch (NumberFormatException e) {
                 retakeAllowed = true; // UNLIMITED
             }
-
-            // Check if still within the platform-wide cooldown window (skip if UNLIMITED)
-            Instant retakeAvailableAt = null;
-            if (retakeAllowed && !"UNLIMITED".equals(retakePolicyText) && latestAttempt != null && latestAttempt.getDateCompleted() != null) {
-                Instant cooldownEnd = latestAttempt.getDateCompleted()
-                        .plus(RETAKE_COOLDOWN_HOURS, ChronoUnit.HOURS);
-                if (Instant.now().isBefore(cooldownEnd)) {
-                    retakeAvailableAt = cooldownEnd;
-                }
-            }
-
             int passingScore = configObj.path("passingScore").asInt(80);
             int totalQuestions = configObj.path("totalQuestions").asInt(15);
             int timeLimitSeconds = configObj.path("timeLimitSeconds").asInt(3600);
@@ -219,8 +220,12 @@ public class AssessmentServiceImpl implements AssessmentService {
                             String rName = userRepository.findById(userId)
                                     .map(com.icentric.Icentric.identity.entity.User::getName)
                                     .orElse("Learner");
+                            String displayId = ic.getVerificationToken() != null
+                                    ? ic.getVerificationToken().toString().toUpperCase().replace("-", "").substring(0, 16)
+                                    : ic.getId().toString();
                             return AssessmentCertificateDto.builder()
                                     .certificateId(ic.getId().toString())
+                                    .displayId(displayId)
                                     .downloadUrl(ic.getDownloadUrl())
                                     .issuedAt(ic.getIssuedAt())
                                     .recipientName(rName)
@@ -312,7 +317,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                     .title(cfgData.path("title").asText("Final Assessment"))
                     .status(currentStatus)
                     .retakeAvailableAt(retakeAvailableAt != null ? retakeAvailableAt.toString() : null)
-                    .cooldownHours(retakeAvailableAt != null ? RETAKE_COOLDOWN_HOURS : null)
+                    .cooldownHours(null)
                     .score(bestAttempt != null ? bestAttempt.getScore() : null)
                     .passingScore(passingScore)
                     .attemptNumber(attemptCount)
@@ -403,7 +408,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     // ── Render assessment ──────────────────────────────────────────────────────
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public AssessmentRenderResponse getAssessmentForRender(String assessmentId, UUID userId) {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
@@ -422,6 +427,38 @@ public class AssessmentServiceImpl implements AssessmentService {
                 .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .orElse(null);
 
+        // Guard: Prevent creating new attempts if retake limit is reached or already passed
+        if (inProgressAttempt == null) {
+            boolean alreadyPassed = attempts.stream().anyMatch(a -> "PASSED".equalsIgnoreCase(a.getStatus()));
+            if (alreadyPassed) {
+                throw new RuntimeException("Assessment already passed. Retake not allowed.");
+            }
+
+            String retakePolicyText = configObj.path("retakePolicy").asText("UNLIMITED").toUpperCase();
+            if (!"UNLIMITED".equals(retakePolicyText)) {
+                try {
+                    int limit = Integer.parseInt(retakePolicyText);
+                    long completedAttempts = attempts.stream()
+                            .filter(a -> "PASSED".equalsIgnoreCase(a.getStatus()) || "FAILED".equalsIgnoreCase(a.getStatus()))
+                            .count();
+                    if (completedAttempts >= limit) {
+                        AssessmentAttempt latestAttempt = attempts.stream()
+                                .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
+                                .orElse(null);
+                        
+                        if (latestAttempt != null && latestAttempt.getDateCompleted() != null) {
+                            Instant cooldownEnd = latestAttempt.getDateCompleted().plus(RETAKE_COOLDOWN_HOURS, ChronoUnit.HOURS);
+                            if (Instant.now().isBefore(cooldownEnd)) {
+                                throw new RuntimeException("Maximum attempts reached. Retake not allowed until cooldown expires.");
+                            }
+                        } else {
+                            throw new RuntimeException("Maximum attempts reached. Retake not allowed.");
+                        }
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
         String resumeAttemptId = null;
         String currentStatus = "NEW";
         Integer timeRemaining = null;
@@ -434,6 +471,22 @@ public class AssessmentServiceImpl implements AssessmentService {
             savedAnswers = inProgressAttempt.getSavedAnswers();
             // Do not increment attempt number if we are resuming
             attemptNumber = inProgressAttempt.getAttemptNumber() != null ? inProgressAttempt.getAttemptNumber() : attemptNumber;
+        } else {
+            // Create a new attempt so the frontend has an attemptId for save-progress
+            AssessmentAttempt newAttempt = new AssessmentAttempt();
+            newAttempt.setId(UUID.randomUUID());
+            newAttempt.setUserId(userId);
+            newAttempt.setAssessmentConfigId(assessmentId);
+            newAttempt.setAttemptNumber(attemptNumber);
+            newAttempt.setStatus("IN_PROGRESS");
+            newAttempt.setQuestionsAnswered(0);
+            newAttempt.setScore(0);
+            assessmentAttemptRepository.save(newAttempt);
+
+            resumeAttemptId = newAttempt.getId().toString();
+            // Keep currentStatus as "NEW" so the frontend knows it's a fresh start, 
+            // even though the attempt is stored as IN_PROGRESS in the database.
+            currentStatus = "NEW";
         }
 
         AssessmentRenderInfoDto info = AssessmentRenderInfoDto.builder()
@@ -554,28 +607,13 @@ public class AssessmentServiceImpl implements AssessmentService {
         JsonNode configObj = cfgData.path("config");
         int totalQuestions = configObj.path("totalQuestions").asInt(request.getAnswers().size());
 
-        // ── Cooldown guard (24h platform rule, skipped if UNLIMITED or already PASSED) ────────
+        // ── Cooldown guard removed: users can use retakes immediately ────────
         String retakePolicyText = configObj.path("retakePolicy").asText("UNLIMITED").toUpperCase();
         List<AssessmentAttempt> priorAttempts = assessmentAttemptRepository
                 .findByUserIdAndAssessmentConfigId(userId, assessmentId);
                 
         boolean alreadyPassed = priorAttempts.stream()
                 .anyMatch(a -> "PASSED".equalsIgnoreCase(a.getStatus()));
-
-        if (!"UNLIMITED".equals(retakePolicyText) && !alreadyPassed) {
-            priorAttempts.stream()
-                    .filter(a -> a.getDateCompleted() != null)
-                    .max(Comparator.comparing(AssessmentAttempt::getDateCompleted))
-                    .ifPresent(last -> {
-                        Instant cooldownEnd = last.getDateCompleted()
-                                .plus(RETAKE_COOLDOWN_HOURS, ChronoUnit.HOURS);
-                        if (Instant.now().isBefore(cooldownEnd)) {
-                            throw new RuntimeException(
-                                "Assessment retake not available yet. Retry after: " + cooldownEnd);
-                        }
-                    });
-        }
-
         // Grading using correctOptionId
         int correctCount = 0;
         List<JsonNode> questionNodes = extractAllQuestionNodes(cfgData);
@@ -647,6 +685,8 @@ public class AssessmentServiceImpl implements AssessmentService {
         attempt.setDateCompleted(Instant.now());
         attempt.setQuestionsAnswered(request.getAnswers() != null ? request.getAnswers().size() : 0);
         attempt.setTotalQuestions(totalQuestions);
+        attempt.setSavedAnswers(request.getAnswers());
+
         
         // Optional: clear savedAnswers on submit, or keep them for historical purposes. 
         // We will keep them, but update timeRemainingSeconds to 0 since it's completed.
@@ -683,8 +723,13 @@ public class AssessmentServiceImpl implements AssessmentService {
                             .map(com.icentric.Icentric.identity.entity.User::getName)
                             .orElse("Learner");
 
+                    String displayId = issued.getVerificationToken() != null
+                            ? issued.getVerificationToken().toString().toUpperCase().replace("-", "").substring(0, 16)
+                            : issued.getId().toString();
+
                     certDto = CertificateResultDto.builder()
-                            .id(issued.getId().toString())
+                            .certificateId(issued.getId().toString())
+                            .displayId(displayId)
                             .recipientName(recipientName)
                             .trackName(cfgData.path("trackName").asText("Track"))
                             .issuedDate(issued.getIssuedAt() != null
@@ -711,13 +756,90 @@ public class AssessmentServiceImpl implements AssessmentService {
                 .build();
     }
 
+    // ── Review assessment ──────────────────────────────────────────────────────
+    
+    @Override
+    @Transactional(readOnly = true)
+    public com.icentric.Icentric.learning.dto.assessment.AssessmentReviewResponse getAssessmentReview(String assessmentId, UUID userId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        AssessmentConfig config = assessmentConfigRepository.findById(assessmentId)
+                .orElseThrow(() -> new RuntimeException("Assessment not found"));
+
+        JsonNode cfgData = config.getConfigData();
+        JsonNode configObj = cfgData.path("config");
+
+        List<AssessmentAttempt> attempts = assessmentAttemptRepository.findByUserIdAndAssessmentConfigId(userId, assessmentId);
+        
+        // Find best attempt that is PASSED
+        AssessmentAttempt bestAttempt = attempts.stream()
+                .filter(a -> "PASSED".equalsIgnoreCase(a.getStatus()))
+                .max(Comparator.comparingInt(a -> a.getScore() == null ? 0 : a.getScore()))
+                .orElseThrow(() -> new RuntimeException("No passed attempt found for review"));
+
+        List<com.icentric.Icentric.learning.dto.assessment.AnswerSubmissionDto> savedAnswers = bestAttempt.getSavedAnswers();
+        Map<String, String> answerMap = new HashMap<>();
+        if (savedAnswers != null) {
+            for (com.icentric.Icentric.learning.dto.assessment.AnswerSubmissionDto ans : savedAnswers) {
+                answerMap.put(ans.getQuestionId(), ans.getSelectedOptionId());
+            }
+        }
+
+        List<com.icentric.Icentric.learning.dto.assessment.AssessmentQuestionReviewDto> reviewQuestions = new ArrayList<>();
+        List<JsonNode> questionNodes = extractAllQuestionNodes(cfgData);
+        
+        for (JsonNode qNode : questionNodes) {
+            String qId = qNode.path("questionId").asText();
+            String correctOptionId = qNode.path("correctOptionId").asText();
+            String selectedOptionId = answerMap.get(qId);
+            boolean isCorrect = correctOptionId.equals(selectedOptionId);
+
+            List<AssessmentRenderOptionDto> options = new ArrayList<>();
+            JsonNode optionsNode = qNode.path("options");
+            if (optionsNode.isArray()) {
+                for (JsonNode oNode : optionsNode) {
+                    options.add(AssessmentRenderOptionDto.builder()
+                            .optionId(oNode.path("optionId").asText())
+                            .letter(oNode.path("letter").isMissingNode() ? null : oNode.path("letter").asText())
+                            .text(oNode.path("text").asText())
+                            .build());
+                }
+            }
+
+            reviewQuestions.add(com.icentric.Icentric.learning.dto.assessment.AssessmentQuestionReviewDto.builder()
+                    .questionId(qId)
+                    .orderIndex(qNode.path("orderIndex").asInt())
+                    .type(qNode.path("type").asText())
+                    .topic(qNode.path("topic").asText())
+                    .scenarioContext(qNode.path("scenarioContext").isMissingNode() ? null : qNode.path("scenarioContext").asText())
+                    .text(qNode.path("text").asText())
+                    .selectedOptionId(selectedOptionId)
+                    .correctOptionId(correctOptionId)
+                    .isCorrect(isCorrect)
+                    .explanation(qNode.path("explanation").isMissingNode() ? null : qNode.path("explanation").asText())
+                    .options(options)
+                    .build());
+        }
+
+        return com.icentric.Icentric.learning.dto.assessment.AssessmentReviewResponse.builder()
+                .assessmentId(config.getId())
+                .title(cfgData.path("title").asText("Assessment"))
+                .trackName(cfgData.path("trackName").asText(config.getTrackId()))
+                .score(bestAttempt.getScore())
+                .passingScore(configObj.path("passingScore").asInt())
+                .status(bestAttempt.getStatus())
+                .completedAt(bestAttempt.getDateCompleted() != null ? bestAttempt.getDateCompleted().toString() : null)
+                .questions(reviewQuestions)
+                .build();
+    }
+
     // ── Admin: create config ───────────────────────────────────────────────────
 
     @Override
     @Transactional
     public void createAssessmentConfig(String trackId, JsonNode request) {
-        tenantSchemaService.applyCurrentTenantSearchPath();
-
+        // No search_path override needed — @Table(schema = "system") ensures Hibernate
+        // always targets the global system.assessment_config table regardless of caller.
         AssessmentConfig config = new AssessmentConfig();
         config.setId(request.path("assessmentId").asText());
         config.setTrackId(trackId);
@@ -733,8 +855,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     @Override
     @Transactional(readOnly = true)
     public List<AdminAssessmentConfigDto> getAllAssessmentConfigs() {
-        tenantSchemaService.applyCurrentTenantSearchPath();
-        
+        // system.assessment_config is global — no search_path override needed.
         return assessmentConfigRepository.findAll().stream().map(config -> {
             JsonNode cfgData = config.getConfigData();
             return AdminAssessmentConfigDto.builder()
@@ -771,5 +892,21 @@ public class AssessmentServiceImpl implements AssessmentService {
             }
         }
         return allQuestions;
+    }
+
+    /**
+     * Sets the PostgreSQL search_path to the given tenant's schema.
+     * Used by platform-admin endpoints where the JWT tenant is "system"
+     * but the target data lives in a tenant schema.
+     */
+    private void applyTenantSchema(String tenantSlug) {
+        if (tenantSlug == null || tenantSlug.isBlank()) {
+            throw new IllegalArgumentException("tenantSlug must be provided");
+        }
+        if (!tenantSlug.matches("[a-zA-Z0-9_-]+")) {
+            throw new IllegalArgumentException("Invalid tenant slug: " + tenantSlug);
+        }
+        String schema = "tenant_" + tenantSlug;
+        entityManager.createNativeQuery("SET search_path TO " + schema).executeUpdate();
     }
 }

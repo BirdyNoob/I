@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.service;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
@@ -190,18 +192,17 @@ public class AdminAnalyticsService {
         Tenant tenant = currentTenant();
         List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId());
 
-        // Group memberships by department
-        Map<String, List<TenantUser>> byDept =
-                memberships.stream()
-                        .collect(Collectors.groupingBy(m ->
-                                m.getDepartment() == null ? "UNKNOWN" : m.getDepartment()
-                        ));
+        // Group memberships by department (allow null)
+        Map<Department, List<TenantUser>> byDept = new HashMap<>();
+        for (TenantUser m : memberships) {
+            byDept.computeIfAbsent(m.getDepartment(), k -> new ArrayList<>()).add(m);
+        }
 
         List<DepartmentPerformanceResponse> result = new ArrayList<>();
 
         for (var entry : byDept.entrySet()) {
 
-            String department = entry.getKey();
+            Department department = entry.getKey();
             List<TenantUser> deptMembers = entry.getValue();
 
             long totalUsers = deptMembers.size();
@@ -300,12 +301,17 @@ public class AdminAnalyticsService {
                 .fetchDepartmentStats(tenant.getId(), AssignmentStatus.COMPLETED)
                 .stream()
                 .map(r -> {
-                    String department = r[0] == null ? "UNKNOWN" : (String) r[0];
+                    String departmentName = "UNKNOWN";
+                    if (r[0] instanceof Department d) {
+                        departmentName = d.getDisplayName();
+                    } else if (r[0] != null) {
+                        departmentName = r[0].toString();
+                    }
                     long total = ((Number) r[1]).longValue();
                     long completed = ((Number) r[2]).longValue();
                     double progressPercent = total == 0 ? 0 : (completed * 100.0) / total;
                     return new AdminOverviewResponse.CompletionByDepartment(
-                            department,
+                            departmentName,
                             progressPercent,
                             classifyDepartmentStatus(progressPercent)
                     );
@@ -330,7 +336,7 @@ public class AdminAnalyticsService {
                     User user = usersById.get(a.getUserId());
                     TenantUser tenantUser = membershipByUserId.get(a.getUserId());
                     String name = user == null ? "Unknown User" : (user.getName() != null && !user.getName().isBlank() ? user.getName() : user.getEmail());
-                    String department = tenantUser == null || tenantUser.getDepartment() == null ? "UNKNOWN" : tenantUser.getDepartment();
+                    String department = tenantUser == null || tenantUser.getDepartment() == null ? "UNKNOWN" : tenantUser.getDepartment().name();
                     long daysOverdue = Math.max(0, (now.getEpochSecond() - a.getDueDate().getEpochSecond()) / 86_400);
                     return new AdminOverviewResponse.OverdueUser(name, department, daysOverdue);
                 })
@@ -347,11 +353,19 @@ public class AdminAnalyticsService {
         List<AdminOverviewResponse.QuizPerformanceByDepartment> quizPerformanceByDepartment = assessmentAttemptRepository
                 .getAssessmentPerformanceByDepartment(tenant.getId())
                 .stream()
-                .map(row -> new AdminOverviewResponse.QuizPerformanceByDepartment(
-                        (String) row[0],
+                .map(row -> {
+                    String dept = "UNKNOWN";
+                    if (row[0] instanceof Department d) {
+                        dept = d.getDisplayName();
+                    } else if (row[0] != null) {
+                        dept = row[0].toString();
+                    }
+                    return new AdminOverviewResponse.QuizPerformanceByDepartment(
+                        dept,
                         row[1] == null ? 0 : (Double) row[1],   // already 0-100
                         row[2] == null ? 0 : ((Double) row[2]) * 100 // passRate 0-1 → 0-100
-                ))
+                    );
+                })
                 .sorted(Comparator.comparing(AdminOverviewResponse.QuizPerformanceByDepartment::department, String.CASE_INSENSITIVE_ORDER))
                 .toList();
 
@@ -359,11 +373,19 @@ public class AdminAnalyticsService {
                 .getAssessmentFailureRateByDepartment(tenant.getId())
                 .stream()
                 .limit(10)
-                .map(row -> new AdminOverviewResponse.HighestFailureLesson(
+                .map(row -> {
+                    String dept = "UNKNOWN";
+                    if (row[1] instanceof Department d) {
+                        dept = d.getDisplayName();
+                    } else if (row[1] != null) {
+                        dept = row[1].toString();
+                    }
+                    return new AdminOverviewResponse.HighestFailureLesson(
                         (String) row[0],   // assessmentConfigId (used as label)
-                        (String) row[1],   // department
+                        dept,              // department
                         row[2] == null ? 0 : ((Double) row[2])
-                ))
+                    );
+                })
                 .toList();
 
         AdminOverviewResponse.Kpis kpis = new AdminOverviewResponse.Kpis(
@@ -385,6 +407,47 @@ public class AdminAnalyticsService {
                 quizPerformanceByDepartment,
                 highestFailureLessons
         );
+    }
+
+    @Transactional(readOnly = true)
+    public TenantAdminDetailsResponse getTenantAdminDetails() {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        Tenant tenant = currentTenant();
+        
+        UUID adminId = currentActorUserId();
+        User admin = userRepository.findById(adminId)
+                .orElseThrow(() -> new IllegalStateException("Logged in admin not found: " + adminId));
+        
+        TenantUser membership = tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId())
+                .orElseThrow(() -> new IllegalStateException("Admin membership not found for tenant: " + tenant.getSlug()));
+
+        long activeSeats = tenantUserRepository.findByTenantId(tenant.getId()).size();
+
+        return new TenantAdminDetailsResponse(
+                tenant.getId(),
+                tenant.getCompanyName(),
+                tenant.getSlug(),
+                tenant.getPlan(),
+                tenant.getMaxSeats(),
+                activeSeats,
+                tenant.getStatus(),
+                tenant.getCreatedAt(),
+                tenant.getTrialEndsAt(),
+                admin.getName(),
+                admin.getEmail(),
+                membership.getRole(),
+                membership.getDepartment() == null ? null : membership.getDepartment().getDisplayName(),
+                admin.getLocation(),
+                admin.getLastLoginAt()
+        );
+    }
+
+    private UUID currentActorUserId() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getDetails() == null) {
+            return null;
+        }
+        return UUID.fromString(authentication.getDetails().toString());
     }
 
     private Tenant currentTenant() {
@@ -502,7 +565,7 @@ public class AdminAnalyticsService {
                                 .thenComparing(DepartmentAggregate::completed, Comparator.reverseOrder())
                                 .thenComparing(DepartmentAggregate::total, Comparator.reverseOrder())
                                 .thenComparing(
-                                        aggregate -> aggregate.department() == null ? "UNKNOWN" : aggregate.department(),
+                                        aggregate -> aggregate.department() == null ? "UNKNOWN" : aggregate.department().name(),
                                         String.CASE_INSENSITIVE_ORDER
                                 )
                 )
@@ -513,7 +576,7 @@ public class AdminAnalyticsService {
             DepartmentAggregate aggregate = sorted.get(i);
             ranked.add(new DepartmentStat(
                     i + 1,
-                    aggregate.department() == null ? "UNKNOWN" : aggregate.department(),
+                    aggregate.department() == null ? null : aggregate.department(),
                     aggregate.total(),
                     aggregate.completed(),
                     aggregate.completionRate()
@@ -524,7 +587,7 @@ public class AdminAnalyticsService {
     }
 
     private record DepartmentAggregate(
-            String department,
+            Department department,
             long total,
             long completed
     ) {

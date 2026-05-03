@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record CertificateVerificationResponse(
         UUID certificateId,
+        String displayId,
         UUID verificationToken,
         String learnerName,
         String learnerEmail,

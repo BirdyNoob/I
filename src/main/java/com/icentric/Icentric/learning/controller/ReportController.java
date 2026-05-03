@@ -1,5 +1,7 @@
 package com.icentric.Icentric.learning.controller;
 
+import com.icentric.Icentric.common.enums.Department;
+
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.ReportRow;
 import com.icentric.Icentric.learning.service.ReportService;
@@ -38,7 +40,7 @@ public class ReportController {
     })
     @GetMapping
     public ResponseEntity<?> report(
-            @Parameter(description = "Filter by department") @RequestParam(required = false) String department,
+            @Parameter(description = "Filter by department") @RequestParam(required = false) Department department,
             @Parameter(description = "Filter by assignment statuses. Repeat param for multiple statuses.") @RequestParam(required = false) List<AssignmentStatus> status,
             @Parameter(description = "Filter by track ID") @RequestParam(required = false) UUID trackId,
             @Parameter(description = "Response format: json or csv") @RequestParam(defaultValue = "json") String format

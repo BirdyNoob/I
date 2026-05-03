@@ -19,6 +19,7 @@ public interface AssessmentService {
     AssessmentRenderResponse getAssessmentForRender(String assessmentId, UUID userId);
     SaveAssessmentProgressResponse saveAssessmentProgress(String assessmentId, SaveAssessmentProgressRequest request, UUID userId);
     SubmitAssessmentResponse submitAssessment(String assessmentId, SubmitAssessmentRequest request, UUID userId);
+    com.icentric.Icentric.learning.dto.assessment.AssessmentReviewResponse getAssessmentReview(String assessmentId, UUID userId);
     
     void createAssessmentConfig(String trackId, JsonNode request);
     
