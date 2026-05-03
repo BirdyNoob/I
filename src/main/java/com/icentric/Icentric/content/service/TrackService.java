@@ -45,6 +45,9 @@ public class TrackService {
     private final AuditMetadataService auditMetadataService;
     private final TenantRepository tenantRepository;
     private final EntityManager entityManager;
+    private final com.icentric.Icentric.identity.repository.TenantUserRepository tenantUserRepository;
+    private final com.icentric.Icentric.learning.service.AssignmentService assignmentService;
+    private final com.icentric.Icentric.identity.repository.UserRepository userRepository;
 
     public TrackService(
             TrackRepository repository,
@@ -58,7 +61,10 @@ public class TrackService {
             AuditService auditService,
             AuditMetadataService auditMetadataService,
             TenantRepository tenantRepository,
-            EntityManager entityManager
+            EntityManager entityManager,
+            com.icentric.Icentric.identity.repository.TenantUserRepository tenantUserRepository,
+            com.icentric.Icentric.learning.service.AssignmentService assignmentService,
+            com.icentric.Icentric.identity.repository.UserRepository userRepository
     ) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
@@ -72,6 +78,9 @@ public class TrackService {
         this.auditMetadataService = auditMetadataService;
         this.tenantRepository = tenantRepository;
         this.entityManager = entityManager;
+        this.tenantUserRepository = tenantUserRepository;
+        this.assignmentService = assignmentService;
+        this.userRepository = userRepository;
     }
 
     // ── Admin: create track ────────────────────────────────────────────────────
@@ -228,6 +237,11 @@ public class TrackService {
         logAdminTrackAction(AuditAction.PUBLISH_TRACK, saved.getId(), "published");
 
         migrateAssignmentsToPublishedVersion(saved);
+
+        // Auto-assign track to all users in the matching department
+        if (saved.getDepartment() != null) {
+            autoAssignTrackToDepartmentUsers(saved);
+        }
 
         return saved;
     }
@@ -447,5 +461,54 @@ public class TrackService {
                 trackId.toString(),
                 auditMetadataService.describeUser(adminId) + " " + verb + " " + auditMetadataService.describeTrack(trackId)
         );
+    }
+
+    private void autoAssignTrackToDepartmentUsers(Track track) {
+        String originalTenant = TenantContext.getTenant();
+        try {
+            List<Tenant> tenants = tenantRepository.findAll();
+            for (Tenant tenant : tenants) {
+                TenantContext.setTenant(tenant.getSlug());
+                entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + tenant.getSlug()).executeUpdate();
+
+                List<com.icentric.Icentric.identity.entity.TenantUser> memberships =
+                        tenantUserRepository.findByTenantId(tenant.getId())
+                                .stream()
+                                .filter(m -> track.getDepartment().equals(m.getDepartment()))
+                                .filter(m -> "LEARNER".equals(m.getRole()))
+                                .toList();
+
+                if (memberships.isEmpty()) continue;
+
+                List<UUID> userIds = memberships.stream().map(com.icentric.Icentric.identity.entity.TenantUser::getUserId).toList();
+                List<com.icentric.Icentric.identity.entity.User> users = userRepository.findByIdIn(userIds);
+
+                for (com.icentric.Icentric.identity.entity.User user : users) {
+                    if (Boolean.TRUE.equals(user.getIsActive())) {
+                        boolean alreadyAssigned = assignmentRepository.findByUserIdAndTrackId(user.getId(), track.getId()).isPresent();
+                        if (!alreadyAssigned) {
+                            UserAssignment assignment = new UserAssignment();
+                            assignment.setId(UUID.randomUUID());
+                            assignment.setUserId(user.getId());
+                            assignment.setTrackId(track.getId());
+                            assignment.setContentVersionAtAssignment(track.getVersion());
+                            assignment.setStatus(com.icentric.Icentric.learning.constants.AssignmentStatus.ASSIGNED);
+                            assignment.setAssignedAt(Instant.now());
+                            
+                            assignmentRepository.save(assignment);
+                            assignmentService.sendTrackAssignedNotification(user, track.getTitle(), tenant.getCompanyName(), tenant.getSlug(), null);
+                        }
+                    }
+                }
+            }
+        } finally {
+            if (originalTenant != null && !originalTenant.isBlank()) {
+                TenantContext.setTenant(originalTenant);
+                entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + originalTenant).executeUpdate();
+            } else {
+                TenantContext.clear();
+                entityManager.createNativeQuery("SET LOCAL search_path TO public").executeUpdate();
+            }
+        }
     }
 }

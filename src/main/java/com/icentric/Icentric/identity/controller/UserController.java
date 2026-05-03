@@ -5,6 +5,7 @@ import com.icentric.Icentric.common.enums.Department;
 import com.icentric.Icentric.identity.dto.BulkUploadResponse;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
+import com.icentric.Icentric.identity.dto.UserDetailResponse;
 import com.icentric.Icentric.identity.dto.UserResponse;
 import com.icentric.Icentric.identity.service.UserService;
 import jakarta.validation.Valid;
@@ -58,6 +59,23 @@ public class UserController {
             @Parameter(description = "Number of items per page") @RequestParam(defaultValue = "10") @Positive @Max(100) int size
     ) {
         return service.getUsers(department, role, isActive, PageRequest.of(page, size));
+    }
+
+    @Operation(
+            summary = "Get user detail",
+            description = "Returns full profile, learning progress, assigned tracks, and certificate count for a specific user. SUPER_ADMIN accounts are excluded."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "User detail retrieved successfully"),
+            @ApiResponse(responseCode = "404", description = "User not found in this tenant"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping("/users/{id}/detail")
+    public ResponseEntity<UserDetailResponse> getUserDetail(
+            @Parameter(description = "UUID of the user") @PathVariable UUID id
+    ) {
+        return ResponseEntity.ok(service.getUserDetail(id));
     }
 
     @Operation(summary = "Create a new user", description = "Creates a new user within the current tenant.")

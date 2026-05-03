@@ -9,17 +9,23 @@ import com.icentric.Icentric.identity.dto.BulkUploadResponse;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
 import com.icentric.Icentric.identity.dto.UserResponse;
+import com.icentric.Icentric.identity.dto.UserDetailResponse;
+import com.icentric.Icentric.identity.dto.UserDetailResponse.AssignedTrackDetail;
 import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.exception.UserNotFoundException;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.content.entity.Track;
+import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
+import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
+import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -70,6 +76,10 @@ public class UserService {
     private final String publicBaseUrl;
     private final TrackRepository trackRepository;
     private final UserAssignmentRepository userAssignmentRepository;
+    private final LessonProgressRepository lessonProgressRepository;
+    private final IssuedCertificateRepository issuedCertificateRepository;
+    private final LessonRepository lessonRepository;
+    private final TenantSchemaService tenantSchemaService;
 
     public UserService(
             UserRepository userRepository,
@@ -82,7 +92,11 @@ public class UserService {
             com.icentric.Icentric.common.mail.EmailService emailService,
             @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
             TrackRepository trackRepository,
-            UserAssignmentRepository userAssignmentRepository
+            UserAssignmentRepository userAssignmentRepository,
+            LessonProgressRepository lessonProgressRepository,
+            IssuedCertificateRepository issuedCertificateRepository,
+            LessonRepository lessonRepository,
+            TenantSchemaService tenantSchemaService
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
@@ -95,6 +109,10 @@ public class UserService {
         this.publicBaseUrl = publicBaseUrl;
         this.trackRepository = trackRepository;
         this.userAssignmentRepository = userAssignmentRepository;
+        this.lessonProgressRepository = lessonProgressRepository;
+        this.issuedCertificateRepository = issuedCertificateRepository;
+        this.lessonRepository = lessonRepository;
+        this.tenantSchemaService = tenantSchemaService;
     }
 
     // ── CREATE ───────────────────────────────────────────────────────────────
@@ -192,6 +210,113 @@ public class UserService {
                 isActive,
                 pageable
         );
+    }
+
+    // ── USER DETAIL ─────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public UserDetailResponse getUserDetail(UUID userId) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        Tenant tenant = tenantAccessGuard.currentTenant();
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        TenantUser membership = tenantUserRepository
+                .findByUserIdAndTenantId(userId, tenant.getId())
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        // All assignments for this user
+        List<UserAssignment> assignments = userAssignmentRepository.findByUserId(userId);
+        List<UUID> trackIds = assignments.stream().map(UserAssignment::getTrackId).toList();
+
+        // Batch-load lesson totals per track
+        Map<UUID, Long> lessonTotals = new HashMap<>();
+        if (!trackIds.isEmpty()) {
+            for (Object[] row : lessonRepository.countLessonsInTracks(trackIds)) {
+                lessonTotals.put((UUID) row[0], ((Number) row[1]).longValue());
+            }
+        }
+
+        // Batch-load completed lessons per track for this user
+        Map<UUID, Long> completedPerTrack = new HashMap<>();
+        if (!trackIds.isEmpty()) {
+            for (Object[] row : lessonProgressRepository.countCompletedLessonsByTrack(userId, trackIds)) {
+                completedPerTrack.put((UUID) row[0], ((Number) row[1]).longValue());
+            }
+        }
+
+        // Certificates earned
+        long certCount = issuedCertificateRepository.findByUserId(userId).size();
+
+        Instant now = Instant.now();
+
+        List<AssignedTrackDetail> assignedTracks = new ArrayList<>();
+        long progressDone = 0;
+        long progressTotal = 0;
+
+        for (UserAssignment a : assignments) {
+            Track track = trackRepository.findById(a.getTrackId()).orElse(null);
+            if (track == null) continue;
+
+            long done = completedPerTrack.getOrDefault(a.getTrackId(), 0L);
+            long total = lessonTotals.getOrDefault(a.getTrackId(), 0L);
+            boolean overdue = a.getStatus() != AssignmentStatus.COMPLETED
+                    && a.getDueDate() != null
+                    && a.getDueDate().isBefore(now);
+
+            // Completed-at: derive from the last completed lesson timestamp if status is COMPLETED
+            Instant completedAt = null;
+            if (a.getStatus() == AssignmentStatus.COMPLETED) {
+                List<Instant> timestamps = lessonProgressRepository.findCompletedTimestampsByUserId(userId);
+                completedAt = timestamps.isEmpty() ? null : timestamps.get(0);
+            }
+
+            progressDone += done;
+            progressTotal += total;
+
+            assignedTracks.add(new AssignedTrackDetail(
+                    track.getId(),
+                    track.getTitle(),
+                    a.getStatus().name(),
+                    completedAt,
+                    a.getDueDate(),
+                    done,
+                    total,
+                    overdue
+            ));
+        }
+
+        String lastActive = formatLastActive(user.getLastLoginAt());
+
+        return new UserDetailResponse(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                membership.getDepartment(),
+                membership.getRole(),
+                user.getIsActive(),
+                user.getCreatedAt(),
+                lastActive,
+                user.getLocation(),
+                progressDone,
+                progressTotal,
+                certCount,
+                assignedTracks
+        );
+    }
+
+    private String formatLastActive(Instant lastLoginAt) {
+        if (lastLoginAt == null) return "Never";
+        long seconds = Instant.now().getEpochSecond() - lastLoginAt.getEpochSecond();
+        if (seconds < 60) return "Just now";
+        if (seconds < 3600) return (seconds / 60) + " minutes ago";
+        if (seconds < 86400) return (seconds / 3600) + " hours ago";
+        long days = seconds / 86400;
+        if (days == 1) return "1 day ago";
+        if (days < 30) return days + " days ago";
+        if (days < 365) return (days / 30) + " months ago";
+        return (days / 365) + " years ago";
     }
 
     // ── UPDATE ───────────────────────────────────────────────────────────────

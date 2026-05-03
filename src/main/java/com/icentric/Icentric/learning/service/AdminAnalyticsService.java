@@ -73,12 +73,23 @@ public class AdminAnalyticsService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         Tenant tenant = currentTenant();
-        long totalUsers = tenantUserRepository.findByTenantId(tenant.getId()).size();
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
+                .stream()
+                .filter(m -> "LEARNER".equals(m.getRole()))
+                .toList();
+        long totalUsers = memberships.size();
+        
+        List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
 
-        long totalAssignments = assignmentRepository.count();
+        List<UserAssignment> assignments = assignmentRepository.findAll().stream()
+                .filter(a -> learnerUserIds.contains(a.getUserId()))
+                .toList();
 
-        long completedAssignments =
-                assignmentRepository.countByStatus(AssignmentStatus.COMPLETED);
+        long totalAssignments = assignments.size();
+
+        long completedAssignments = assignments.stream()
+                .filter(a -> a.getStatus() == AssignmentStatus.COMPLETED)
+                .count();
 
         double completionRate =
                 totalAssignments == 0 ? 0 :
@@ -99,7 +110,16 @@ public class AdminAnalyticsService {
     public List<RiskUserResponse> getRiskUsers() {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        List<UserAssignment> assignments = assignmentRepository.findAll();
+        Tenant tenant = currentTenant();
+        List<UUID> learnerUserIds = tenantUserRepository.findByTenantId(tenant.getId())
+                .stream()
+                .filter(m -> "LEARNER".equals(m.getRole()))
+                .map(TenantUser::getUserId)
+                .toList();
+
+        List<UserAssignment> assignments = assignmentRepository.findAll().stream()
+                .filter(a -> learnerUserIds.contains(a.getUserId()))
+                .toList();
 
         Map<UUID, List<UserAssignment>> userAssignments =
                 assignments.stream().collect(Collectors.groupingBy(UserAssignment::getUserId));
@@ -190,7 +210,10 @@ public class AdminAnalyticsService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         Tenant tenant = currentTenant();
-        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId());
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
+                .stream()
+                .filter(m -> "LEARNER".equals(m.getRole()))
+                .toList();
 
         // Group memberships by department (allow null)
         Map<Department, List<TenantUser>> byDept = new HashMap<>();
@@ -263,14 +286,19 @@ public class AdminAnalyticsService {
         Instant sevenDaysAgo = now.minusSeconds(7L * 24 * 60 * 60);
         Instant fourteenDaysAgo = now.minusSeconds(14L * 24 * 60 * 60);
 
-        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId());
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
+                .stream()
+                .filter(m -> "LEARNER".equals(m.getRole()))
+                .toList();
         Map<UUID, TenantUser> membershipByUserId = memberships.stream()
                 .collect(Collectors.toMap(TenantUser::getUserId, m -> m, (a, b) -> a));
         List<UUID> tenantUserIds = memberships.stream().map(TenantUser::getUserId).distinct().toList();
         Map<UUID, User> usersById = userRepository.findByIdIn(tenantUserIds).stream()
                 .collect(Collectors.toMap(User::getId, user -> user, (a, b) -> a));
 
-        List<UserAssignment> assignments = assignmentRepository.findAll();
+        List<UserAssignment> assignments = assignmentRepository.findAll().stream()
+                .filter(a -> membershipByUserId.containsKey(a.getUserId()))
+                .toList();
         long totalAssignments = assignments.size();
         long completedAssignments = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count();
         long overdueAssignments = assignments.stream().filter(a -> a.getStatus() == AssignmentStatus.OVERDUE).count();
@@ -457,7 +485,16 @@ public class AdminAnalyticsService {
     }
 
     private long countRiskUsers() {
-        List<UserAssignment> assignments = assignmentRepository.findAll();
+        Tenant tenant = currentTenant();
+        List<UUID> learnerUserIds = tenantUserRepository.findByTenantId(tenant.getId())
+                .stream()
+                .filter(m -> "LEARNER".equals(m.getRole()))
+                .map(TenantUser::getUserId)
+                .toList();
+
+        List<UserAssignment> assignments = assignmentRepository.findAll().stream()
+                .filter(a -> learnerUserIds.contains(a.getUserId()))
+                .toList();
 
         Map<UUID, List<UserAssignment>> userAssignments =
                 assignments.stream().collect(Collectors.groupingBy(UserAssignment::getUserId));

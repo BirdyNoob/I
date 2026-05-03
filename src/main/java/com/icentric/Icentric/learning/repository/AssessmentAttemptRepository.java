@@ -50,14 +50,15 @@ public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAtt
      * Replaces QuizAttemptRepository.getQuizPerformanceByDepartment().
      */
     @Query("""
-        SELECT COALESCE(tu.department, 'UNKNOWN'),
+        SELECT tu.department,
                AVG(a.score),
                AVG(CASE WHEN a.status = 'PASSED' THEN 1.0 ELSE 0.0 END)
         FROM AssessmentAttempt a
         JOIN TenantUser tu ON tu.userId = a.userId
         WHERE tu.tenantId = :tenantId
+        AND tu.role = 'LEARNER'
         AND a.score IS NOT NULL
-        GROUP BY COALESCE(tu.department, 'UNKNOWN')
+        GROUP BY tu.department
         """)
     List<Object[]> getAssessmentPerformanceByDepartment(UUID tenantId);
 
@@ -67,12 +68,13 @@ public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAtt
      */
     @Query("""
         SELECT a.assessmentConfigId,
-               COALESCE(tu.department, 'UNKNOWN'),
+               tu.department,
                (SUM(CASE WHEN a.status = 'FAILED' THEN 1.0 ELSE 0.0 END) * 100.0) / COUNT(a)
         FROM AssessmentAttempt a
         JOIN TenantUser tu ON tu.userId = a.userId
         WHERE tu.tenantId = :tenantId
-        GROUP BY a.assessmentConfigId, COALESCE(tu.department, 'UNKNOWN')
+        AND tu.role = 'LEARNER'
+        GROUP BY a.assessmentConfigId, tu.department
         ORDER BY (SUM(CASE WHEN a.status = 'FAILED' THEN 1.0 ELSE 0.0 END) * 100.0) / COUNT(a) DESC
         """)
     List<Object[]> getAssessmentFailureRateByDepartment(UUID tenantId);

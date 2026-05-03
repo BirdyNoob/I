@@ -25,13 +25,14 @@ public interface UserAssignmentRepository
     Optional<UserAssignment> findByUserIdAndTrackId(UUID userId, UUID trackId);
     List<UserAssignment> findByTrackId(UUID trackId);
     List<UserAssignment> findByTrackIdIn(List<UUID> trackIds);
-    @Query("""
+@Query("""
 SELECT ua, u.name, u.email, tu.role, tu.department, t.title
 FROM UserAssignment ua
 JOIN User u ON ua.userId = u.id
 JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
 JOIN Track t ON ua.trackId = t.id
-WHERE (:department IS NULL OR tu.department = :department)
+WHERE tu.role = 'LEARNER'
+AND (:department IS NULL OR tu.department = :department)
 AND (:status IS NULL OR ua.status = :status)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
@@ -48,6 +49,7 @@ JOIN User u ON ua.userId = u.id
 JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
 JOIN Track t ON ua.trackId = t.id
 WHERE ua.status IN :statuses
+AND tu.role = 'LEARNER'
 AND (:department IS NULL OR tu.department = :department)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
@@ -64,6 +66,7 @@ JOIN User u ON ua.userId = u.id
 JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
 JOIN Track t ON ua.trackId = t.id
 WHERE ua.status IN :statuses
+AND tu.role = 'LEARNER'
 AND (:department IS NULL OR tu.department = :department)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
@@ -82,6 +85,7 @@ SUM(CASE WHEN ua.status = :completedStatus THEN 1 ELSE 0 END)
 FROM UserAssignment ua
 JOIN User u ON ua.userId = u.id
 JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
+WHERE tu.role = 'LEARNER'
 GROUP BY tu.department
 """)
     List<Object[]> fetchDepartmentStats(

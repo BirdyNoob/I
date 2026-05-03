@@ -45,6 +45,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         FROM User u
         JOIN TenantUser tu ON u.id = tu.userId
         WHERE tu.tenantId = :tenantId
+          AND tu.role != 'SUPER_ADMIN'
           AND (:department IS NULL OR tu.department = :department)
           AND (:role IS NULL OR tu.role = :role)
           AND (:isActive IS NULL OR u.isActive = :isActive)
@@ -64,6 +65,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         FROM User u
         JOIN TenantUser tu ON u.id = tu.userId
         WHERE tu.tenantId = :tenantId
+          AND tu.role != 'SUPER_ADMIN'
           AND (:department IS NULL OR tu.department = :department)
           AND (:role IS NULL OR tu.role = :role)
           AND (:isActive IS NULL OR u.isActive = :isActive)
