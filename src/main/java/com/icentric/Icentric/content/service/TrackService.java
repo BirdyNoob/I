@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -48,6 +49,7 @@ public class TrackService {
     private final com.icentric.Icentric.identity.repository.TenantUserRepository tenantUserRepository;
     private final com.icentric.Icentric.learning.service.AssignmentService assignmentService;
     private final com.icentric.Icentric.identity.repository.UserRepository userRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     public TrackService(
             TrackRepository repository,
@@ -64,7 +66,8 @@ public class TrackService {
             EntityManager entityManager,
             com.icentric.Icentric.identity.repository.TenantUserRepository tenantUserRepository,
             com.icentric.Icentric.learning.service.AssignmentService assignmentService,
-            com.icentric.Icentric.identity.repository.UserRepository userRepository
+            com.icentric.Icentric.identity.repository.UserRepository userRepository,
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper
     ) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
@@ -81,6 +84,7 @@ public class TrackService {
         this.tenantUserRepository = tenantUserRepository;
         this.assignmentService = assignmentService;
         this.userRepository = userRepository;
+        this.objectMapper = objectMapper;
     }
 
     // ── Admin: create track ────────────────────────────────────────────────────
@@ -99,6 +103,7 @@ public class TrackService {
         track.setDepartment(request.department());
         track.setTrackType(request.trackType());
         track.setEstimatedMins(request.estimatedMins());
+        track.setIsMandatory(request.isMandatory());
         track.setVersion(1);
         track.setPreviousVersionId(null);
         track.setIsPublished(false);
@@ -144,19 +149,48 @@ public class TrackService {
 
         List<ModuleResponse> moduleResponses = modules.stream()
                 .map(module -> {
-                    // Lessons ordered by sortOrder (enforces VIDEO → SCENARIO → DOS_DONTS → QUIZ sequence)
+                    // Lessons ordered by sortOrder
                     List<Lesson> lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
 
                     List<LessonResponse> lessonResponses = lessons.stream()
-                            .map(l -> new LessonResponse(
-                                    l.getId(),
-                                    l.getTitle()
-                            ))
+                            .map(l -> {
+                                List<com.icentric.Icentric.content.entity.LessonStep> steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(l.getId());
+                                List<LessonStepResponse> stepResponses = steps.stream().map(step -> {
+                                    Object parsedData = null;
+                                    try {
+                                        if (step.getContentJson() != null) {
+                                            parsedData = objectMapper.readValue(step.getContentJson(), Object.class);
+                                        }
+                                    } catch (Exception e) {
+                                        // Ignore parsing errors, return null or fallback
+                                    }
+                                    return new LessonStepResponse(
+                                            step.getId(),
+                                            step.getLessonId(),
+                                            step.getStepType() != null ? step.getStepType().name() : null,
+                                            step.getTitle(),
+                                            null, // durationFormatted not stored on step entity currently
+                                            false, // isCompleted depends on user context, not relevant for admin config
+                                            step.getSortOrder(),
+                                            parsedData
+                                    );
+                                }).toList();
+
+                                return new LessonResponse(
+                                        l.getId(),
+                                        l.getTitle(),
+                                        l.getEstimatedMins(),
+                                        l.getSortOrder(),
+                                        l.getIsPublished(),
+                                        stepResponses
+                                );
+                            })
                             .toList();
 
                     return new ModuleResponse(
                             module.getId(),
                             module.getTitle(),
+                            module.getSortOrder(),
                             lessonResponses
                     );
                 })
@@ -164,7 +198,19 @@ public class TrackService {
 
         return new TrackDetailResponse(
                 track.getId(),
+                track.getSlug(),
                 track.getTitle(),
+                track.getDescription(),
+                track.getDepartment() != null ? track.getDepartment().name() : null,
+                track.getTrackType(),
+                track.getEstimatedMins(),
+                track.getIsPublished(),
+                track.getIsMandatory(),
+                track.getStatus(),
+                track.getVersion(),
+                track.getPreviousVersionId(),
+                track.getCreatedAt(),
+                track.getPublishedAt(),
                 moduleResponses
         );
     }
@@ -182,6 +228,7 @@ public class TrackService {
 
         if (request.title() != null)       track.setTitle(request.title());
         if (request.description() != null) track.setDescription(request.description());
+        if (request.isMandatory() != null) track.setIsMandatory(request.isMandatory());
 
         Track saved = repository.save(track);
 
@@ -304,6 +351,7 @@ public class TrackService {
         cloned.setDepartment(source.getDepartment());
         cloned.setTrackType(source.getTrackType());
         cloned.setEstimatedMins(source.getEstimatedMins());
+        cloned.setIsMandatory(source.getIsMandatory());
         cloned.setVersion(version);
         cloned.setPreviousVersionId(source.getId());
         cloned.setIsPublished(false);
@@ -494,6 +542,7 @@ public class TrackService {
                             assignment.setContentVersionAtAssignment(track.getVersion());
                             assignment.setStatus(com.icentric.Icentric.learning.constants.AssignmentStatus.ASSIGNED);
                             assignment.setAssignedAt(Instant.now());
+                            assignment.setDueDate(Instant.now().plus(7, ChronoUnit.DAYS));
                             
                             assignmentRepository.save(assignment);
                             assignmentService.sendTrackAssignedNotification(user, track.getTitle(), tenant.getCompanyName(), tenant.getSlug(), null);

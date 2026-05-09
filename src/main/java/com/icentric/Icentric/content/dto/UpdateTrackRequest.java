@@ -9,5 +9,6 @@ public record UpdateTrackRequest(
         String title,
         @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "description must not start or end with whitespace")
         @Size(max = 2000)
-        String description
+        String description,
+        Boolean isMandatory
 ) {}

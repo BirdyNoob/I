@@ -2,7 +2,10 @@ package com.icentric.Icentric.learning.service;
 
 import com.icentric.Icentric.common.enums.Department;
 
+import com.icentric.Icentric.common.mail.EmailService;
+import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.repository.LessonRepository;
+import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
@@ -19,6 +22,9 @@ import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantContext;
 import com.icentric.Icentric.tenant.TenantSchemaService;
+import com.icentric.Icentric.audit.repository.AuditLogRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,9 +37,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import com.icentric.Icentric.audit.constants.AuditAction;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
+@Slf4j
 public class AdminAnalyticsService {
 
     private final UserRepository userRepository;
@@ -45,6 +55,9 @@ public class AdminAnalyticsService {
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
     private final TenantSchemaService tenantSchemaService;
+    private final EmailService emailService;
+    private final TrackRepository trackRepository;
+    private final AuditLogRepository auditLogRepository;
 
     public AdminAnalyticsService(
             UserRepository userRepository,
@@ -55,7 +68,10 @@ public class AdminAnalyticsService {
             IssuedCertificateRepository issuedCertificateRepository,
             LessonProgressRepository progressRepository,
             LessonRepository lessonRepository,
-            TenantSchemaService tenantSchemaService
+            TenantSchemaService tenantSchemaService,
+            EmailService emailService,
+            TrackRepository trackRepository,
+            AuditLogRepository auditLogRepository
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
@@ -66,6 +82,9 @@ public class AdminAnalyticsService {
         this.progressRepository = progressRepository;
         this.lessonRepository = lessonRepository;
         this.tenantSchemaService = tenantSchemaService;
+        this.emailService = emailService;
+        this.trackRepository = trackRepository;
+        this.auditLogRepository = auditLogRepository;
     }
 
     @Transactional(readOnly = true)
@@ -370,13 +389,7 @@ public class AdminAnalyticsService {
                 })
                 .toList();
 
-        List<AdminOverviewResponse.ActivityItem> activityFeed = buildActivityFeed(
-                certificatesIssuedThisMonth,
-                overdueAssignments,
-                avgAssessmentTrendPoints,
-                totalAssignments,
-                now
-        );
+        List<AdminOverviewResponse.ActivityItem> activityFeed = buildActivityFeed(tenant, now, usersById);
 
         List<AdminOverviewResponse.QuizPerformanceByDepartment> quizPerformanceByDepartment = assessmentAttemptRepository
                 .getAssessmentPerformanceByDepartment(tenant.getId())
@@ -552,47 +565,117 @@ public class AdminAnalyticsService {
         return AdminOverviewResponse.CompletionByDepartment.Status.CRITICAL;
     }
 
+    private static final List<AuditAction> MAJOR_ACTIVITY_ACTIONS = List.of(
+            AuditAction.CERTIFICATE_ISSUED,
+            AuditAction.COURSE_COMPLETED,
+            AuditAction.COURSE_FAILED,
+            AuditAction.ASSIGNMENT_OVERDUE,
+            AuditAction.ASSIGNMENT_ESCALATION_SENT,
+            AuditAction.QUIZ_LOCKED_MAX_ATTEMPTS
+    );
+
     private List<AdminOverviewResponse.ActivityItem> buildActivityFeed(
-            long certificatesIssuedThisMonth,
-            long overdueAssignments,
-            double avgAssessmentTrendPoints,
-            long totalAssignments,
-            Instant now
+            Tenant tenant,
+            Instant now,
+            Map<UUID, User> usersById
     ) {
-        List<AdminOverviewResponse.ActivityItem> feed = new ArrayList<>();
-        feed.add(new AdminOverviewResponse.ActivityItem(
-                AdminOverviewResponse.ActivityItem.Type.INFO,
-                "Total assignments in scope: " + totalAssignments,
-                "just now"
-        ));
-        if (certificatesIssuedThisMonth > 0) {
-            feed.add(new AdminOverviewResponse.ActivityItem(
-                    AdminOverviewResponse.ActivityItem.Type.SUCCESS,
-                    certificatesIssuedThisMonth + " certificates issued this month",
-                    "this month"
-            ));
-        }
-        if (overdueAssignments > 0) {
-            feed.add(new AdminOverviewResponse.ActivityItem(
-                    AdminOverviewResponse.ActivityItem.Type.WARNING,
-                    overdueAssignments + " learners are currently overdue",
-                    "current"
-            ));
-        }
-        if (avgAssessmentTrendPoints < 0) {
-            feed.add(new AdminOverviewResponse.ActivityItem(
-                    AdminOverviewResponse.ActivityItem.Type.ERROR,
-                    "Average assessment trend dropped by " + Math.abs(Math.round(avgAssessmentTrendPoints * 10.0) / 10.0) + " points",
-                    "last 7 days"
-            ));
-        } else {
-            feed.add(new AdminOverviewResponse.ActivityItem(
-                    AdminOverviewResponse.ActivityItem.Type.INFO,
-                    "Average assessment trend improved by " + Math.round(avgAssessmentTrendPoints * 10.0) / 10.0 + " points",
-                    "last 7 days"
-            ));
-        }
-        return feed;
+        return auditLogRepository.findByTenantSlugAndActionIn(
+                tenant.getSlug(), 
+                MAJOR_ACTIVITY_ACTIONS,
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"))
+            ).stream()
+            .map(log -> {
+                String userName = "System";
+                if (log.getUserId() != null) {
+                    User u = usersById.get(log.getUserId());
+                    if (u == null) {
+                        u = userRepository.findById(log.getUserId()).orElse(null);
+                    }
+                    if (u != null) {
+                        userName = u.getName() != null && !u.getName().isBlank() ? u.getName() : "A learner";
+                    } else {
+                        userName = "A learner";
+                    }
+                }
+
+                String actionText = userName + " performed an action";
+                AdminOverviewResponse.ActivityItem.Type type = AdminOverviewResponse.ActivityItem.Type.INFO;
+
+                switch (log.getAction()) {
+                    case CERTIFICATE_ISSUED -> {
+                        actionText = userName + " earned a new certificate";
+                        type = AdminOverviewResponse.ActivityItem.Type.SUCCESS;
+                    }
+                    case QUIZ_PASSED -> {
+                        actionText = userName + " passed an assessment";
+                        type = AdminOverviewResponse.ActivityItem.Type.SUCCESS;
+                    }
+                    case COURSE_COMPLETED -> {
+                        actionText = userName + " completed a track";
+                        type = AdminOverviewResponse.ActivityItem.Type.SUCCESS;
+                    }
+                    case QUIZ_ATTEMPT -> {
+                        actionText = userName + " attempted an assessment";
+                        type = AdminOverviewResponse.ActivityItem.Type.INFO;
+                    }
+                    case LESSON_COMPLETED -> {
+                        actionText = userName + " completed a lesson";
+                        type = AdminOverviewResponse.ActivityItem.Type.INFO;
+                    }
+                    case ASSIGNMENT_OVERDUE -> {
+                        actionText = userName + " has an overdue assignment";
+                        type = AdminOverviewResponse.ActivityItem.Type.WARNING;
+                    }
+                    case QUIZ_FAILED_RETRY_AVAILABLE -> {
+                        actionText = userName + " failed an assessment but can retry";
+                        type = AdminOverviewResponse.ActivityItem.Type.WARNING;
+                    }
+                    case ASSIGNMENT_ESCALATION_SENT -> {
+                        actionText = "Escalation email sent for " + userName;
+                        type = AdminOverviewResponse.ActivityItem.Type.WARNING;
+                    }
+                    case QUIZ_LOCKED_MAX_ATTEMPTS -> {
+                        actionText = userName + " was locked out of an assessment (max attempts)";
+                        type = AdminOverviewResponse.ActivityItem.Type.ERROR;
+                    }
+                    case COURSE_FAILED -> {
+                        actionText = userName + " failed a track";
+                        type = AdminOverviewResponse.ActivityItem.Type.ERROR;
+                    }
+                    case CREATE_USER -> {
+                        actionText = "New user account created";
+                        type = AdminOverviewResponse.ActivityItem.Type.INFO;
+                    }
+                    case ASSIGN_TRACK -> {
+                        actionText = "Track assigned to " + userName;
+                        type = AdminOverviewResponse.ActivityItem.Type.INFO;
+                    }
+                    default -> actionText = userName + " triggered " + log.getAction().name().replace("_", " ").toLowerCase();
+                }
+
+                // If we have details (JSON/String), we could potentially extract the track title, but for now we keep it generic and safe
+                // You could parse `log.getDetails()` if it contains {"trackTitle": "..."} to say "completed track 'Security'"
+
+                return new AdminOverviewResponse.ActivityItem(
+                        type,
+                        actionText,
+                        formatTimeAgo(log.getCreatedAt(), now)
+                );
+            })
+            .toList();
+    }
+
+    private String formatTimeAgo(Instant eventTime, Instant now) {
+        if (eventTime == null) return "just now";
+        long seconds = now.getEpochSecond() - eventTime.getEpochSecond();
+        if (seconds < 60) return "just now";
+        long minutes = seconds / 60;
+        if (minutes < 60) return minutes + "m ago";
+        long hours = minutes / 60;
+        if (hours < 24) return hours + "h ago";
+        long days = hours / 24;
+        if (days == 1) return "yesterday";
+        return days + "d ago";
     }
 
     private List<DepartmentStat> rankDepartmentStats(List<DepartmentAggregate> aggregates) {
@@ -631,5 +714,111 @@ public class AdminAnalyticsService {
         double completionRate() {
             return total == 0 ? 0 : (completed * 100.0) / total;
         }
+    }
+
+    // ── OVERDUE NOTIFICATION ─────────────────────────────────────────────────
+
+    public record OverdueNotificationResult(
+            int totalOverdue,
+            int emailsSent,
+            int emailsFailed
+    ) {}
+
+    @Transactional
+    public OverdueNotificationResult notifyOverdueUsers(List<UUID> targetUserIds) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        Tenant tenant = currentTenant();
+        Instant now = Instant.now();
+
+        // Only LEARNER roles
+        List<UUID> learnerUserIds = tenantUserRepository.findByTenantId(tenant.getId())
+                .stream()
+                .filter(m -> "LEARNER".equals(m.getRole()))
+                .map(TenantUser::getUserId)
+                .toList();
+
+        // Filter down to requested users if caller supplied a list
+        List<UUID> scopedUserIds = (targetUserIds == null || targetUserIds.isEmpty())
+                ? learnerUserIds
+                : learnerUserIds.stream().filter(targetUserIds::contains).toList();
+
+        // Find overdue assignments (past due date, not completed) for scoped users
+        List<UserAssignment> overdueAssignments = assignmentRepository.findAll().stream()
+                .filter(a -> scopedUserIds.contains(a.getUserId()))
+                .filter(a -> a.getStatus() != AssignmentStatus.COMPLETED)
+                .filter(a -> a.getDueDate() != null && a.getDueDate().isBefore(now))
+                .toList();
+
+        // Deduplicate: one email per user (summarise all their overdue tracks)
+        Map<UUID, List<UserAssignment>> byUser = overdueAssignments.stream()
+                .collect(Collectors.groupingBy(UserAssignment::getUserId));
+
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+
+        for (Map.Entry<UUID, List<UserAssignment>> entry : byUser.entrySet()) {
+            UUID userId = entry.getKey();
+            List<UserAssignment> userOverdue = entry.getValue();
+
+            User user = userRepository.findById(userId).orElse(null);
+            if (user == null || user.getEmail() == null) { 
+                futures.add(CompletableFuture.completedFuture(false));
+                continue; 
+            }
+
+            String displayName = (user.getName() != null && !user.getName().isBlank())
+                    ? user.getName() : user.getEmail();
+
+            // Build a bullet list of overdue tracks
+            StringBuilder trackList = new StringBuilder();
+            for (UserAssignment a : userOverdue) {
+                Track track = trackRepository.findById(a.getTrackId()).orElse(null);
+                String title = track != null ? track.getTitle() : a.getTrackId().toString();
+                long daysOverdue = Math.max(1, (now.getEpochSecond() - a.getDueDate().getEpochSecond()) / 86_400);
+                trackList.append("• <strong>").append(title).append("</strong> — overdue by ").append(daysOverdue).append(" day(s)<br>");
+            }
+
+            String message = "You have overdue learning assignment(s) that require your immediate attention:<br><br>"
+                    + trackList
+                    + "<br>Please log in and complete your pending training as soon as possible.";
+
+            Map<String, Object> vars = new java.util.HashMap<>();
+            vars.put("tenantName", tenant.getCompanyName());
+            vars.put("notificationPill", "🔴\u00a0OVERDUE TRAINING");
+            vars.put("displayName", displayName);
+            vars.put("title", "Action Required: Overdue Training");
+            vars.put("message", message);
+            vars.put("actionUrl", "#");
+            vars.put("actionText", "View My Training →");
+
+            CompletableFuture<Boolean> future = emailService.sendTemplateEmail(
+                    user.getEmail(),
+                    "Action Required: You Have Overdue Training",
+                    "AISafe_Email_Notification",
+                    vars
+            ).handle((res, ex) -> {
+                if (ex != null) {
+                    log.error("Failed to send overdue notification to {}", user.getEmail(), ex);
+                    return false;
+                }
+                return true;
+            });
+            futures.add(future);
+        }
+
+        // Wait for all emails to be processed concurrently
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        int sent = 0;
+        int failed = 0;
+        for (CompletableFuture<Boolean> f : futures) {
+            if (Boolean.TRUE.equals(f.getNow(false))) {
+                sent++;
+            } else {
+                failed++;
+            }
+        }
+
+        return new OverdueNotificationResult(byUser.size(), sent, failed);
     }
 }

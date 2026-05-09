@@ -11,6 +11,7 @@ import com.icentric.Icentric.learning.repository.CertificateRepository;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
+import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
@@ -89,16 +90,24 @@ public class LearnerDashboardService {
         Map<UUID, Long> totalLessonsByTrack = new HashMap<>();
         Map<UUID, Long> completedLessonsByTrack = new HashMap<>();
 
-        trackRepository.findAllById(trackIds)
-                .forEach(track -> trackTitles.put(track.getId(), track.getTitle()));
+        List<Track> validTracks = trackRepository.findAllById(trackIds)
+                .stream()
+                .filter(t -> Boolean.TRUE.equals(t.getIsPublished()))
+                .toList();
+        
+        Set<UUID> validTrackIds = validTracks.stream().map(com.icentric.Icentric.content.entity.Track::getId).collect(java.util.stream.Collectors.toSet());
 
-        lessonRepository.countLessonsInTracks(trackIds)
+        validTracks.forEach(track -> trackTitles.put(track.getId(), track.getTitle()));
+
+        lessonRepository.countLessonsInTracks(new java.util.ArrayList<>(validTrackIds))
                 .forEach(row -> totalLessonsByTrack.put((UUID) row[0], (Long) row[1]));
 
-        progressRepository.countCompletedLessonsByTrack(userId, trackIds)
+        progressRepository.countCompletedLessonsByTrack(userId, new java.util.ArrayList<>(validTrackIds))
                 .forEach(row -> completedLessonsByTrack.put((UUID) row[0], (Long) row[1]));
 
-        return assignments.stream().map(a -> {
+        return assignments.stream()
+                .filter(a -> validTrackIds.contains(a.getTrackId()))
+                .map(a -> {
             long completedLessons = completedLessonsByTrack.getOrDefault(a.getTrackId(), 0L);
             long totalLessons = totalLessonsByTrack.getOrDefault(a.getTrackId(), 0L);
             double completionPercent = totalLessons == 0 ? 0 : (completedLessons * 100.0) / totalLessons;
@@ -124,9 +133,11 @@ public class LearnerDashboardService {
 
         for (var assignment : assignments) {
 
-            var track = trackRepository
-                    .findById(assignment.getTrackId())
-                    .orElseThrow();
+            var trackOpt = trackRepository.findById(assignment.getTrackId());
+            if (trackOpt.isEmpty() || !Boolean.TRUE.equals(trackOpt.get().getIsPublished())) {
+                continue;
+            }
+            var track = trackOpt.get();
 
             var modules = moduleRepository
                     .findByTrackIdOrderBySortOrder(track.getId());
@@ -174,7 +185,11 @@ public class LearnerDashboardService {
         DateTimeFormatter shortDateFormatter = DateTimeFormatter.ofPattern("MMM d").withZone(ZoneOffset.UTC);
 
         for (UserAssignment assignment : assignments) {
-            var track   = trackRepository.findById(assignment.getTrackId()).orElseThrow();
+            var trackOpt = trackRepository.findById(assignment.getTrackId());
+            if (trackOpt.isEmpty() || !Boolean.TRUE.equals(trackOpt.get().getIsPublished())) {
+                continue;
+            }
+            var track = trackOpt.get();
             var modules = moduleRepository.findByTrackIdOrderBySortOrder(track.getId());
 
             int completedModulesCount = 0;
@@ -414,25 +429,20 @@ public class LearnerDashboardService {
         Map<UUID, Long> completedLessonsByTrack = new HashMap<>();
 
         if (!trackIds.isEmpty()) {
-            trackRepository.findAllById(trackIds)
+            trackRepository.findAllById(trackIds).stream()
+                    .filter(t -> Boolean.TRUE.equals(t.getIsPublished()))
                     .forEach(track -> trackTitles.put(track.getId(), track.getTitle()));
-
-            lessonRepository.countLessonsInTracks(trackIds)
-                    .forEach(row -> totalLessonsByTrack.put((UUID) row[0], (Long) row[1]));
-
-            progressRepository.countCompletedLessonsByTrack(userId, trackIds)
-                    .forEach(row -> completedLessonsByTrack.put((UUID) row[0], (Long) row[1]));
         }
 
         for (UserAssignment a : assignments) {
+            if (!trackTitles.containsKey(a.getTrackId())) {
+                continue;
+            }
+            
             AssignmentStatus status = resolveAssignmentStatus(a);
 
-            long completed = completedLessonsByTrack.getOrDefault(a.getTrackId(), 0L);
-
-            long total = totalLessonsByTrack.getOrDefault(a.getTrackId(), 0L);
-
-            int progress = total == 0 ? 0 :
-                    (int) ((completed * 100) / total);
+            // Calculate step-aware progress for this track
+            int progress = calculateTrackProgressPercent(userId, a.getTrackId());
 
             Long daysLeft = calculateDaysLeft(a);
 
@@ -675,5 +685,47 @@ public class LearnerDashboardService {
             case "VIDEO"    -> "Video";
             default         -> stepTypeName.charAt(0) + stepTypeName.substring(1).toLowerCase().replace('_', ' ');
         };
+    }
+
+    /**
+     * Calculate progress percentage for a track, accounting for step-level progress.
+     * For lessons with steps, counts completed steps toward progress.
+     * For lessons without steps, counts completed lessons.
+     * This provides granular progress tracking (e.g., 40% if 2 of 5 steps done).
+     */
+    private int calculateTrackProgressPercent(UUID userId, UUID trackId) {
+        var modules = moduleRepository.findByTrackIdOrderBySortOrder(trackId);
+        long totalDisplayItems = 0;
+        long completedDisplayItems = 0;
+
+        for (var module : modules) {
+            var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+            for (var lesson : lessons) {
+                var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+
+                if (!steps.isEmpty()) {
+                    // Lesson has steps: count step-level progress
+                    totalDisplayItems += steps.size();
+                    var progressOpt = progressRepository.findByUserIdAndLessonId(userId, lesson.getId());
+                    if (progressOpt.isPresent() && progressOpt.get().getCompletedStepIds() != null) {
+                        completedDisplayItems += progressOpt.get().getCompletedStepIds().size();
+                    }
+                    // If lesson status is COMPLETED, all steps are done
+                    if (progressOpt.isPresent() && "COMPLETED".equals(progressOpt.get().getStatus())) {
+                        completedDisplayItems = Math.max(completedDisplayItems, (long) steps.size());
+                    }
+                } else {
+                    // Lesson has no steps: count at lesson level
+                    totalDisplayItems++;
+                    boolean lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(
+                            userId, lesson.getId(), "COMPLETED");
+                    if (lessonDone) {
+                        completedDisplayItems++;
+                    }
+                }
+            }
+        }
+
+        return totalDisplayItems == 0 ? 0 : (int) ((completedDisplayItems * 100) / totalDisplayItems);
     }
 }

@@ -18,6 +18,7 @@ public class AssessmentQuestionReviewDto {
     private String type;
     private String topic;
     private String scenarioContext;
+    private AssessmentImageDto image; // only for type=IMAGE_BASED
     private String selectedOptionId;
     private String correctOptionId;
     private boolean isCorrect;

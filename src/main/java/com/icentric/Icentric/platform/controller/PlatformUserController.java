@@ -1,6 +1,7 @@
 package com.icentric.Icentric.platform.controller;
 
 import com.icentric.Icentric.platform.dto.TenantResponse;
+import com.icentric.Icentric.platform.dto.PlatformTenantDetailResponse;
 import com.icentric.Icentric.platform.service.PlatformUserService;
 import com.icentric.Icentric.platform.tenant.service.TenantService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -51,7 +53,24 @@ public class PlatformUserController {
             @ApiResponse(responseCode = "403", description = "Forbidden - platform admin role required")
     })
     @GetMapping
-    public List<TenantResponse> getTenants() {
-        return tenantService.getAllTenants();
+    public TenantResponse getTenants(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int itemsPerPage
+    ) {
+        return tenantService.getAllTenants(page, itemsPerPage);
+    }
+
+    @Operation(summary = "Get tenant detail", description = "Retrieves platform admin metrics and analytics for a tenant by slug.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved tenant detail"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - platform admin role required"),
+            @ApiResponse(responseCode = "404", description = "Tenant not found")
+    })
+    @GetMapping("/{slug}")
+    public PlatformTenantDetailResponse getTenantDetail(
+            @Parameter(description = "Tenant slug") @PathVariable String slug
+    ) {
+        return tenantService.getTenantDetail(slug);
     }
 }

@@ -21,6 +21,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, UUID> {
 
     /** All members of a specific tenant. */
     List<TenantUser> findByTenantId(UUID tenantId);
+    long countByTenantId(UUID tenantId);
 
     List<TenantUser> findByTenantIdAndUserIdIn(UUID tenantId, Collection<UUID> userIds);
 

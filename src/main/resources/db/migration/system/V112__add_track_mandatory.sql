@@ -1,0 +1,2 @@
+ALTER TABLE system.tracks
+ADD COLUMN IF NOT EXISTS is_mandatory BOOLEAN DEFAULT false;

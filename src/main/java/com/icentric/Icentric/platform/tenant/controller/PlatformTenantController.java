@@ -47,6 +47,8 @@ public class PlatformTenantController {
         return tenantService.createTenant(
                 request.slug(),
                 request.companyName(),
+                request.plan(),
+                request.maxSeats(),
                 request.adminEmail(),
                 request.adminPassword());
     }
@@ -70,7 +72,6 @@ public class PlatformTenantController {
                 adminEmail, // pass email; service resolves UUID internally
                 request.targetUserId(),
                 slug,
-                "ROLE_ADMIN",
                 request.reason());
     }
 }

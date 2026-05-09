@@ -6,5 +6,6 @@ import java.util.UUID;
 public record ModuleResponse(
         UUID id,
         String title,
+        Integer sortOrder,
         List<LessonResponse> lessons
 ) {}

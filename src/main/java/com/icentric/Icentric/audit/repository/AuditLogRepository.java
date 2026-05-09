@@ -6,8 +6,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,4 +24,32 @@ public interface AuditLogRepository
     List<AuditLog> findByUserId(UUID userId);
 
     List<AuditLog> findByAction(AuditAction action);
+
+    Page<AuditLog> findByTenantSlugAndActionIn(String tenantSlug, List<AuditAction> actions, Pageable pageable);
+
+    List<AuditLog> findByTenantSlugAndActionAndCreatedAtBetween(
+            String tenantSlug,
+            AuditAction action,
+            Instant from,
+            Instant to
+    );
+
+    @Query("""
+            SELECT COUNT(DISTINCT a.tenantSlug)
+            FROM AuditLog a
+            WHERE a.createdAt >= :since
+              AND a.tenantSlug IS NOT NULL
+              AND a.tenantSlug <> ''
+            """)
+    long countActiveTenantsSince(Instant since);
+
+    @Query("""
+            SELECT COUNT(DISTINCT a.tenantSlug)
+            FROM AuditLog a
+            WHERE a.createdAt >= :from
+              AND a.createdAt < :to
+              AND a.tenantSlug IS NOT NULL
+              AND a.tenantSlug <> ''
+            """)
+    long countActiveTenantsBetween(Instant from, Instant to);
 }

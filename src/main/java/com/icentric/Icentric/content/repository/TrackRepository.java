@@ -15,6 +15,14 @@ public interface TrackRepository
 
     Optional<Track> findBySlug(String slug);
     List<Track> findByStatus(String status);
+    long countByIsPublishedTrue();
+    @Query("""
+        SELECT COUNT(t) FROM Track t
+        WHERE t.isPublished = false
+           OR t.isPublished IS NULL
+           OR LOWER(t.status) = 'draft'
+    """)
+    long countDraftTracks();
     List<Track> findBySlugOrderByVersionDesc(String slug);
     Optional<Track> findTopBySlugOrderByVersionDesc(String slug);
 

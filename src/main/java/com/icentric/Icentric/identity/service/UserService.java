@@ -44,6 +44,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -731,7 +732,7 @@ public class UserService {
                 assignment.setUserId(user.getId());
                 assignment.setTrackId(track.getId());
                 assignment.setAssignedAt(Instant.now());
-                assignment.setDueDate(null);
+                assignment.setDueDate(Instant.now().plus(7, ChronoUnit.DAYS));
                 assignment.setStatus(AssignmentStatus.ASSIGNED);
                 assignment.setContentVersionAtAssignment(track.getVersion());
                 assignment.setRequiresRetraining(false);

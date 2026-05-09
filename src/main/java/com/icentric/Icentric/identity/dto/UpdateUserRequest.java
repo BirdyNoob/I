@@ -12,8 +12,7 @@ public record UpdateUserRequest(
         String name,
         @Pattern(regexp = "LEARNER|ADMIN|SUPER_ADMIN", message = "role must be LEARNER, ADMIN, or SUPER_ADMIN")
         String role,
-        @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "department must not start or end with whitespace")
-        Department department,
+        Department department,   // validated by @JsonCreator in Department enum — @Pattern not applicable to enums
         @Pattern(regexp = "^\\S(?:.*\\S)?$", message = "location must not start or end with whitespace")
         @Size(max = 100)
         String location,

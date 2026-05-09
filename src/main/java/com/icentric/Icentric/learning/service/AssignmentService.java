@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Service
@@ -108,7 +109,7 @@ public class AssignmentService {
         assignment.setUserId(request.userId());
         assignment.setTrackId(request.trackId());
         assignment.setAssignedAt(Instant.now());
-        assignment.setDueDate(request.dueDate());
+        assignment.setDueDate(request.dueDate() != null ? request.dueDate() : Instant.now().plus(7, ChronoUnit.DAYS));
         assignment.setStatus(AssignmentStatus.ASSIGNED);
         assignment.setContentVersionAtAssignment(track.getVersion());
 
@@ -200,7 +201,7 @@ public class AssignmentService {
                 assignment.setUserId(user.getId());
                 assignment.setTrackId(request.trackId());
                 assignment.setAssignedAt(Instant.now());
-                assignment.setDueDate(request.dueDate());
+                assignment.setDueDate(request.dueDate() != null ? request.dueDate() : Instant.now().plus(7, ChronoUnit.DAYS));
                 assignment.setStatus(AssignmentStatus.ASSIGNED);
                 assignment.setContentVersionAtAssignment(track.getVersion());
                 assignment.setRequiresRetraining(false);

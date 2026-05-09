@@ -2,6 +2,8 @@ package com.icentric.Icentric.platform.tenant.service;
 
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
+import com.icentric.Icentric.common.mail.EmailService;
+import com.icentric.Icentric.audit.service.AuditService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,10 @@ class TenantServiceTest {
     TenantProvisioningService provisioningService;
     @Mock
     TenantUserBootstrapService bootstrapService;
+    @Mock
+    EmailService emailService;
+    @Mock
+    AuditService auditService;
 
     @InjectMocks
     TenantService tenantService;
@@ -34,10 +40,19 @@ class TenantServiceTest {
         when(tenantRepository.findBySlug("acme")).thenReturn(Optional.empty());
         when(tenantRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Tenant result = tenantService.createTenant("acme", "Acme Corp", "owner@acme.com", "SecurePass1!");
+        Tenant result = tenantService.createTenant(
+                "acme",
+                "Acme Corp",
+                "Pro",
+                150,
+                "owner@acme.com",
+                "SecurePass1!"
+        );
 
         assertThat(result.getSlug()).isEqualTo("acme");
         assertThat(result.getCompanyName()).isEqualTo("Acme Corp");
+        assertThat(result.getPlan()).isEqualTo("Pro");
+        assertThat(result.getMaxSeats()).isEqualTo(150);
         assertThat(result.getStatus()).isEqualTo("active");
 
         verify(provisioningService).provisionTenantSchema("acme");
@@ -50,7 +65,14 @@ class TenantServiceTest {
         Tenant existing = new Tenant("acme", "Existing Corp");
         when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> tenantService.createTenant("acme", "New Corp", "owner@new.com", "SomePass1!"))
+        assertThatThrownBy(() -> tenantService.createTenant(
+                "acme",
+                "New Corp",
+                "Starter",
+                25,
+                "owner@new.com",
+                "SomePass1!"
+        ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("acme");
 

@@ -17,5 +17,6 @@ public class AssessmentRenderQuestionDto {
     private Integer difficulty; // nullable allowed
     private String scenarioContext; // only for type=scenario
     private String text;
+    private AssessmentImageDto image; // only for type=IMAGE_BASED
     private List<AssessmentRenderOptionDto> options;
 }

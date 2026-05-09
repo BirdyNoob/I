@@ -26,6 +26,8 @@ public record CreateTrackRequest(
         String trackType,
         @NotNull
         @Positive
-        Integer estimatedMins
+        Integer estimatedMins,
+        @NotNull
+        Boolean isMandatory
 
 ) {}

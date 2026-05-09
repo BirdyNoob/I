@@ -211,7 +211,10 @@ Create a new tenant. Automatically:
 {
   "slug": "acme",
   "companyName": "Acme Corp",
-  "adminEmail": "owner@acme.com"
+  "plan": "Pro",
+  "maxSeats": 150,
+  "adminEmail": "owner@acme.com",
+  "adminPassword": "SecurePass1!"
 }
 ```
 

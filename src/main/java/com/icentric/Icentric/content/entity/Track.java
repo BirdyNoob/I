@@ -35,6 +35,8 @@ public class Track {
 
     private Boolean isPublished;
 
+    private Boolean isMandatory;
+
     private Instant createdAt;
     private Instant publishedAt;
     private String status;

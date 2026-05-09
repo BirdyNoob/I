@@ -8,7 +8,6 @@ import com.icentric.Icentric.content.repository.LessonStepRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
-import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.assessment.*;
 import com.icentric.Icentric.learning.entity.AssessmentAssignment;
 import com.icentric.Icentric.learning.entity.AssessmentAttempt;
@@ -29,9 +28,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 import jakarta.persistence.EntityManager;
+import org.springframework.security.access.AccessDeniedException;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class AssessmentServiceImpl implements AssessmentService {
 
     private final AssessmentConfigRepository assessmentConfigRepository;
@@ -91,14 +92,8 @@ public class AssessmentServiceImpl implements AssessmentService {
 
             // ── Determine which user this config is visible to ─────────────────
             boolean isExplicit = explicitConfigIds.contains(configId);
-            UUID trackId = null;
-            if (config.getTrackId() != null && !config.getTrackId().isBlank()
-                    && !"null".equals(config.getTrackId())) {
-                try { trackId = UUID.fromString(config.getTrackId()); } catch (Exception ignored) {}
-            }
-
+            UUID trackId = parseTrackId(config.getTrackId());
             boolean hasTrackAssignment  = trackId != null && trackAssignmentMap.containsKey(trackId);
-            UserAssignment trackAssign  = hasTrackAssignment ? trackAssignmentMap.get(trackId) : null;
 
             if (!isExplicit && !hasTrackAssignment) continue; // not relevant to this user
 
@@ -109,27 +104,15 @@ public class AssessmentServiceImpl implements AssessmentService {
 
 
 
-            // ── Eligibility (module completion) ────────────────────────────────
-            int totalModules     = 0;
-            int completedModules = 0;
-            if (trackId != null) {
-                List<com.icentric.Icentric.content.entity.CourseModule> modules =
-                        moduleRepository.findByTrackIdOrderBySortOrder(trackId);
-                totalModules = modules.size();
-                for (var mod : modules) {
-                    long totalLessons     = lessonRepository.findByModuleIdOrderBySortOrder(mod.getId()).size();
-                    long completedLessons = totalLessons == 0 ? 0 :
-                            lessonProgressRepository.countCompletedLessons(userId, trackId);
-                    if (totalLessons > 0 && completedLessons >= totalLessons) completedModules++;
-                }
-            }
-            boolean allModulesComplete = totalModules > 0 && completedModules >= totalModules;
+            // ── Eligibility (lesson completion) ───────────────────────────────
+            ProgressStats progressStats = trackId != null
+                    ? getTrackProgressStats(userId, trackId)
+                    : ProgressStats.empty();
+            boolean allModulesComplete = progressStats.allLessonsComplete();
 
-            // ── Base status ────────────────────────────────────────────────────
-            // available: explicitly assigned OR track is COMPLETED
-            // locked:    on track but not yet completed
-            boolean trackCompleted = trackAssign != null && trackAssign.getStatus() == AssignmentStatus.COMPLETED;
-            String baseStatus = (isExplicit || trackCompleted) ? "AVAILABLE" : "LOCKED";
+            // Security Baseline: Check track completion
+            boolean prerequisitesMet = allModulesComplete;
+            String baseStatus = prerequisitesMet ? "AVAILABLE" : "LOCKED";
 
             // ── Attempt history ────────────────────────────────────────────────
             List<AssessmentAttempt> attempts = attemptsByConfig.getOrDefault(configId, Collections.emptyList());
@@ -179,7 +162,8 @@ public class AssessmentServiceImpl implements AssessmentService {
             }
 
             // Override with IN_PROGRESS if we are not already PASSED or FAILED (no retakes)
-            if (hasInProgress && !"PASSED".equals(currentStatus) && !"FAILED".equals(currentStatus)) {
+            // Only allow IN_PROGRESS status if prerequisites are met
+            if (hasInProgress && prerequisitesMet && !"PASSED".equals(currentStatus) && !"FAILED".equals(currentStatus)) {
                 currentStatus = "IN_PROGRESS";
             }
 
@@ -204,6 +188,9 @@ public class AssessmentServiceImpl implements AssessmentService {
                 }
             } catch (NumberFormatException e) {
                 retakeAllowed = true; // UNLIMITED
+            }
+            if (!allModulesComplete) {
+                retakeAllowed = false;
             }
             int passingScore = configObj.path("passingScore").asInt(80);
             int totalQuestions = configObj.path("totalQuestions").asInt(15);
@@ -301,7 +288,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             if (!"PASSED".equals(currentStatus)) {
                 eligibility = AssessmentEligibilityDto.builder()
                         .allModulesComplete(allModulesComplete)
-                        .completedModuleCount(completedModules)
+                        .completedModuleCount(progressStats.completedModules())
                         .build();
             }
 
@@ -379,6 +366,8 @@ public class AssessmentServiceImpl implements AssessmentService {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Assessment config not found for track: " + trackId));
 
+        assertAssessmentUnlocked(config, userId);
+
         JsonNode configData = config.getConfigData();
 
         AssessmentMetadataDto metadata = AssessmentMetadataDto.builder()
@@ -414,6 +403,8 @@ public class AssessmentServiceImpl implements AssessmentService {
 
         AssessmentConfig config = assessmentConfigRepository.findById(assessmentId)
                 .orElseThrow(() -> new RuntimeException("Assessment not found"));
+
+        assertAssessmentUnlocked(config, userId);
 
         JsonNode configData = config.getConfigData();
         JsonNode configObj = configData.path("config");
@@ -521,6 +512,18 @@ public class AssessmentServiceImpl implements AssessmentService {
                             .build());
                 }
             }
+            AssessmentImageDto imageDto = null;
+            JsonNode imageNode = qNode.path("image");
+            if (!imageNode.isMissingNode() && !imageNode.isNull()) {
+                imageDto = AssessmentImageDto.builder()
+                        .imageId(imageNode.path("imageId").asText())
+                        .fileName(imageNode.path("fileName").asText())
+                        .mimeType(imageNode.path("mimeType").asText())
+                        .altText(imageNode.path("altText").asText())
+                        .data(imageNode.path("data").asText())
+                        .build();
+            }
+
             questions.add(AssessmentRenderQuestionDto.builder()
                     .questionId(qNode.path("questionId").asText())
                     .orderIndex(qNode.path("orderIndex").asInt())
@@ -529,6 +532,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                     .difficulty(qNode.path("difficulty").isMissingNode() ? null : qNode.path("difficulty").asInt())
                     .scenarioContext(qNode.path("scenarioContext").isMissingNode() ? null : qNode.path("scenarioContext").asText())
                     .text(qNode.path("text").asText())
+                    .image(imageDto)
                     .options(options)
                     .build());
         }
@@ -545,6 +549,10 @@ public class AssessmentServiceImpl implements AssessmentService {
     @Transactional
     public SaveAssessmentProgressResponse saveAssessmentProgress(String assessmentId, SaveAssessmentProgressRequest request, UUID userId) {
         tenantSchemaService.applyCurrentTenantSearchPath();
+
+        AssessmentConfig config = assessmentConfigRepository.findById(assessmentId)
+                .orElseThrow(() -> new RuntimeException("Assessment not found"));
+        assertAssessmentUnlocked(config, userId);
 
         AssessmentAttempt attempt = null;
         if (request.getAttemptId() != null && !request.getAttemptId().isBlank()) {
@@ -602,6 +610,8 @@ public class AssessmentServiceImpl implements AssessmentService {
 
         AssessmentConfig config = assessmentConfigRepository.findById(assessmentId)
                 .orElseThrow(() -> new RuntimeException("Assessment not found"));
+
+        assertAssessmentUnlocked(config, userId);
 
         JsonNode cfgData = config.getConfigData();
         JsonNode configObj = cfgData.path("config");
@@ -806,6 +816,18 @@ public class AssessmentServiceImpl implements AssessmentService {
                 }
             }
 
+            AssessmentImageDto imageDto = null;
+            JsonNode imageNode = qNode.path("image");
+            if (!imageNode.isMissingNode() && !imageNode.isNull()) {
+                imageDto = AssessmentImageDto.builder()
+                        .imageId(imageNode.path("imageId").asText())
+                        .fileName(imageNode.path("fileName").asText())
+                        .mimeType(imageNode.path("mimeType").asText())
+                        .altText(imageNode.path("altText").asText())
+                        .data(imageNode.path("data").asText())
+                        .build();
+            }
+
             reviewQuestions.add(com.icentric.Icentric.learning.dto.assessment.AssessmentQuestionReviewDto.builder()
                     .questionId(qId)
                     .orderIndex(qNode.path("orderIndex").asInt())
@@ -813,6 +835,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                     .topic(qNode.path("topic").asText())
                     .scenarioContext(qNode.path("scenarioContext").isMissingNode() ? null : qNode.path("scenarioContext").asText())
                     .text(qNode.path("text").asText())
+                    .image(imageDto)
                     .selectedOptionId(selectedOptionId)
                     .correctOptionId(correctOptionId)
                     .isCorrect(isCorrect)
@@ -892,6 +915,83 @@ public class AssessmentServiceImpl implements AssessmentService {
             }
         }
         return allQuestions;
+    }
+
+    private void assertAssessmentUnlocked(AssessmentConfig config, UUID userId) {
+        UUID trackId = parseTrackId(config.getTrackId());
+        log.debug("Checking assessment unlock status for user {} on track {}", userId, trackId);
+        
+        if (trackId == null) {
+            log.warn("Assessment config {} has no valid trackId. Defaulting to LOCKED.", config.getId());
+            throw new AccessDeniedException("This assessment is not linked to a valid track.");
+        }
+        
+        ProgressStats stats = getTrackProgressStats(userId, trackId);
+        if (!stats.allLessonsComplete()) {
+            log.info("Access denied to assessment for user {}: Incomplete track {}. Progress: {}/{} lessons", 
+                    userId, trackId, stats.completedLessons(), stats.totalLessons());
+            throw new AccessDeniedException("Complete all lessons in this track before taking the assessment.");
+        }
+    }
+
+    private ProgressStats getTrackProgressStats(UUID userId, UUID trackId) {
+        List<com.icentric.Icentric.content.entity.CourseModule> modules =
+                moduleRepository.findByTrackIdOrderBySortOrder(trackId);
+
+        int completedModules = 0;
+        int totalLessons = 0;
+        int completedLessons = 0;
+
+        for (var module : modules) {
+            List<com.icentric.Icentric.content.entity.Lesson> lessons =
+                    lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+            int moduleLessonCount = lessons.size();
+            int moduleCompletedLessons = 0;
+            totalLessons += moduleLessonCount;
+
+            for (var lesson : lessons) {
+                boolean completed = lessonProgressRepository.existsByUserIdAndLessonIdAndStatus(
+                        userId, lesson.getId(), "COMPLETED");
+                if (completed) {
+                    completedLessons++;
+                    moduleCompletedLessons++;
+                }
+            }
+
+            if (moduleLessonCount > 0 && moduleCompletedLessons >= moduleLessonCount) {
+                completedModules++;
+            }
+        }
+
+        boolean allLessonsComplete = totalLessons > 0 && completedLessons >= totalLessons;
+        
+        log.debug("Track Progress Stats for user {} on track {}: modules={}, completedModules={}, lessons={}/{}, complete={}",
+                userId, trackId, modules.size(), completedModules, completedLessons, totalLessons, allLessonsComplete);
+                
+        return new ProgressStats(modules.size(), completedModules, totalLessons, completedLessons, allLessonsComplete);
+    }
+
+    private UUID parseTrackId(String trackId) {
+        if (trackId == null || trackId.isBlank() || "null".equalsIgnoreCase(trackId)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(trackId);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private record ProgressStats(
+            int totalModules,
+            int completedModules,
+            int totalLessons,
+            int completedLessons,
+            boolean allLessonsComplete
+    ) {
+        private static ProgressStats empty() {
+            return new ProgressStats(0, 0, 0, 0, false);
+        }
     }
 
     /**
