@@ -34,31 +34,19 @@ public class TenantFilter extends OncePerRequestFilter {
 
         if (tenant != null) {
 
-            // Convert slug → schema
-            String schema;
-            if ("system".equals(tenant)) {
-                schema = "system";
-            } else {
-                if (!tenant.matches("[a-zA-Z0-9_-]+")) {
-                    throw new IllegalArgumentException("Invalid tenant slug: " + tenant);
-                }
-                schema = "tenant_" + tenant;
-            }
+            String schema = resolveSchema(tenant);
 
             Connection connection = DataSourceUtils.getConnection(dataSource);
 
             try (Statement statement = connection.createStatement()) {
-
                 statement.execute("SET search_path TO " + schema);
-
                 log.debug("Tenant schema set to: {}", schema);
-
-                filterChain.doFilter(request, response);
-
             } catch (Exception e) {
-
                 throw new ServletException("Tenant schema switch failed", e);
+            }
 
+            try {
+                filterChain.doFilter(request, response);
             } finally {
                 try (Statement reset = connection.createStatement()) {
                     reset.execute("SET search_path TO public");
@@ -72,5 +60,22 @@ public class TenantFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String resolveSchema(String tenant) {
+        if ("system".equals(tenant)) {
+            return "system";
+        }
+        if (tenant.startsWith("tenant_")) {
+            String suffix = tenant.substring("tenant_".length());
+            if (!suffix.matches("[a-zA-Z0-9_-]+")) {
+                throw new IllegalArgumentException("Invalid tenant schema: " + tenant);
+            }
+            return tenant;
+        }
+        if (!tenant.matches("[a-zA-Z0-9_-]+")) {
+            throw new IllegalArgumentException("Invalid tenant slug: " + tenant);
+        }
+        return "tenant_" + tenant;
     }
 }

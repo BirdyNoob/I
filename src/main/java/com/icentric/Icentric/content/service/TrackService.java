@@ -16,6 +16,8 @@ import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
+import com.icentric.Icentric.learning.repository.AssessmentConfigRepository;
+import com.icentric.Icentric.learning.entity.AssessmentConfig;
 import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
@@ -50,6 +52,7 @@ public class TrackService {
     private final com.icentric.Icentric.learning.service.AssignmentService assignmentService;
     private final com.icentric.Icentric.identity.repository.UserRepository userRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final AssessmentConfigRepository assessmentConfigRepository;
 
     public TrackService(
             TrackRepository repository,
@@ -67,7 +70,8 @@ public class TrackService {
             com.icentric.Icentric.identity.repository.TenantUserRepository tenantUserRepository,
             com.icentric.Icentric.learning.service.AssignmentService assignmentService,
             com.icentric.Icentric.identity.repository.UserRepository userRepository,
-            com.fasterxml.jackson.databind.ObjectMapper objectMapper
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+            AssessmentConfigRepository assessmentConfigRepository
     ) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
@@ -85,6 +89,7 @@ public class TrackService {
         this.assignmentService = assignmentService;
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
+        this.assessmentConfigRepository = assessmentConfigRepository;
     }
 
     // ── Admin: create track ────────────────────────────────────────────────────
@@ -417,6 +422,16 @@ public class TrackService {
                     }
                 }
             }
+        }
+
+        // Clone AssessmentConfig if it exists
+        List<AssessmentConfig> sourceConfigs = assessmentConfigRepository.findByTrackId(source.getId().toString());
+        for (AssessmentConfig config : sourceConfigs) {
+            AssessmentConfig clonedConfig = new AssessmentConfig();
+            clonedConfig.setId(UUID.randomUUID().toString());
+            clonedConfig.setTrackId(savedTrack.getId().toString());
+            clonedConfig.setConfigData(config.getConfigData());
+            assessmentConfigRepository.save(clonedConfig);
         }
 
         return savedTrack;

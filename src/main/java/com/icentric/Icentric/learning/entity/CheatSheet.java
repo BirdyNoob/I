@@ -12,6 +12,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Entity
@@ -26,6 +27,13 @@ public class CheatSheet {
 
     @Column(name = "type_code", nullable = false)
     private String type;
+
+    /**
+     * When set, this cheat sheet is only shown to learners assigned to this track.
+     * When NULL, it is global — visible to all learners.
+     */
+    @Column(name = "track_id")
+    private UUID trackId;
 
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     private com.icentric.Icentric.common.enums.Department department;

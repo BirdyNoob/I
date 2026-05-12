@@ -8,5 +8,6 @@ public enum StepType {
     SUMMARY,
     // Legacy/alternative types
     HOOK,
-    VIDEO
+    VIDEO,
+    SIMULATION
 }

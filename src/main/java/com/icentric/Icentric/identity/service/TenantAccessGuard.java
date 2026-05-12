@@ -42,6 +42,9 @@ public class TenantAccessGuard {
         if (slug == null || slug.isBlank()) {
             throw new IllegalStateException("Missing tenant in request context");
         }
+        if (slug.startsWith("tenant_")) {
+            return slug.substring("tenant_".length());
+        }
         return slug;
     }
 
