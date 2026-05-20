@@ -2,342 +2,315 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cybersecurity Certificate</title>
-  <!-- Google Fonts removed: openhtmltopdf renders offline; external URLs fail silently
-       and bare 'crossorigin' is invalid XML. Font families fall back to system fonts below. -->
+  <title>Certificate of Completion</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg-primary: #ffffff;
-      --bg-secondary: #f7f7f5;
-      --text-primary: #1a1a18;
-      --text-secondary: #5f5e5a;
-      --text-tertiary: #888780;
-      --border-light: rgba(0,0,0,0.10);
-      --border-mid: rgba(0,0,0,0.18);
-      --blue-dark: #185FA5;
-      --blue-mid: #378ADD;
-      --blue-bg: #E6F1FB;
-      --blue-text: #0C447C;
-      --radius-md: 8px;
-      --radius-lg: 12px;
+    @page {
+      size: 297mm 210mm;
+      margin: 0;
     }
-
     body {
-      font-family: 'IBM Plex Sans', Helvetica, Arial, sans-serif;
-      background: var(--bg-secondary);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      background-color: #ffffff;
+      font-family: Georgia, 'Times New Roman', serif;
+      color: #000000;
+    }
+    .page {
+      width: 297mm;
+      height: 210mm;
+      padding: 12mm;
+      box-sizing: border-box;
     }
 
-    .wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 24px;
+    /* Outer border frame */
+    .outer-frame {
+      width: 273mm;
+      height: 186mm;
+      border: 2px solid #000000;
+      box-sizing: border-box;
+    }
+
+    /* Inner border frame inset */
+    .inner-frame {
+      margin: 4px;
+      border: 0.5px solid #000000;
+      height: 173mm;
+      box-sizing: border-box;
+    }
+
+    /* Main layout table */
+    .main-table {
       width: 100%;
-      max-width: 720px;
+      height: 100%;
+      border-collapse: collapse;
     }
 
-    /* ── Certificate ── */
-    .cert {
-      width: 100%;
-      background: var(--bg-primary);
-      border: 0.5px solid var(--border-light);
-      border-radius: var(--radius-lg);
-      overflow: hidden;
+    /* ── Header ── */
+    .header-row td {
+      padding: 14px 28px 8px 28px;
+      border-bottom: 0.5px solid #000000;
     }
-
-    .cert-top-bar {
-      height: 4px;
-      background: var(--blue-dark);
-      width: 100%;
-    }
-
-    .cert-inner {
-      padding: 44px 52px 40px;
-    }
-
-    .cert-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 36px;
-    }
-
-    .cert-logo-area {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .lock-icon {
-      width: 32px;
-      height: 32px;
-      background: var(--blue-bg);
-      border-radius: 7px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .cert-org-name {
-      font-family: 'Syne', Georgia, 'Times New Roman', serif;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text-primary);
-      letter-spacing: 0.01em;
-    }
-
-    .cert-org-sub {
-      font-size: 10px;
-      color: var(--text-tertiary);
-      margin-top: 2px;
-      letter-spacing: 0.04em;
-    }
-
-    .cert-id-block { text-align: right; }
-
-    .cert-id-label {
-      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
-      font-size: 9px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-tertiary);
-      margin-bottom: 3px;
-    }
-
-    .cert-id-value {
-      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--blue-dark);
-      letter-spacing: 0.06em;
-    }
-
-    .cert-id-learner {
-      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
-      font-size: 10px;
-      color: var(--text-tertiary);
-      margin-top: 4px;
-      letter-spacing: 0.04em;
-    }
-
-    .cert-divider {
-      height: 0.5px;
-      background: var(--border-light);
-      margin-bottom: 32px;
-    }
-
-    .cert-presented {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--text-tertiary);
-      margin-bottom: 8px;
-    }
-
-    .cert-recipient {
-      font-family: 'Syne', Georgia, 'Times New Roman', serif;
-      font-size: 36px;
-      font-weight: 700;
-      color: var(--text-primary);
-      line-height: 1.05;
-      margin-bottom: 28px;
-      letter-spacing: -0.01em;
-    }
-
-    .cert-body-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 48px;
-      margin-bottom: 28px;
-    }
-
-    .cert-track-block { flex: 1; }
-
-    .cert-track-label {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-tertiary);
-      margin-bottom: 5px;
-    }
-
-    .cert-track-name {
-      font-family: 'Syne', Georgia, 'Times New Roman', serif;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--text-primary);
-      line-height: 1.2;
-    }
-
-    .cert-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: var(--blue-bg);
-      color: var(--blue-text);
-      font-size: 10px;
-      font-weight: 500;
-      padding: 3px 9px;
-      border-radius: 4px;
-      letter-spacing: 0.06em;
-      margin-top: 8px;
-      text-transform: uppercase;
-    }
-
-    .cert-date-block {}
-
-    .cert-date-label {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-tertiary);
-      margin-bottom: 5px;
-    }
-
-    .cert-date-value {
-      font-family: 'Syne', Georgia, 'Times New Roman', serif;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-
-    .cert-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-top: 0.5px solid var(--border-light);
-      padding-top: 20px;
-    }
-
-    .cert-verify {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .cert-verify-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--blue-dark);
-      flex-shrink: 0;
-    }
-
-    .cert-verify-text {
+    .platform-name {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
       font-size: 11px;
-      color: var(--text-secondary);
-    }
-
-    .cert-verify-text strong {
-      font-weight: 500;
-      color: var(--text-primary);
-    }
-
-    .cert-watermark {
-      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
-      font-size: 9px;
-      letter-spacing: 0.1em;
-      color: var(--text-tertiary);
+      font-weight: 700;
+      letter-spacing: 4px;
       text-transform: uppercase;
+      color: #000000;
+    }
+    .platform-sub {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 9px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #555555;
+      margin-top: 3px;
+    }
+    .cert-meta {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 8.5px;
+      color: #333333;
+      letter-spacing: 0.5px;
+      text-align: right;
+    }
+    .cert-meta-label {
+      font-size: 7.5px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #888888;
+      margin-bottom: 2px;
+    }
+    .cert-meta-value {
+      font-size: 10px;
+      font-weight: bold;
+      color: #000000;
+    }
+    .cert-meta-sub {
+      font-size: 8px;
+      color: #666666;
+      margin-top: 2px;
     }
 
-    /* ── Print styles ── */
-    @media print {
-      body { background: #fff; padding: 0; }
-      .fields-panel { display: none; }
-      .cert { border: 1px solid #ddd; box-shadow: none; }
+    /* ── Body ── */
+    .body-row td {
+      padding: 18px 48px 10px 48px;
+      text-align: center;
+    }
+    .presented-label {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 8.5px;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: #777777;
+      margin-bottom: 14px;
+    }
+    .cert-heading {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 13px;
+      font-weight: normal;
+      letter-spacing: 0.5px;
+      color: #333333;
+      margin-bottom: 10px;
+      font-style: italic;
+    }
+    .recipient-name {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 40px;
+      font-weight: bold;
+      color: #000000;
+      letter-spacing: -1px;
+      line-height: 1.05;
+      margin-bottom: 14px;
+    }
+    .cert-statement {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 11px;
+      font-style: italic;
+      color: #444444;
+      line-height: 1.6;
+      max-width: 180mm;
+      margin: 0 auto;
     }
 
-    /* ── Responsive ── */
-    @media (max-width: 600px) {
-      .fields-grid { grid-template-columns: 1fr 1fr; }
-      .cert-inner { padding: 28px 24px; }
-      .cert-recipient { font-size: 26px; }
-      .cert-body-row { flex-direction: column; gap: 20px; }
-      .cert-head { flex-direction: column; gap: 16px; }
-      .cert-id-block { text-align: left; }
+    /* ── Details Row ── */
+    .details-row td {
+      padding: 12px 48px 14px 48px;
+    }
+    .details-inner {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .detail-cell {
+      text-align: left;
+      vertical-align: top;
+    }
+    .detail-center {
+      text-align: center;
+      vertical-align: top;
+    }
+    .detail-label {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 7.5px;
+      font-weight: bold;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #888888;
+      margin-bottom: 5px;
+    }
+    .detail-value {
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 15px;
+      font-weight: bold;
+      color: #000000;
+      line-height: 1.25;
+    }
+    .detail-divider-v {
+      width: 1px;
+      background-color: #cccccc;
+      padding: 0;
+    }
+    .separator-line {
+      height: 0.5px;
+      background-color: #000000;
+      margin: 5px auto;
+      width: 30px;
+    }
+
+    /* ── Footer ── */
+    .footer-row td {
+      padding: 8px 28px 12px 28px;
+      border-top: 0.5px solid #000000;
+    }
+    .footer-inner {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .footer-left {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 8px;
+      color: #666666;
+      letter-spacing: 0.5px;
+    }
+    .footer-left strong {
+      color: #000000;
+      font-weight: bold;
+    }
+    .footer-dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      background-color: #000000;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .footer-right {
+      text-align: right;
+      vertical-align: middle;
+    }
+    .verify-label {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #888888;
+      margin-bottom: 4px;
+    }
+    .verify-url {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 8.5px;
+      font-weight: bold;
+      color: #000000;
+      letter-spacing: 0.5px;
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="page">
+    <div class="outer-frame">
+      <div class="inner-frame">
 
+        <table class="main-table" border="0" cellspacing="0" cellpadding="0">
 
-    <!-- Certificate -->
-    <div class="cert">
-      <div class="cert-top-bar"></div>
-      <div class="cert-inner">
+          <!-- ── Header ── -->
+          <tr class="header-row">
+            <td valign="middle" align="left" width="60%">
+              <div class="platform-name">{{platformNameStart}}{{platformNameHighlight}}{{platformNameEnd}}</div>
+              <div class="platform-sub">{{tenantName}}</div>
+            </td>
+            <td valign="middle" align="right" width="40%">
+              <div class="cert-meta">
+                <div class="cert-meta-label">Certificate ID</div>
+                <div class="cert-meta-value">{{certificateId}}</div>
+                <div class="cert-meta-sub">Learner: {{learnerId}}</div>
+              </div>
+            </td>
+          </tr>
 
-        <div class="cert-head">
-          <div class="cert-logo-area">
-            <div class="lock-icon">
-              <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
-                <rect x="2" y="7" width="10" height="8" rx="2" stroke="#185FA5" stroke-width="1.3"/>
-                <path d="M4.5 7V5a2.5 2.5 0 015 0v2" stroke="#185FA5" stroke-width="1.3" stroke-linecap="round"/>
-                <circle cx="7" cy="11" r="1.2" fill="#185FA5"/>
-              </svg>
-            </div>
-            <div>
-              <div class="cert-org-name">CyberShield</div>
-              <div class="cert-org-sub">Security Training Platform</div>
-            </div>
-          </div>
-          <div class="cert-id-block">
-            <div class="cert-id-label">Certificate ID</div>
-            <div class="cert-id-value" id="c-certid">{{certificateId}}</div>
-            <div class="cert-id-learner" id="c-learner">{{learnerId}}</div>
-          </div>
-        </div>
+          <!-- ── Body ── -->
+          <tr class="body-row">
+            <td colspan="2" valign="middle" align="center">
+              <div class="presented-label">Certificate of Completion</div>
+              <div class="cert-heading">This certificate is proudly presented to</div>
+              <div class="recipient-name">{{recipientName}}</div>
+              <div class="cert-statement">
+                in recognition of successfully completing all requirements and demonstrating outstanding
+                commitment, knowledge, and proficiency in the designated programme of study.
+              </div>
+            </td>
+          </tr>
 
-        <div class="cert-divider"></div>
+          <!-- ── Details ── -->
+          <tr class="details-row">
+            <td colspan="2" valign="top">
+              <table class="details-inner" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td class="detail-cell" width="55%" valign="top">
+                    <div class="detail-label">Programme of Study</div>
+                    <div class="detail-value">{{trackTitle}}</div>
+                  </td>
+                  <td class="detail-divider-v" width="1px">&#160;</td>
+                  <td class="detail-center" width="25%" valign="top" style="padding-left: 24px;">
+                    <div class="detail-label">Date Issued</div>
+                    <div class="detail-value">{{issuedDate}}</div>
+                  </td>
+                  <td class="detail-divider-v" width="1px">&#160;</td>
+                  <td class="detail-center" width="19%" valign="middle" style="padding-left: 24px;">
+                    <div class="detail-label">Verify</div>
+                    <img src="data:image/png;base64,{{qrCode}}"
+                         style="width: 44px; height: 44px; display: block; margin: 4px auto 0 auto; border: 0.5px solid #cccccc;"
+                         alt="QR Code" />
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-        <div class="cert-presented">Certificate of Completion — Presented to</div>
-        <div class="cert-recipient" id="c-name">{{recipientName}}</div>
+          <!-- ── Footer ── -->
+          <tr class="footer-row">
+            <td colspan="2" valign="middle">
+              <table class="footer-inner" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td valign="middle" align="left">
+                    <span class="footer-left">
+                      <span class="footer-dot"></span>Issued and digitally authenticated by <strong>Icentric Platform</strong> &#183; All rights reserved
+                    </span>
+                  </td>
+                  <td valign="middle" align="right">
+                    <div class="footer-right">
+                      <div class="verify-label">Verification Portal</div>
+                      <div class="verify-url">icentric.com/verify</div>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-        <div class="cert-body-row">
-          <div class="cert-track-block">
-            <div class="cert-track-label">Track completed</div>
-            <div class="cert-track-name" id="c-track">{{trackTitle}}</div>
-            <div class="cert-tag">
-              <svg width="7" height="7" viewBox="0 0 7 7"><circle cx="3.5" cy="3.5" r="3" fill="#185FA5"/></svg>
-              Verified
-            </div>
-          </div>
-          <div class="cert-date-block">
-            <div class="cert-date-label">Issued on</div>
-            <div class="cert-date-value" id="c-date">{{issuedDate}}</div>
-          </div>
-        </div>
-
-        <div class="cert-footer">
-          <div class="cert-verify">
-            <div class="cert-verify-dot"></div>
-            <div class="cert-verify-text">Issued by <strong>CyberShield Training Platform</strong> · Digitally authenticated</div>
-          </div>
-          <div class="cert-watermark">
-            <img src="data:image/png;base64,{{qrCode}}" style="width: 50px; height: 50px; vertical-align: middle; margin-right: 10px; border-radius: 4px;" alt="QR Code" />
-            <span style="vertical-align: middle;">cybershield.io/verify</span>
-          </div>
-        </div>
+        </table>
 
       </div>
     </div>
-
   </div>
-
 </body>
 </html>

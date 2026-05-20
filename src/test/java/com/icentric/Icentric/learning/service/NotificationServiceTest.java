@@ -28,6 +28,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -138,13 +139,13 @@ class NotificationServiceTest {
 
         when(repository.findBySentFalse()).thenReturn(List.of(event));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(emailService.sendHtmlEmail(eq("aryan@example.com"), eq("Training reminder"), contains("Due soon")))
+        when(emailService.sendTemplateEmail(eq("aryan@example.com"), eq("Training reminder"), eq("AISafe_Email_Notification"), any()))
                 .thenReturn(CompletableFuture.completedFuture(null));
 
         notificationService.processNotifications();
 
         verify(tenantSchemaService).applyCurrentTenantSearchPath();
-        verify(emailService).sendHtmlEmail(eq("aryan@example.com"), eq("Training reminder"), contains("Due soon"));
+        verify(emailService).sendTemplateEmail(eq("aryan@example.com"), eq("Training reminder"), eq("AISafe_Email_Notification"), any());
         assertThat(event.getSent()).isTrue();
         verify(repository).save(event);
     }
@@ -158,7 +159,7 @@ class NotificationServiceTest {
 
         when(repository.findBySentFalse()).thenReturn(List.of(event));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(emailService.sendHtmlEmail(eq("aryan@example.com"), eq("Training overdue"), contains("Training overdue")))
+        when(emailService.sendTemplateEmail(eq("aryan@example.com"), eq("Training overdue"), eq("AISafe_Email_Notification"), any()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("SMTP down")));
 
         notificationService.processNotifications();

@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="x-apple-disable-message-reformatting">
-  <title>Your AI safety training is ready — AISafe</title>
+  <title>Your AI safety training is ready — Icentric</title>
   <!--[if mso]>
   <noscript>
     <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
@@ -13,7 +13,7 @@
   <![endif]-->
   <style>
     * { box-sizing: border-box; }
-    body, table, td, p, a, li, blockquote {
+    body, table, td, p, a, li {
       -webkit-text-size-adjust: 100%;
       -ms-text-size-adjust: 100%;
     }
@@ -27,47 +27,47 @@
       .hero-name { font-size: 26px !important; }
       .hide-mobile { display: none !important; }
       .pad-mobile { padding: 24px 20px !important; }
-      .track-row td { display: block !important; width: 100% !important; }
-      .track-row td.track-right { padding-top: 12px !important; padding-left: 0 !important; }
+      .grid-col { display: block !important; width: 100% !important; padding-right: 0 !important; padding-bottom: 16px !important; }
+      .grid-col:last-child { padding-bottom: 0 !important; }
     }
   </style>
 </head>
-<body style="margin:0;padding:0;background-color:#F8FAFC;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+<body style="margin:0;padding:0;background-color:#F1F5F9;font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;">
 
   <!-- Preview text -->
   <div class="preview-text" th:text="|${userName}, your AI safety training is assigned and waiting. &nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌|">
     Arjun, your AI safety training is assigned and waiting. &nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌
   </div>
 
-  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F8FAFC;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F1F5F9;">
     <tr>
       <td align="center" style="padding:32px 16px;">
 
         <!-- Email container -->
-        <table class="email-container" role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px;">
+        <table class="email-container" role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E2E8F0;box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.03);">
 
-          <!-- ── HEADER ─────────────────────────────────────────────────── -->
+          <!-- HEADER -->
           <tr>
             <td>
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
-                  <td style="padding:18px 28px;background-color:#FFFFFF;border-radius:12px 12px 0 0;border:1px solid #E2E8F0;border-bottom:none;">
+                  <td style="padding:20px 28px;background-color:#0F172A;border-bottom:none;">
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                       <tr>
                         <td valign="middle">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                             <tr>
-                              <td valign="middle" style="padding-right:9px;">
-                                <div style="width:30px;height:30px;background:linear-gradient(135deg,rgba(37,99,235,0.15),rgba(37,99,235,0.05));border:1px solid rgba(37,99,235,0.3);border-radius:7px;display:inline-block;text-align:center;line-height:30px;font-size:15px;">🛡</div>
+                              <td valign="middle" style="padding-right:10px;">
+                                <div style="width:30px;height:30px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:7px;display:inline-block;text-align:center;line-height:30px;font-size:15px;">🛡</div>
                               </td>
                               <td valign="middle">
-                                <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:19px;font-weight:700;letter-spacing:-0.02em;color:#1E293B;">AI<span style="color:#2563EB;">Safe</span></span>
+                                <span style="font-family:'Inter',sans-serif;font-size:20px;font-weight:800;letter-spacing:-0.03em;color:#FFFFFF;">I<span style="color:#6366F1;">centric</span></span>
                               </td>
                             </tr>
                           </table>
                         </td>
                         <td align="right" valign="middle">
-                          <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#64748B;letter-spacing:0.08em;text-transform:uppercase;" th:text="${tenantName}">Acme Corp</span>
+                          <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:#E2E8F0;background-color:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);padding:4px 10px;border-radius:6px;letter-spacing:0.06em;text-transform:uppercase;" th:text="${tenantName}">Acme Corp</span>
                         </td>
                       </tr>
                     </table>
@@ -77,37 +77,35 @@
             </td>
           </tr>
 
-          <!-- ── HERO ───────────────────────────────────────────────────── -->
+          <!-- HERO SECTION -->
           <tr>
-            <td style="background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
-
-              <!-- Blue top accent (learner = blue, not red) -->
-              <div style="height:3px;background:linear-gradient(90deg,#1E293B,rgba(30,41,59,0.3),transparent);"></div>
+            <td style="background-color:#ffffff;">
+              <!-- Indigo/violet gradient accent line -->
+              <div style="height:4px;background:linear-gradient(90deg,#4F46E5,#6366F1,transparent);"></div>
 
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
-                  <td class="pad-mobile" style="padding:36px 40px 28px;">
+                  <td class="pad-mobile" style="padding:40px 40px 28px;">
 
                     <!-- Greeting -->
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;color:#475569;margin:0 0 10px 0;letter-spacing:0.01em;" th:text="|Hi ${userName} 👋|">
+                    <p style="font-family:'Inter',sans-serif;font-size:14px;color:#475569;margin:0 0 12px 0;font-weight:500;" th:text="|Hi ${userName} 👋|">
                       Hi Arjun 👋
                     </p>
 
                     <!-- Headline -->
-                    <h1 class="hero-name" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:30px;font-weight:700;line-height:1.2;letter-spacing:-0.03em;color:#1E293B;margin:0 0 14px 0;">
+                    <h1 class="hero-name" style="font-family:'Inter',sans-serif;font-size:32px;font-weight:800;line-height:1.25;letter-spacing:-0.03em;color:#0F172A;margin:0 0 16px 0;">
                       Your AI safety training<br>
                       is ready to begin.
                     </h1>
 
                     <!-- Body -->
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#475569;margin:0 0 12px 0;max-width:440px;" th:text="|${tenantName} has enrolled you in AI security training on AISafe. It covers how to use AI tools safely — protecting company data, your customers, and yourself.|">
-                      Acme Corp has enrolled you in AI security training on AISafe. It covers how to use AI tools safely — protecting company data, your customers, and yourself.
+                    <p style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#334155;margin:0 0 14px 0;" th:text="|${tenantName} has enrolled you in AI security training on Icentric. It covers how to use AI tools safely — protecting company data, your customers, and yourself.|">
+                      Acme Corp has enrolled you in AI security training on Icentric. It covers how to use AI tools safely — protecting company data, your customers, and yourself.
                     </p>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#475569;margin:0 0 24px 0;max-width:440px;">
-                      Most learners finish in <span style="color:#1E293B;font-weight:500;">under 2 hours</span>, broken across short sessions. You can pause and resume any time.
+                    
+                    <p style="font-family:'Inter',sans-serif;font-size:14px;line-height:1.6;color:#64748B;margin:0;">
+                      Most learners finish in <span style="color:#0F172A;font-weight:600;">under 2 hours</span>, broken across short, self-paced sessions. You can pause and resume at any time.
                     </p>
-
-
 
                   </td>
                 </tr>
@@ -115,60 +113,63 @@
             </td>
           </tr>
 
-
-
-          <!-- ── WHAT TO EXPECT ─────────────────────────────────────────── -->
+          <!-- WHAT TO EXPECT -->
           <tr>
-            <td style="background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;padding:0 28px 28px;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
+            <td style="background-color:#ffffff;padding:0 40px 32px;" class="pad-mobile">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;">
                 <tr>
-                  <td style="padding:16px 20px 8px;">
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#64748B;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 14px 0;">What each lesson looks like</p>
-                    <!-- 4 items 2x2 -->
+                  <td style="padding:24px 24px;">
+                    <p style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#64748B;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 20px 0;">What each lesson looks like</p>
+                    
+                    <!-- 2x2 grid -->
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                       <tr>
-                        <td width="50%" valign="top" style="padding-bottom:14px;padding-right:12px;">
+                        <!-- Short videos -->
+                        <td width="50%" valign="top" style="padding-bottom:20px;padding-right:16px;" class="grid-col">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                             <tr>
-                              <td valign="top" style="padding-right:8px;font-size:16px;line-height:1;">🎬</td>
+                              <td valign="top" style="padding-right:12px;font-size:20px;line-height:1;">🎬</td>
                               <td valign="top">
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#1E293B;margin:0 0 2px 0;">Short videos</p>
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.4;">2–3 min clips, no lectures</p>
+                                <p style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:#0F172A;margin:0 0 4px 0;">Short videos</p>
+                                <p style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;margin:0;line-height:1.45;">2–3 min modern clips, no boring lectures</p>
                               </td>
                             </tr>
                           </table>
                         </td>
-                        <td width="50%" valign="top" style="padding-bottom:14px;">
+                        <!-- Real scenarios -->
+                        <td width="50%" valign="top" style="padding-bottom:20px;" class="grid-col">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                             <tr>
-                              <td valign="top" style="padding-right:8px;font-size:16px;line-height:1;">🎮</td>
+                              <td valign="top" style="padding-right:12px;font-size:20px;line-height:1;">🎮</td>
                               <td valign="top">
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#1E293B;margin:0 0 2px 0;">Real scenarios</p>
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.4;">What would you do?</p>
+                                <p style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:#0F172A;margin:0 0 4px 0;">Real scenarios</p>
+                                <p style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;margin:0;line-height:1.45;">Interactive case-studies simulating daily tools</p>
                               </td>
                             </tr>
                           </table>
                         </td>
                       </tr>
                       <tr>
-                        <td width="50%" valign="top" style="padding-bottom:14px;padding-right:12px;">
+                        <!-- Cheat sheets -->
+                        <td width="50%" valign="top" style="padding-right:16px;" class="grid-col">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                             <tr>
-                              <td valign="top" style="padding-right:8px;font-size:16px;line-height:1;">📋</td>
+                              <td valign="top" style="padding-right:12px;font-size:20px;line-height:1;">📋</td>
                               <td valign="top">
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#1E293B;margin:0 0 2px 0;">Cheat sheets</p>
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.4;">Save &amp; download any time</p>
+                                <p style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:#0F172A;margin:0 0 4px 0;">Cheat sheets</p>
+                                <p style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;margin:0;line-height:1.45;">Practical summaries, downloadable anytime</p>
                               </td>
                             </tr>
                           </table>
                         </td>
-                        <td width="50%" valign="top" style="padding-bottom:14px;">
+                        <!-- Certificate -->
+                        <td width="50%" valign="top" class="grid-col">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                             <tr>
-                              <td valign="top" style="padding-right:8px;font-size:16px;line-height:1;">🏅</td>
+                              <td valign="top" style="padding-right:12px;font-size:20px;line-height:1;">🏅</td>
                               <td valign="top">
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:500;color:#1E293B;margin:0 0 2px 0;">Certificate</p>
-                                <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.4;">Downloadable &amp; LinkedIn shareable</p>
+                                <p style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:#0F172A;margin:0 0 4px 0;">Verified certificate</p>
+                                <p style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;margin:0;line-height:1.45;">Shareable directly on your LinkedIn profile</p>
                               </td>
                             </tr>
                           </table>
@@ -181,34 +182,24 @@
             </td>
           </tr>
 
-          <!-- ── CREDENTIALS BOX ───────────────────────────────────────── -->
+          <!-- CREDENTIALS BOX -->
           <tr>
-            <td class="pad-mobile" style="background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;padding:0 40px 36px;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;">
+            <td style="background-color:#ffffff;padding:0 40px 32px;" class="pad-mobile">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
                 <tr>
-                  <td style="padding:16px 20px;border-bottom:1px solid #E2E8F0;">
-                    <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:600;color:#64748B;letter-spacing:0.1em;text-transform:uppercase;">Your login details</span>
+                  <td style="padding:18px 24px;border-bottom:1px solid #E2E8F0;background-color:#F8FAFC;">
+                    <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#475569;letter-spacing:0.08em;text-transform:uppercase;">Your Login Details</span>
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:14px 20px 6px;">
+                  <td style="padding:20px 24px;">
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                       <tr>
-                        <td style="padding-bottom:10px;">
+                        <td style="padding-bottom:14px;">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                             <tr>
-                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;">Training portal</span></td>
-                              <td><span style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#2563EB;" th:text="${portalUrl}">acmecorp.aisafe.io</span></td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding-bottom:10px;">
-                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                            <tr>
-                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;">Your email</span></td>
-                              <td><span style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#2563EB;" th:text="${userEmail}">arjun.kapoor@acmecorp.com</span></td>
+                              <td width="140" valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;font-weight:500;">Training Portal</span></td>
+                              <td valign="middle"><a th:href="${portalUrl}" target="_blank" style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#4F46E5;font-weight:700;text-decoration:none;" th:text="${portalUrl}">acmecorp.aisafe.io</a></td>
                             </tr>
                           </table>
                         </td>
@@ -217,8 +208,18 @@
                         <td style="padding-bottom:14px;">
                           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                             <tr>
-                              <td width="110"><span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;">Password</span></td>
-                              <td><span style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#1E293B;font-weight:600;" th:text="${password}">YourPasswordHere</span></td>
+                              <td width="140" valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;font-weight:500;">Username / Email</span></td>
+                              <td valign="middle"><span style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#0F172A;font-weight:600;" th:text="${userEmail}">arjun.kapoor@acmecorp.com</span></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td width="140" valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;font-weight:500;">Password</span></td>
+                              <td valign="middle"><span style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#0F172A;background:#F1F5F9;padding:3px 8px;border-radius:6px;font-weight:700;border:1px solid #E2E8F0;" th:text="${password}">YourPasswordHere</span></td>
                             </tr>
                           </table>
                         </td>
@@ -230,51 +231,57 @@
             </td>
           </tr>
 
-          <!-- ── FINAL CTA ──────────────────────────────────────────────── -->
+          <!-- FINAL CTA WITH CERTIFICATE HIGHLIGHT -->
           <tr>
-            <td class="pad-mobile" style="background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;padding:0 40px 40px;text-align:center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:10px;">
+            <td style="background-color:#ffffff;padding:0 40px 40px;" class="pad-mobile">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:linear-gradient(135deg,rgba(79,70,229,0.05) 0%,rgba(99,102,241,0.02) 100%);border:1px solid #C7D2FE;border-radius:12px;text-align:center;">
                 <tr>
-                  <td style="padding:24px 20px;text-align:center;">
-                    <!-- Trophy row -->
-                    <p style="font-size:28px;margin:0 0 10px 0;">🏅</p>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#1E293B;margin:0 0 6px 0;">Finish and earn your certificate</p>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#475569;margin:0 0 20px 0;line-height:1.5;">A verified certificate of completion — downloadable, shareable on LinkedIn, and audit-ready.</p>
-                    <a th:href="${portalUrl}" target="_blank" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;background:#1E293B;background-image:linear-gradient(135deg,#1E293B,#0F172A);padding:13px 32px;border-radius:8px;display:inline-block;letter-spacing:0.01em;">
-                      Begin your training →
-                    </a>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#64748B;margin:12px 0 0 0;">Takes less than 15 minutes to get started</p>
+                  <td style="padding:28px 24px;text-align:center;">
+                    <p style="font-size:32px;margin:0 0 12px 0;">🏆</p>
+                    <p style="font-family:'Inter',sans-serif;font-size:16px;font-weight:700;color:#0F172A;margin:0 0 6px 0;">Finish and earn your certificate</p>
+                    <p style="font-family:'Inter',sans-serif;font-size:13px;color:#475569;margin:0 0 22px 0;line-height:1.5;">Gain a verified certificate of completion immediately upon finishing the modules to secure your compliance status.</p>
+                    
+                    <!-- CTA Button -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                      <tr>
+                        <td style="border-radius:8px;background:linear-gradient(135deg,#4F46E5 0%,#6366F1 100%);box-shadow: 0 4px 6px -1px rgba(79,70,229,0.2), 0 2px 4px -1px rgba(79,70,229,0.1);">
+                          <a th:href="${portalUrl}" target="_blank" style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;padding:14px 36px;display:inline-block;border-radius:8px;letter-spacing:0.01em;">
+                            Begin your training →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                    
+                    <p style="font-family:'Inter',sans-serif;font-size:11px;color:#64748B;margin:14px 0 0 0;">Takes less than 15 minutes to set up and get started</p>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- ── FOOTER ─────────────────────────────────────────────────── -->
+          <!-- FOOTER -->
           <tr>
-            <td style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:0 0 12px 12px;padding:24px 28px;">
+            <td style="background-color:#F8FAFC;border-top:1px solid #E2E8F0;padding:28px 28px;">
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                 <tr>
                   <td>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0 0 5px 0;line-height:1.6;" th:utext="|This email was sent to &lt;span style='color:#475569;'&gt;${userEmail}&lt;/span&gt; by ${tenantName} via AISafe.|">
-                      This email was sent to <span style="color:#475569;">arjun.kapoor@acmecorp.com</span> by Acme Corp via AISafe.
+                    <p style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B;margin:0 0 8px 0;line-height:1.6;" th:utext="|This email was sent to &lt;span style='color:#334155;font-weight:500;'&gt;${userEmail}&lt;/span&gt; by ${tenantName} via Icentric.|">
+                      This email was sent to <span style="color:#334155;font-weight:500;">arjun.kapoor@acmecorp.com</span> by Acme Corp via Icentric.
                     </p>
-                    <p style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.6;">
-                      Questions? Contact your HR team or&nbsp;
-                      <a href="mailto:support@aisafe.io" style="color:#475569;text-decoration:underline;">support@aisafe.io</a>
+                    <p style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.6;">
+                      Questions? Contact your training coordinator or&nbsp;
+                      <a href="mailto:support@icentric.com" style="color:#4F46E5;text-decoration:underline;">support@icentric.com</a>
                       &nbsp;·&nbsp;
-                      <a href="https://aisafe.io/privacy" style="color:#64748B;text-decoration:none;">Privacy policy</a>
+                      <a href="https://icentric.com/privacy" style="color:#64748B;text-decoration:none;">Privacy policy</a>
                     </p>
                   </td>
                   <td align="right" valign="top" style="padding-left:16px;" class="hide-mobile">
-                    <span style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:-0.01em;color:#1E293B;">AI<span style="color:#2563EB;">Safe</span></span>
+                    <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:800;letter-spacing:-0.02em;color:#0F172A;">I<span style="color:#6366F1;">centric</span></span>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
-
-          <tr><td style="height:24px;"></td></tr>
 
         </table>
 

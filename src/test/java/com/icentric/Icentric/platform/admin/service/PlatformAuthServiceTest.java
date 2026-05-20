@@ -32,6 +32,8 @@ class PlatformAuthServiceTest {
     JwtService jwtService;
     @Mock
     MfaService mfaService;
+    @Mock
+    com.icentric.Icentric.audit.service.AuditService auditService;
 
     @InjectMocks
     PlatformAuthService authService;

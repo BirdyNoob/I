@@ -1,6 +1,7 @@
 package com.icentric.Icentric.identity.service;
 
 import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.audit.service.AuditService;
 import com.icentric.Icentric.identity.dto.LoginRequest;
 import com.icentric.Icentric.identity.dto.LoginResponse;
@@ -42,6 +43,7 @@ class AuthServiceTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock JwtService jwtService;
     @Mock AuditService auditService;
+    @Mock AuditMetadataService auditMetadataService;
     @Mock RefreshTokenService refreshTokenService;
 
     @InjectMocks AuthService authService;
@@ -74,6 +76,7 @@ class AuthServiceTest {
                 .thenReturn("jwt-access");
         when(refreshTokenService.create(any(), any(), any(), any()))
                 .thenReturn("opaque-refresh");
+        when(auditMetadataService.describeUser(user.getId())).thenReturn("Learner");
 
         LoginResponse response = authService.login(
                 new LoginRequest("learner@acme.com", "secret"));
@@ -81,7 +84,7 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("jwt-access");
         assertThat(response.refreshToken()).isEqualTo("opaque-refresh");
         assertThat(response.tenants()).isNull();
-        verify(auditService).log(any(), eq(AuditAction.LOGIN), eq("USER"), any(), any());
+        verify(auditService).logForTenant(any(), eq(AuditAction.LOGIN), eq("USER"), any(), any(), eq("acme"));
     }
 
     @Test

@@ -120,7 +120,7 @@ class UserServiceTest {
         assertThat(response.name()).isEqualTo("Aryan Kundal");
         assertThat(response.email()).isEqualTo("aryan@example.com");
         assertThat(response.role()).isEqualTo("LEARNER");
-        assertThat(response.department()).isEqualTo("Engineering");
+        assertThat(response.department()).isEqualTo(Department.ENGINEERING);
     }
 
     @Test
@@ -169,7 +169,6 @@ class UserServiceTest {
         when(passwordEncoder.encode("ChangeMe@123")).thenReturn("encoded-default-password");
         when(userRepository.findAllByEmailLowerIn(Collections.singleton("aryan@example.com")))
                 .thenReturn(Collections.emptyList());
-        when(tenantUserRepository.findByTenantId(tenant.getId())).thenReturn(List.of());
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0, User.class));
         when(tenantUserRepository.save(any(TenantUser.class))).thenAnswer(inv -> inv.getArgument(0, TenantUser.class));
 

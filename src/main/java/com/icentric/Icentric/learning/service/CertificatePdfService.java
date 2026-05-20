@@ -2,8 +2,6 @@ package com.icentric.Icentric.learning.service;
 
 import com.icentric.Icentric.learning.dto.CertificateDownloadData;
 import com.icentric.Icentric.learning.exception.CertificateGenerationException;
-import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
-import com.openhtmltopdf.util.XRRuntimeException;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
@@ -18,7 +16,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
-import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -28,37 +25,28 @@ import java.util.regex.Pattern;
 
 @Service
 public class CertificatePdfService {
+
     private static final DateTimeFormatter ISSUE_DATE_FORMAT =
             DateTimeFormatter.ofPattern("dd MMM uuuu").withZone(ZoneOffset.UTC);
-    private static final String TEMPLATE_PATH = "templates/certificates/cybersecurity_certificate.html";
+    private static final String TEMPLATE_PATH = "templates/certificates/testnewcertifications.html";
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{([a-zA-Z0-9]+)}}");
 
     private final CertificateUrlService certificateUrlService;
+    private final PlaywrightPdfService playwrightPdfService;
 
-    public CertificatePdfService(CertificateUrlService certificateUrlService) {
+    public CertificatePdfService(CertificateUrlService certificateUrlService,
+                                  PlaywrightPdfService playwrightPdfService) {
         this.certificateUrlService = certificateUrlService;
+        this.playwrightPdfService = playwrightPdfService;
     }
 
     public byte[] generateCertificate(CertificateDownloadData data) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
         String html = renderTemplate(data);
-
         try {
-            PdfRendererBuilder builder = new PdfRendererBuilder();
-            builder.useFastMode();
-            builder.withHtmlContent(html, null);
-            builder.toStream(out);
-            builder.run();
-            return out.toByteArray();
-        } catch (IOException e) {
+            return playwrightPdfService.render(html);
+        } catch (Exception e) {
             throw new CertificateGenerationException(
-                    "Failed to render certificate PDF output for userEmail: " + data.userEmail()
-                            + ", trackTitle: " + data.trackTitle(),
-                    e
-            );
-        } catch (XRRuntimeException e) {
-            throw new CertificateGenerationException(
-                    "Failed to layout certificate template for userEmail: " + data.userEmail()
+                    "Failed to render certificate PDF via Playwright for userEmail: " + data.userEmail()
                             + ", trackTitle: " + data.trackTitle(),
                     e
             );
@@ -68,9 +56,9 @@ public class CertificatePdfService {
     private String renderTemplate(CertificateDownloadData data) {
         String template = loadTemplate();
         Map<String, String> placeholders = new LinkedHashMap<>();
-        placeholders.put("platformNameStart", "AI");
-        placeholders.put("platformNameHighlight", "SAFE");
-        placeholders.put("platformNameEnd", " PROTOCOL");
+        placeholders.put("platformNameStart", "I");
+        placeholders.put("platformNameHighlight", "CENTRIC");
+        placeholders.put("platformNameEnd", " PLATFORM");
         placeholders.put("recipientName", escape(resolveRecipientName(data)));
         placeholders.put("trackTitle", escape(data.trackTitle()));
         placeholders.put("certificateId", escape(shortId(data.certificateId())));

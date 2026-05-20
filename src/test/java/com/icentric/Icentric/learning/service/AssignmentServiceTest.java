@@ -44,6 +44,16 @@ class AssignmentServiceTest {
     TenantRepository tenantRepository;
     @Mock
     TenantSchemaService tenantSchemaService;
+    @Mock
+    com.icentric.Icentric.content.repository.LessonRepository lessonRepository;
+    @Mock
+    com.icentric.Icentric.learning.repository.LessonProgressRepository lessonProgressRepository;
+    @Mock
+    com.icentric.Icentric.audit.service.AuditMetadataService auditMetadataService;
+    @Mock
+    com.icentric.Icentric.identity.service.TenantAccessGuard tenantAccessGuard;
+    @Mock
+    com.icentric.Icentric.common.mail.EmailService emailService;
 
     @InjectMocks
     AssignmentService assignmentService;
@@ -51,6 +61,7 @@ class AssignmentServiceTest {
     @Test
     @DisplayName("bulkAssign applies tenant schema before repository lookup")
     void bulkAssign_appliesTenantSchemaBeforeAssignmentLookup() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
         UUID userId = UUID.randomUUID();
         UUID trackId = UUID.randomUUID();
 
@@ -61,9 +72,14 @@ class AssignmentServiceTest {
         track.setId(trackId);
         track.setVersion(3);
 
+        com.icentric.Icentric.platform.tenant.entity.Tenant tenant = new com.icentric.Icentric.platform.tenant.entity.Tenant("acme", "Acme Corp");
+
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
         when(userRepository.findByIdIn(List.of(userId))).thenReturn(List.of(user));
         when(trackRepository.findById(trackId)).thenReturn(Optional.of(track));
         when(repository.findByUserIdAndTrackId(userId, trackId)).thenReturn(Optional.empty());
+        when(repository.save(org.mockito.ArgumentMatchers.any(com.icentric.Icentric.learning.entity.UserAssignment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         assignmentService.bulkAssign(new BulkAssignmentRequest(
                 trackId,

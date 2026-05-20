@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Certificate of Completion</title>
+  <style>
+    @page { size: 297mm 210mm; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      background-color: #f5f7fa;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: #1a1a2e;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page {
+      width: 297mm; height: 210mm;
+      padding: 16mm;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+    }
+    /* Subtle grid pattern */
+    .page::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+              linear-gradient(rgba(0,0,0,0.015) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(0,0,0,0.015) 1px, transparent 1px);
+      background-size: 8mm 8mm;
+      pointer-events: none;
+    }
+    /* Floating accent shapes */
+    .accent-shape-1 {
+      position: absolute;
+      top: -20mm; right: -20mm;
+      width: 80mm; height: 80mm;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .accent-shape-2 {
+      position: absolute;
+      bottom: -30mm; left: 20mm;
+      width: 100mm; height: 100mm;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(16,185,129,0.04) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .frame {
+      width: 100%; height: 100%;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 3mm;
+      box-shadow:
+              0 1px 3px rgba(0,0,0,0.04),
+              0 8px 24px rgba(0,0,0,0.04);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      padding: 14mm 18mm;
+      z-index: 1;
+    }
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8mm;
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .platform-name {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #1a1a2e;
+    }
+    .tenant-name {
+      font-size: 8px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+    .meta {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .meta-label {
+      font-size: 6.5px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #cbd5e1;
+      margin-bottom: 1px;
+    }
+    .meta-value {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 9px;
+      font-weight: 500;
+      color: #1a1a2e;
+      letter-spacing: 0.5px;
+    }
+    .meta-sub {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 7.5px;
+      color: #94a3b8;
+      margin-top: 1px;
+    }
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: #1a1a2e;
+      border-radius: 10px;
+      margin-bottom: 6mm;
+    }
+    .badge-dot {
+      width: 4px; height: 4px;
+      background: #10b981;
+      border-radius: 50%;
+    }
+    .badge-text {
+      font-size: 7px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #ffffff;
+    }
+    /* Content */
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+    .presented-text {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 4mm;
+    }
+    .recipient-name {
+      font-size: 46px;
+      font-weight: 300;
+      color: #1a1a2e;
+      letter-spacing: -0.5px;
+      line-height: 1.1;
+      margin-bottom: 5mm;
+    }
+    .statement {
+      font-size: 10.5px;
+      font-weight: 400;
+      color: #64748b;
+      line-height: 1.7;
+      max-width: 155mm;
+    }
+    .gradient-line {
+      width: 20mm;
+      height: 2px;
+      background: linear-gradient(90deg, #6366f1, #10b981);
+      border-radius: 1px;
+      margin: 6mm auto;
+    }
+    /* Details */
+    .details {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-top: 8mm;
+      padding: 5mm 6mm;
+      background: rgba(248,250,252,0.8);
+      border-radius: 2mm;
+      border: 1px solid rgba(226,232,240,0.6);
+    }
+    .detail-group { display: flex; flex-direction: column; gap: 2px; }
+    .detail-group.wide { flex: 1; max-width: 55%; }
+    .detail-label {
+      font-size: 6.5px;
+      font-weight: 600;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: #cbd5e1;
+      margin-bottom: 3px;
+    }
+    .detail-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a2e;
+      line-height: 1.3;
+    }
+    .detail-value.date {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+    .qr-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+    .qr-code {
+      width: 14mm; height: 14mm;
+      display: block;
+      border-radius: 2px;
+      background: #ffffff;
+      padding: 2px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    /* Footer */
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+      padding-top: 5mm;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .footer-dot {
+      width: 5px; height: 5px;
+      background: linear-gradient(135deg, #6366f1, #10b981);
+      border-radius: 50%;
+    }
+    .footer-text {
+      font-size: 7px;
+      color: #94a3b8;
+      letter-spacing: 0.3px;
+      font-weight: 500;
+    }
+    .footer-text strong {
+      color: #1a1a2e;
+      font-weight: 700;
+    }
+    .footer-right { text-align: right; }
+    .verify-label {
+      font-size: 6.5px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #cbd5e1;
+      margin-bottom: 1px;
+    }
+    .verify-url {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 8px;
+      font-weight: 500;
+      color: #1a1a2e;
+      letter-spacing: 0.3px;
+    }
+  </style>
+  <base target="_blank">
+</head>
+<body>
+<div class="page">
+  <div class="accent-shape-1"></div>
+  <div class="accent-shape-2"></div>
+  <div class="frame">
+    <div class="header">
+      <div class="brand">
+        <div class="platform-name">{{platformNameStart}}{{platformNameHighlight}}{{platformNameEnd}}</div>
+        <div class="tenant-name">{{tenantName}}</div>
+      </div>
+      <div class="meta">
+        <div>
+          <div class="meta-label">Certificate ID</div>
+          <div class="meta-value">{{certificateId}}</div>
+          <div class="meta-sub">Learner: {{learnerId}}</div>
+        </div>
+      </div>
+    </div>
+    <div class="content">
+      <div class="badge">
+        <div class="badge-dot"></div>
+        <div class="badge-text">Certificate of Completion</div>
+      </div>
+      <div class="presented-text">This certificate is proudly presented to</div>
+      <div class="recipient-name">{{recipientName}}</div>
+      <div class="gradient-line"></div>
+      <div class="statement">
+        in recognition of successfully completing all requirements and demonstrating outstanding
+        commitment, knowledge, and proficiency in the designated programme of study.
+      </div>
+    </div>
+    <div class="details">
+      <div class="detail-group wide">
+        <div class="detail-label">Programme of Study</div>
+        <div class="detail-value">{{trackTitle}}</div>
+      </div>
+      <div class="detail-group">
+        <div class="detail-label">Date Issued</div>
+        <div class="detail-value date">{{issuedDate}}</div>
+      </div>
+      <div class="qr-section">
+        <div class="detail-label">Verify</div>
+        <img src="data:image/png;base64,{{qrCode}}" class="qr-code" alt="QR" />
+      </div>
+    </div>
+    <div class="footer">
+      <div class="footer-left">
+        <div class="footer-dot"></div>
+        <div class="footer-text">
+          Issued and digitally authenticated by <strong>Icentric Platform</strong> &middot; All rights reserved
+        </div>
+      </div>
+      <div class="footer-right">
+        <div class="verify-label">Verification Portal</div>
+        <div class="verify-url">icentric.com/verify</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
