@@ -11,6 +11,10 @@ import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.icentric.Icentric.tenant.TenantSchemaService;
+import com.icentric.Icentric.identity.repository.TenantUserRepository;
+import com.icentric.Icentric.identity.entity.TenantUser;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -29,19 +33,22 @@ public class ReportService {
     private final LessonProgressRepository lessonProgressRepository;
     private final TenantSchemaService tenantSchemaService;
     private final com.icentric.Icentric.platform.tenant.repository.TenantRepository tenantRepository;
+    private final TenantUserRepository tenantUserRepository;
 
     public ReportService(
             UserAssignmentRepository repository,
             LessonRepository lessonRepository,
             LessonProgressRepository lessonProgressRepository,
             TenantSchemaService tenantSchemaService,
-            com.icentric.Icentric.platform.tenant.repository.TenantRepository tenantRepository
+            com.icentric.Icentric.platform.tenant.repository.TenantRepository tenantRepository,
+            TenantUserRepository tenantUserRepository
     ) {
         this.repository = repository;
         this.lessonRepository = lessonRepository;
         this.lessonProgressRepository = lessonProgressRepository;
         this.tenantSchemaService = tenantSchemaService;
         this.tenantRepository = tenantRepository;
+        this.tenantUserRepository = tenantUserRepository;
     }
 
     private UUID getCurrentTenantId() {
@@ -59,26 +66,37 @@ public class ReportService {
     ) {
         tenantSchemaService.applyCurrentTenantSearchPath();
         UUID currentTenantId = getCurrentTenantId();
+        
+        UUID actorId = currentActorUserId();
+        UUID createdByFilter = null;
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, currentTenantId).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                createdByFilter = actorId;
+            }
+        }
+
         List<AssignmentStatus> normalizedStatuses = statuses == null
                 ? List.of()
                 : statuses.stream().distinct().toList();
-        List<Object[]> data = loadReportData(currentTenantId, department, trackId, normalizedStatuses);
+        List<Object[]> data = loadReportData(currentTenantId, createdByFilter, department, trackId, normalizedStatuses);
         return toReportRows(data);
     }
 
     private List<Object[]> loadReportData(
             UUID tenantId,
+            UUID createdBy,
             Department department,
             UUID trackId,
             List<AssignmentStatus> statuses
     ) {
         if (statuses == null || statuses.isEmpty()) {
-            return repository.fetchCompletionData(tenantId, department, null, trackId);
+            return repository.fetchCompletionData(tenantId, createdBy, department, null, trackId);
         }
         if (statuses.size() == 1) {
-            return repository.fetchCompletionData(tenantId, department, statuses.get(0), trackId);
+            return repository.fetchCompletionData(tenantId, createdBy, department, statuses.get(0), trackId);
         }
-        return repository.fetchReportDataByStatuses(tenantId, statuses, department, trackId);
+        return repository.fetchReportDataByStatuses(tenantId, createdBy, statuses, department, trackId);
     }
 
     private List<ReportRow> toReportRows(List<Object[]> data) {
@@ -224,5 +242,16 @@ public class ReportService {
         }
 
         return false;
+    }
+
+    private UUID currentActorUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
+        if (userIdRaw == null) {
+            return null;
+        }
+        return userIdRaw instanceof String
+                ? UUID.fromString((String) userIdRaw)
+                : UUID.fromString(userIdRaw.toString());
     }
 }

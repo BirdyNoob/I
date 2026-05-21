@@ -33,6 +33,7 @@ import java.util.List;
  * </ol>
  */
 @Service
+@lombok.extern.slf4j.Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -188,6 +189,22 @@ public class AuthService {
      */
     @Transactional
     public void logout(String rawRefreshToken) {
+        try {
+            RefreshToken stored = refreshTokenService.validate(rawRefreshToken);
+            if (stored != null) {
+                auditService.logForTenant(
+                        stored.getUserId(),
+                        AuditAction.LOGOUT,
+                        "USER",
+                        stored.getUserId().toString(),
+                        "User " + stored.getEmail() + " logged out from tenant " + stored.getTenantSlug(),
+                        stored.getTenantSlug()
+                );
+                log.info("User logged out successfully: email={}, userId={}, tenant={}", stored.getEmail(), stored.getUserId(), stored.getTenantSlug());
+            }
+        } catch (Exception e) {
+            log.warn("Could not write logout audit/application log: {}", e.getMessage());
+        }
         refreshTokenService.revoke(rawRefreshToken);
     }
 

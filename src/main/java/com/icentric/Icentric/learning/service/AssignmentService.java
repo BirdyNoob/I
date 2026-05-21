@@ -81,7 +81,19 @@ public class AssignmentService {
     public UserAssignment assignTrack(CreateAssignmentRequest request) {
         tenantSchemaService.applyCurrentTenantSearchPath();
         UUID adminUserId = currentActorUserId();
+        Tenant tenant = tenantAccessGuard.currentTenant();
         tenantAccessGuard.assertUserBelongsToCurrentTenant(request.userId());
+
+        if (adminUserId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(adminUserId, tenant.getId()).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                TenantUser targetMembership = tenantUserRepository.findByUserIdAndTenantId(request.userId(), tenant.getId())
+                        .orElseThrow(() -> new IllegalArgumentException("User not found in tenant"));
+                if (!adminUserId.equals(targetMembership.getCreatedBy())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not authorized to assign tracks to this user");
+                }
+            }
+        }
 
         if (repository.findByUserIdAndTrackId(request.userId(), request.trackId()).isPresent()) {
             if (adminUserId != null) {
@@ -131,7 +143,6 @@ public class AssignmentService {
         }
 
         // Send email notification to the learner
-        Tenant tenant = tenantAccessGuard.currentTenant();
         userRepository.findById(request.userId()).ifPresent(u ->
                 sendTrackAssignedNotification(u, track.getTitle(), tenant.getCompanyName(), tenant.getSlug(), request.dueDate())
         );
@@ -150,12 +161,34 @@ public class AssignmentService {
         if (request.userIds() != null && !request.userIds().isEmpty()) {
             List<UUID> requestedUserIds = request.userIds().stream().distinct().toList();
             tenantAccessGuard.assertUsersBelongToCurrentTenant(requestedUserIds);
+
+            if (adminUserId != null) {
+                TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(adminUserId, tenant.getId()).orElse(null);
+                if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                    List<TenantUser> targetMemberships = tenantUserRepository.findByTenantIdAndUserIdIn(tenant.getId(), new HashSet<>(requestedUserIds));
+                    for (TenantUser target : targetMemberships) {
+                        if (!adminUserId.equals(target.getCreatedBy())) {
+                            throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not authorized to assign tracks to one or more of these users");
+                        }
+                    }
+                }
+            }
+
             users = userRepository.findByIdIn(requestedUserIds);
         } else if (request.department() != null) {
             List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
                     .stream()
                     .filter(m -> request.department().equals(m.getDepartment()))
                     .toList();
+
+            if (adminUserId != null) {
+                TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(adminUserId, tenant.getId()).orElse(null);
+                if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                    memberships = memberships.stream()
+                            .filter(m -> adminUserId.equals(m.getCreatedBy()))
+                            .toList();
+                }
+            }
 
             List<UUID> userIds = memberships.stream().map(TenantUser::getUserId).toList();
             users = userRepository.findByIdIn(userIds);
@@ -259,14 +292,33 @@ public class AssignmentService {
             Pageable pageable
     ) {
         tenantSchemaService.applyCurrentTenantSearchPath();
+        Tenant tenant = tenantAccessGuard.currentTenant();
+        UUID actorId = currentActorUserId();
+        UUID createdByFilter = null;
+
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                createdByFilter = actorId;
+            }
+        }
+
         if (userId != null) {
             tenantAccessGuard.assertUserBelongsToCurrentTenant(userId);
+            if (createdByFilter != null) {
+                TenantUser targetMembership = tenantUserRepository.findByUserIdAndTenantId(userId, tenant.getId()).orElse(null);
+                if (targetMembership == null || !createdByFilter.equals(targetMembership.getCreatedBy())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not authorized to view this user's assignments");
+                }
+            }
         }
 
         Page<UserAssignment> assignments = repository.searchAssignments(
+                tenant.getId(),
                 status,
                 trackId,
                 userId,
+                createdByFilter,
                 pageable
         );
 
@@ -275,7 +327,6 @@ public class AssignmentService {
             return new PageImpl<>(List.of(), pageable, assignments.getTotalElements());
         }
 
-        Tenant tenant = tenantAccessGuard.currentTenant();
         Set<UUID> userIds = content.stream().map(UserAssignment::getUserId).collect(java.util.stream.Collectors.toSet());
         Set<UUID> trackIds = content.stream().map(UserAssignment::getTrackId).collect(java.util.stream.Collectors.toSet());
 

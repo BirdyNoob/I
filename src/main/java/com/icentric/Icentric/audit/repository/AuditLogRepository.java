@@ -27,6 +27,8 @@ public interface AuditLogRepository
 
     Page<AuditLog> findByTenantSlugAndActionIn(String tenantSlug, List<AuditAction> actions, Pageable pageable);
 
+    Page<AuditLog> findByTenantSlugAndActionInAndUserIdIn(String tenantSlug, List<AuditAction> actions, List<UUID> userIds, Pageable pageable);
+
     List<AuditLog> findByTenantSlugAndActionAndCreatedAtBetween(
             String tenantSlug,
             AuditAction action,

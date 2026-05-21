@@ -48,12 +48,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         JOIN TenantUser tu ON u.id = tu.userId
         WHERE tu.tenantId = :tenantId
           AND tu.role != 'SUPER_ADMIN'
+          AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
           AND (:department IS NULL OR tu.department = :department)
           AND (:role IS NULL OR tu.role = :role)
           AND (:isActive IS NULL OR u.isActive = :isActive)
     """)
     Page<com.icentric.Icentric.identity.dto.UserResponse> findTenantUsers(
             @Param("tenantId") UUID tenantId,
+            @Param("createdBy") UUID createdBy,
             @Param("department") Department department,
             @Param("role") String role,
             @Param("isActive") Boolean isActive,
@@ -68,6 +70,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         JOIN TenantUser tu ON u.id = tu.userId
         WHERE tu.tenantId = :tenantId
           AND tu.role != 'SUPER_ADMIN'
+          AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
           AND (:department IS NULL OR tu.department = :department)
           AND (:role IS NULL OR tu.role = :role)
           AND (:isActive IS NULL OR u.isActive = :isActive)
@@ -76,6 +79,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     """)
     Page<com.icentric.Icentric.identity.dto.UserResponse> searchTenantUsers(
             @Param("tenantId") UUID tenantId,
+            @Param("createdBy") UUID createdBy,
             @Param("department") Department department,
             @Param("role") String role,
             @Param("isActive") Boolean isActive,

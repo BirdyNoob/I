@@ -3,6 +3,7 @@ package com.icentric.Icentric.learning.repository;
 import com.icentric.Icentric.learning.entity.AssessmentAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -23,6 +24,9 @@ public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAtt
     @Query("SELECT AVG(a.score) FROM AssessmentAttempt a WHERE a.score IS NOT NULL")
     Double getAverageScore();
 
+    @Query("SELECT AVG(a.score) FROM AssessmentAttempt a WHERE a.userId IN :userIds AND a.score IS NOT NULL")
+    Double getAverageScoreByUserIds(List<UUID> userIds);
+
     /** Per-user average assessment score. */
     @Query("SELECT AVG(a.score) FROM AssessmentAttempt a WHERE a.userId = :userId AND a.score IS NOT NULL")
     Double getAverageScoreByUser(UUID userId);
@@ -30,6 +34,9 @@ public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAtt
     /** Average score within a time window. */
     @Query("SELECT AVG(a.score) FROM AssessmentAttempt a WHERE a.dateCompleted >= :from AND a.dateCompleted < :to AND a.score IS NOT NULL")
     Double getAverageScoreBetween(Instant from, Instant to);
+
+    @Query("SELECT AVG(a.score) FROM AssessmentAttempt a WHERE a.userId IN :userIds AND a.dateCompleted >= :from AND a.dateCompleted < :to AND a.score IS NOT NULL")
+    Double getAverageScoreBetweenAndUserIds(Instant from, Instant to, List<UUID> userIds);
 
     /**
      * Returns [assessmentConfigId, avgScore (0-100), attemptCount] per assessment.
@@ -40,10 +47,16 @@ public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAtt
                AVG(a.score),
                COUNT(a)
         FROM AssessmentAttempt a
-        WHERE a.score IS NOT NULL
+        JOIN TenantUser tu ON tu.userId = a.userId
+        WHERE tu.tenantId = :tenantId
+        AND a.score IS NOT NULL
+        AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
         GROUP BY a.assessmentConfigId
         """)
-    List<Object[]> getAssessmentStats();
+    List<Object[]> getAssessmentStats(
+            @Param("tenantId") UUID tenantId,
+            @Param("createdBy") UUID createdBy
+    );
 
     /**
      * Returns [department, avgScore (0-100), passRate (0-1)] per department.
@@ -58,9 +71,13 @@ public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAtt
         WHERE tu.tenantId = :tenantId
         AND tu.role = 'LEARNER'
         AND a.score IS NOT NULL
+        AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
         GROUP BY tu.department
         """)
-    List<Object[]> getAssessmentPerformanceByDepartment(UUID tenantId);
+    List<Object[]> getAssessmentPerformanceByDepartment(
+            @Param("tenantId") UUID tenantId,
+            @Param("createdBy") UUID createdBy
+    );
 
     /**
      * Returns [assessmentConfigId, department, failureRate%] ordered by highest failure first.
@@ -74,8 +91,12 @@ public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAtt
         JOIN TenantUser tu ON tu.userId = a.userId
         WHERE tu.tenantId = :tenantId
         AND tu.role = 'LEARNER'
+        AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
         GROUP BY a.assessmentConfigId, tu.department
         ORDER BY (SUM(CASE WHEN a.status = 'FAILED' THEN 1.0 ELSE 0.0 END) * 100.0) / COUNT(a) DESC
         """)
-    List<Object[]> getAssessmentFailureRateByDepartment(UUID tenantId);
+    List<Object[]> getAssessmentFailureRateByDepartment(
+            @Param("tenantId") UUID tenantId,
+            @Param("createdBy") UUID createdBy
+    );
 }

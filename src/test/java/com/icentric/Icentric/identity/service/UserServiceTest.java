@@ -8,6 +8,7 @@ import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
+import com.icentric.Icentric.identity.dto.UserResponse;
 import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
@@ -35,6 +36,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.mockito.Mockito;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,6 +101,7 @@ class UserServiceTest {
     @AfterEach
     void teardown() {
         TenantContext.clear();
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -195,5 +207,183 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.bulkUploadUsers(file, true))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("CSV must contain name, email, role, and department headers");
+    }
+
+    private void setupMockSecurityContext(UUID actorId) {
+        Authentication auth = Mockito.mock(Authentication.class);
+        when(auth.getDetails()).thenReturn(actorId.toString());
+        SecurityContext securityContext = Mockito.mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(auth);
+        SecurityContextHolder.setContext(securityContext);
+    }
+
+    @Test
+    @DisplayName("createUser by ADMIN sets createdBy and allows null department")
+    void createUser_byAdmin_setsCreatedByAndAllowsNullDepartment() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+        when(passwordEncoder.encode("secret123")).thenReturn("encoded-password");
+        when(userRepository.findByEmail("learner@example.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0, User.class));
+        when(tenantUserRepository.save(any(TenantUser.class))).thenAnswer(inv -> inv.getArgument(0, TenantUser.class));
+
+        CreateUserRequest request = new CreateUserRequest(
+                "Learner Null Dept",
+                "learner@example.com",
+                "secret123",
+                "LEARNER",
+                null,
+                null,
+                false
+        );
+
+        var response = userService.createUser(request);
+
+        ArgumentCaptor<TenantUser> tenantUserCaptor = ArgumentCaptor.forClass(TenantUser.class);
+        verify(tenantUserRepository).save(tenantUserCaptor.capture());
+
+        TenantUser savedMapping = tenantUserCaptor.getValue();
+        assertThat(savedMapping.getCreatedBy()).isEqualTo(adminId);
+        assertThat(savedMapping.getDepartment()).isNull();
+        assertThat(response.role()).isEqualTo("LEARNER");
+        assertThat(response.department()).isNull();
+    }
+
+    @Test
+    @DisplayName("createUser by ADMIN prevents SUPER_ADMIN creation")
+    void createUser_byAdmin_preventSuperAdminCreation() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        CreateUserRequest request = new CreateUserRequest(
+                "Super Admin Attempt",
+                "sa@example.com",
+                "secret123",
+                "SUPER_ADMIN",
+                null,
+                null,
+                false
+        );
+
+        assertThatThrownBy(() -> userService.createUser(request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Managers are not authorized to create SUPER_ADMIN users");
+    }
+
+    @Test
+    @DisplayName("updateUser by ADMIN on non-onboarded user throws AccessDeniedException")
+    void updateUser_byAdmin_onNonOnboardedUser_throwsAccessDenied() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        UUID targetUserId = UUID.randomUUID();
+        User targetUser = new User();
+        targetUser.setId(targetUserId);
+
+        TenantUser targetMapping = new TenantUser(targetUserId, tenant.getId(), "LEARNER");
+        targetMapping.setCreatedBy(UUID.randomUUID()); // owned by someone else
+
+        when(userRepository.findById(targetUserId)).thenReturn(Optional.of(targetUser));
+        when(tenantUserRepository.findByUserIdAndTenantId(targetUserId, tenant.getId()))
+                .thenReturn(Optional.of(targetMapping));
+
+        UpdateUserRequest updateRequest = new UpdateUserRequest("Updated Name", null, null, null, null);
+
+        assertThatThrownBy(() -> userService.updateUser(targetUserId, updateRequest))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("You are not authorized to modify this user");
+    }
+
+    @Test
+    @DisplayName("updateUser by ADMIN prevents promoting to SUPER_ADMIN")
+    void updateUser_byAdmin_preventSuperAdminPromotion() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        UUID targetUserId = UUID.randomUUID();
+        User targetUser = new User();
+        targetUser.setId(targetUserId);
+
+        TenantUser targetMapping = new TenantUser(targetUserId, tenant.getId(), "LEARNER");
+        targetMapping.setCreatedBy(adminId); // owned by this admin
+
+        when(userRepository.findById(targetUserId)).thenReturn(Optional.of(targetUser));
+        when(tenantUserRepository.findByUserIdAndTenantId(targetUserId, tenant.getId()))
+                .thenReturn(Optional.of(targetMapping));
+
+        UpdateUserRequest updateRequest = new UpdateUserRequest(null, "SUPER_ADMIN", null, null, null);
+
+        assertThatThrownBy(() -> userService.updateUser(targetUserId, updateRequest))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Managers are not authorized to promote users to SUPER_ADMIN");
+    }
+
+    @Test
+    @DisplayName("deactivateUser by ADMIN on non-onboarded user throws AccessDeniedException")
+    void deactivateUser_byAdmin_onNonOnboardedUser_throwsAccessDenied() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        UUID targetUserId = UUID.randomUUID();
+        User targetUser = new User();
+        targetUser.setId(targetUserId);
+
+        TenantUser targetMapping = new TenantUser(targetUserId, tenant.getId(), "LEARNER");
+        targetMapping.setCreatedBy(UUID.randomUUID()); // owned by someone else
+
+        when(userRepository.findById(targetUserId)).thenReturn(Optional.of(targetUser));
+        when(tenantUserRepository.findByUserIdAndTenantId(targetUserId, tenant.getId()))
+                .thenReturn(Optional.of(targetMapping));
+
+        assertThatThrownBy(() -> userService.deactivateUser(targetUserId))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("You are not authorized to deactivate this user");
+    }
+
+    @Test
+    @DisplayName("getUsers by ADMIN filters by createdBy")
+    void getUsers_byAdmin_passesCreatedByFilter() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<UserResponse> expectedPage = new PageImpl<>(List.of());
+
+        when(userRepository.findTenantUsers(tenant.getId(), adminId, null, null, null, pageable))
+                .thenReturn(expectedPage);
+
+        var result = userService.getUsers(null, null, null, pageable);
+
+        assertThat(result).isSameAs(expectedPage);
     }
 }

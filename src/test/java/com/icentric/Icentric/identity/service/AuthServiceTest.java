@@ -158,4 +158,27 @@ class AuthServiceTest {
         authService.logout("the-token");
         verify(refreshTokenService).revoke("the-token");
     }
+
+    @Test
+    @DisplayName("logout logs the logout event when valid token is provided")
+    void logoutLogsEvent() {
+        UUID userId = UUID.randomUUID();
+        RefreshToken stored = new RefreshToken(
+                "valid-token", userId, "learner@acme.com", "ROLE_LEARNER",
+                "acme", Instant.now().plus(1, ChronoUnit.DAYS));
+
+        when(refreshTokenService.validate("valid-token")).thenReturn(stored);
+
+        authService.logout("valid-token");
+
+        verify(auditService).logForTenant(
+                eq(userId),
+                eq(AuditAction.LOGOUT),
+                eq("USER"),
+                eq(userId.toString()),
+                contains("logged out from tenant acme"),
+                eq("acme")
+        );
+        verify(refreshTokenService).revoke("valid-token");
+    }
 }

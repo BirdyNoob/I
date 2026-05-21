@@ -18,6 +18,8 @@ import com.icentric.Icentric.learning.repository.*;
 import com.icentric.Icentric.learning.service.AssessmentService;
 import com.icentric.Icentric.learning.service.CertificateService;
 import com.icentric.Icentric.tenant.TenantSchemaService;
+import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.audit.constants.AuditAction;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +52,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     private final ObjectMapper objectMapper;
     private final TenantSchemaService tenantSchemaService;
     private final EntityManager entityManager;
+    private final AuditService auditService;
 
     private static final int RETAKE_COOLDOWN_HOURS = 24;
 
@@ -474,6 +477,16 @@ public class AssessmentServiceImpl implements AssessmentService {
             newAttempt.setScore(0);
             assessmentAttemptRepository.save(newAttempt);
 
+            String assessmentTitle = configData.path("title").asText("Assessment");
+            auditService.log(
+                    userId,
+                    AuditAction.ASSESSMENT_START,
+                    "ASSESSMENT",
+                    assessmentId,
+                    "Started final assessment: " + assessmentTitle + " (Attempt #" + attemptNumber + ")"
+            );
+            log.info("Assessment started: userId={}, assessmentId={}, attemptNumber={}", userId, assessmentId, attemptNumber);
+
             resumeAttemptId = newAttempt.getId().toString();
             // Keep currentStatus as "NEW" so the frontend knows it's a fresh start, 
             // even though the attempt is stored as IN_PROGRESS in the database.
@@ -707,6 +720,16 @@ public class AssessmentServiceImpl implements AssessmentService {
         }
         
         assessmentAttemptRepository.save(attempt);
+
+        String assessmentTitle = cfgData.path("title").asText("Assessment");
+        auditService.log(
+                userId,
+                AuditAction.ASSESSMENT_SUBMIT,
+                "ASSESSMENT",
+                assessmentId,
+                "Submitted final assessment: " + assessmentTitle + " - Score: " + score + "%, Status: " + status + " (Attempt #" + attempt.getAttemptNumber() + ")"
+        );
+        log.info("Assessment submitted: userId={}, assessmentId={}, attemptNumber={}, score={}%, status={}", userId, assessmentId, attempt.getAttemptNumber(), score, status);
 
         // ── Certificate: trigger real issuance via CertificateService ──────────
         CertificateResultDto certDto = null;

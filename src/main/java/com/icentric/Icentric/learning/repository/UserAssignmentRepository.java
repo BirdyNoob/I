@@ -32,12 +32,14 @@ JOIN User u ON ua.userId = u.id
 JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
 JOIN Track t ON ua.trackId = t.id
 WHERE tu.role = 'LEARNER'
+AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
 AND (:department IS NULL OR tu.department = :department)
 AND (:status IS NULL OR ua.status = :status)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
     List<Object[]> fetchCompletionData(
             @Param("tenantId") UUID tenantId,
+            @Param("createdBy") UUID createdBy,
             @Param("department") Department department,
             @Param("status") AssignmentStatus status,
             @Param("trackId") UUID trackId
@@ -50,11 +52,13 @@ JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
 JOIN Track t ON ua.trackId = t.id
 WHERE ua.status IN :statuses
 AND tu.role = 'LEARNER'
+AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
 AND (:department IS NULL OR tu.department = :department)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
     List<Object[]> fetchRiskData(
             @Param("tenantId") UUID tenantId,
+            @Param("createdBy") UUID createdBy,
             @Param("statuses") List<AssignmentStatus> statuses,
             @Param("department") Department department,
             @Param("trackId") UUID trackId
@@ -67,11 +71,13 @@ JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
 JOIN Track t ON ua.trackId = t.id
 WHERE ua.status IN :statuses
 AND tu.role = 'LEARNER'
+AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
 AND (:department IS NULL OR tu.department = :department)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 """)
     List<Object[]> fetchReportDataByStatuses(
             @Param("tenantId") UUID tenantId,
+            @Param("createdBy") UUID createdBy,
             @Param("statuses") List<AssignmentStatus> statuses,
             @Param("department") Department department,
             @Param("trackId") UUID trackId
@@ -86,11 +92,13 @@ FROM UserAssignment ua
 JOIN User u ON ua.userId = u.id
 JOIN TenantUser tu ON tu.userId = u.id AND tu.tenantId = :tenantId
 WHERE tu.role = 'LEARNER'
+AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
 GROUP BY tu.department
 """)
     List<Object[]> fetchDepartmentStats(
             @Param("tenantId") UUID tenantId,
-            @Param("completedStatus") AssignmentStatus completedStatus
+            @Param("completedStatus") AssignmentStatus completedStatus,
+            @Param("createdBy") UUID createdBy
     );
 
     long countByAssignedAtAfter(Instant assignedAt);
@@ -98,14 +106,18 @@ GROUP BY tu.department
     long countByDueDateBetweenAndStatusIn(Instant dueDateFrom, Instant dueDateTo, List<AssignmentStatus> statuses);
     @Query("""
 SELECT ua FROM UserAssignment ua
+JOIN TenantUser tu ON ua.userId = tu.userId AND tu.tenantId = :tenantId
 WHERE (:status IS NULL OR ua.status = :status)
 AND (:trackId IS NULL OR ua.trackId = :trackId)
 AND (:userId IS NULL OR ua.userId = :userId)
+AND (:createdBy IS NULL OR tu.createdBy = :createdBy)
 """)
     Page<UserAssignment> searchAssignments(
+            @Param("tenantId") UUID tenantId,
             @Param("status") AssignmentStatus status,
             @Param("trackId") UUID trackId,
             @Param("userId") UUID userId,
+            @Param("createdBy") UUID createdBy,
             Pageable pageable
     );
 }

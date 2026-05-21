@@ -122,6 +122,20 @@ public class UserService {
     public UserResponse createUser(CreateUserRequest request) {
         Tenant tenant = tenantAccessGuard.currentTenant();
 
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
+        if (actorMembership != null) {
+            if ("ADMIN".equals(actorMembership.getRole())) {
+                if ("SUPER_ADMIN".equalsIgnoreCase(request.role())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Managers are not authorized to create SUPER_ADMIN users");
+                }
+            }
+        }
+
         // Upsert global user
         User user = userRepository.findByEmail(request.email())
                 .orElseGet(() -> {
@@ -140,6 +154,9 @@ public class UserService {
         // Create tenant mapping
         TenantUser mapping = new TenantUser(user.getId(), tenant.getId(), request.role());
         mapping.setDepartment(request.department());
+        if (actorId != null) {
+            mapping.setCreatedBy(actorId);
+        }
         tenantUserRepository.save(mapping);
 
         // Auto-assign department tracks if the toggle is enabled
@@ -203,9 +220,18 @@ public class UserService {
             Pageable pageable
     ) {
         Tenant tenant = tenantAccessGuard.currentTenant();
+        UUID actorId = currentActorUserId();
+        UUID createdByFilter = null;
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                createdByFilter = actorId;
+            }
+        }
 
         return userRepository.findTenantUsers(
                 tenant.getId(),
+                createdByFilter,
                 department,
                 role,
                 isActive,
@@ -226,6 +252,16 @@ public class UserService {
         TenantUser membership = tenantUserRepository
                 .findByUserIdAndTenantId(userId, tenant.getId())
                 .orElseThrow(() -> new UserNotFoundException(userId));
+
+        UUID actorId = currentActorUserId();
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                if (!actorId.equals(membership.getCreatedBy())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not authorized to view this user");
+                }
+            }
+        }
 
         // All assignments for this user
         List<UserAssignment> assignments = userAssignmentRepository.findByUserId(userId);
@@ -333,6 +369,21 @@ public class UserService {
                 .findByUserIdAndTenantId(userId, tenant.getId())
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            if (!actorId.equals(mapping.getCreatedBy())) {
+                throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not authorized to modify this user");
+            }
+            if (request.role() != null && "SUPER_ADMIN".equalsIgnoreCase(request.role())) {
+                throw new org.springframework.security.access.AccessDeniedException("Managers are not authorized to promote users to SUPER_ADMIN");
+            }
+        }
+
         // Update global fields
         if (request.name() != null) {
             user.setName(normalizeName(request.name()));
@@ -373,6 +424,19 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
+        Tenant tenant = tenantAccessGuard.currentTenant();
+        UUID actorId = currentActorUserId();
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                TenantUser mapping = tenantUserRepository.findByUserIdAndTenantId(userId, tenant.getId())
+                        .orElseThrow(() -> new UserNotFoundException(userId));
+                if (!actorId.equals(mapping.getCreatedBy())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not authorized to deactivate this user");
+                }
+            }
+        }
+
         user.setIsActive(false);
         userRepository.save(user);
 
@@ -397,11 +461,21 @@ public class UserService {
     ) {
         Tenant tenant = tenantAccessGuard.currentTenant();
 
+        UUID actorId = currentActorUserId();
+        UUID createdByFilter = null;
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                createdByFilter = actorId;
+            }
+        }
+
         String normalizedName = normalizeSearchText(name);
         String normalizedEmail = normalizeSearchEmail(email);
 
         return userRepository.searchTenantUsers(
                 tenant.getId(),
+                createdByFilter,
                 department,
                 role,
                 isActive,
@@ -479,6 +553,16 @@ public class UserService {
 
                     validateCandidate(nameVal, emailVal, roleVal);
 
+                    UUID actId = currentActorUserId();
+                    if (actId != null) {
+                        TenantUser actMem = tenantUserRepository.findByUserIdAndTenantId(actId, tenant.getId()).orElse(null);
+                        if (actMem != null && "ADMIN".equals(actMem.getRole())) {
+                            if ("SUPER_ADMIN".equalsIgnoreCase(roleVal)) {
+                                throw new IllegalArgumentException("Managers are not authorized to upload SUPER_ADMIN users");
+                            }
+                        }
+                    }
+
                     if (!seenEmailsInFile.add(emailVal)) {
                         throw new IllegalArgumentException("Duplicate email in file");
                     }
@@ -550,6 +634,10 @@ public class UserService {
             // Create tenant mapping
             TenantUser mapping = new TenantUser(user.getId(), tenant.getId(), candidate.role());
             mapping.setDepartment(candidate.department());
+            UUID actId = currentActorUserId();
+            if (actId != null) {
+                mapping.setCreatedBy(actId);
+            }
             tenantUserRepository.save(mapping);
 
             // Auto-assign department tracks if the toggle is enabled

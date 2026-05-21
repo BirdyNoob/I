@@ -41,6 +41,9 @@ public class TenantUser {
     @Column(name = "department")
     private Department department;
 
+    @Column(name = "created_by")
+    private UUID createdBy;
+
     @Column(name = "joined_at", nullable = false)
     private Instant joinedAt = Instant.now();
 

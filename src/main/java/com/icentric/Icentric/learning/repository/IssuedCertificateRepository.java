@@ -18,6 +18,8 @@ public interface IssuedCertificateRepository
     List<IssuedCertificate> findByUserId(UUID userId);
     List<IssuedCertificate> findByStatus(com.icentric.Icentric.learning.constants.CertificateStatus status);
     long countByIssuedAtAfter(java.time.Instant issuedAt);
+    @Query("SELECT COUNT(ic) FROM IssuedCertificate ic WHERE ic.userId IN :userIds AND ic.issuedAt > :issuedAt")
+    long countByUserIdInAndIssuedAtAfter(List<UUID> userIds, java.time.Instant issuedAt);
     boolean existsByUserIdAndTrackId(UUID userId, UUID trackId);
     Optional<IssuedCertificate> findByUserIdAndTrackId(UUID userId, UUID trackId);
     Optional<IssuedCertificate> findByVerificationToken(UUID verificationToken);

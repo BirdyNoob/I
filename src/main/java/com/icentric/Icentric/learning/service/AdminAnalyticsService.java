@@ -92,10 +92,24 @@ public class AdminAnalyticsService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         Tenant tenant = currentTenant();
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
         List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
                 .stream()
                 .filter(m -> "LEARNER".equals(m.getRole()))
                 .toList();
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            UUID finalActorId = actorId;
+            memberships = memberships.stream()
+                    .filter(m -> finalActorId.equals(m.getCreatedBy()))
+                    .toList();
+        }
+
         long totalUsers = memberships.size();
         
         List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
@@ -114,7 +128,12 @@ public class AdminAnalyticsService {
                 totalAssignments == 0 ? 0 :
                         (completedAssignments * 100.0) / totalAssignments;
 
-        Double avgScore = assessmentAttemptRepository.getAverageScore();
+        Double avgScore;
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            avgScore = learnerUserIds.isEmpty() ? 0.0 : assessmentAttemptRepository.getAverageScoreByUserIds(learnerUserIds);
+        } else {
+            avgScore = assessmentAttemptRepository.getAverageScore();
+        }
 
         return new AdminAnalyticsResponse(
                 totalUsers,
@@ -130,11 +149,25 @@ public class AdminAnalyticsService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         Tenant tenant = currentTenant();
-        List<UUID> learnerUserIds = tenantUserRepository.findByTenantId(tenant.getId())
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
                 .stream()
                 .filter(m -> "LEARNER".equals(m.getRole()))
-                .map(TenantUser::getUserId)
                 .toList();
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            UUID finalActorId = actorId;
+            memberships = memberships.stream()
+                    .filter(m -> finalActorId.equals(m.getCreatedBy()))
+                    .toList();
+        }
+
+        List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
 
         List<UserAssignment> assignments = assignmentRepository.findAll().stream()
                 .filter(a -> learnerUserIds.contains(a.getUserId()))
@@ -195,7 +228,19 @@ public class AdminAnalyticsService {
     public List<WeakLessonResponse> getWeakLessons() {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        List<Object[]> stats = assessmentAttemptRepository.getAssessmentStats();
+        Tenant tenant = currentTenant();
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
+        UUID createdByFilter = null;
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            createdByFilter = actorId;
+        }
+
+        List<Object[]> stats = assessmentAttemptRepository.getAssessmentStats(tenant.getId(), createdByFilter);
 
         List<WeakLessonResponse> result = new ArrayList<>();
 
@@ -229,10 +274,23 @@ public class AdminAnalyticsService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         Tenant tenant = currentTenant();
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
         List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
                 .stream()
                 .filter(m -> "LEARNER".equals(m.getRole()))
                 .toList();
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            UUID finalActorId = actorId;
+            memberships = memberships.stream()
+                    .filter(m -> finalActorId.equals(m.getCreatedBy()))
+                    .toList();
+        }
 
         // Group memberships by department (allow null)
         Map<Department, List<TenantUser>> byDept = new HashMap<>();
@@ -301,6 +359,17 @@ public class AdminAnalyticsService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         Tenant tenant = currentTenant();
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
+        UUID createdByFilter = null;
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            createdByFilter = actorId;
+        }
+
         Instant now = Instant.now();
         Instant sevenDaysAgo = now.minusSeconds(7L * 24 * 60 * 60);
         Instant fourteenDaysAgo = now.minusSeconds(14L * 24 * 60 * 60);
@@ -309,6 +378,14 @@ public class AdminAnalyticsService {
                 .stream()
                 .filter(m -> "LEARNER".equals(m.getRole()))
                 .toList();
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            UUID finalActorId = actorId;
+            memberships = memberships.stream()
+                    .filter(m -> finalActorId.equals(m.getCreatedBy()))
+                    .toList();
+        }
+
         Map<UUID, TenantUser> membershipByUserId = memberships.stream()
                 .collect(Collectors.toMap(TenantUser::getUserId, m -> m, (a, b) -> a));
         List<UUID> tenantUserIds = memberships.stream().map(TenantUser::getUserId).distinct().toList();
@@ -335,17 +412,33 @@ public class AdminAnalyticsService {
                 .filter(a -> a.getStatus() == AssignmentStatus.OVERDUE && a.getDueDate() != null && !a.getDueDate().isBefore(sevenDaysAgo))
                 .count();
 
-        Double avgScoreCurrent = assessmentAttemptRepository.getAverageScore();
+        Double avgScoreCurrent;
+        Double thisWeekScore;
+        Double prevWeekScore;
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            avgScoreCurrent = tenantUserIds.isEmpty() ? 0.0 : assessmentAttemptRepository.getAverageScoreByUserIds(tenantUserIds);
+            thisWeekScore = tenantUserIds.isEmpty() ? 0.0 : assessmentAttemptRepository.getAverageScoreBetweenAndUserIds(sevenDaysAgo, now, tenantUserIds);
+            prevWeekScore = tenantUserIds.isEmpty() ? 0.0 : assessmentAttemptRepository.getAverageScoreBetweenAndUserIds(fourteenDaysAgo, sevenDaysAgo, tenantUserIds);
+        } else {
+            avgScoreCurrent = assessmentAttemptRepository.getAverageScore();
+            thisWeekScore = assessmentAttemptRepository.getAverageScoreBetween(sevenDaysAgo, now);
+            prevWeekScore = assessmentAttemptRepository.getAverageScoreBetween(fourteenDaysAgo, sevenDaysAgo);
+        }
+
         double avgAssessmentScorePercent = avgScoreCurrent == null ? 0 : avgScoreCurrent;
-        Double thisWeekScore = assessmentAttemptRepository.getAverageScoreBetween(sevenDaysAgo, now);
-        Double prevWeekScore = assessmentAttemptRepository.getAverageScoreBetween(fourteenDaysAgo, sevenDaysAgo);
         double avgAssessmentTrendPoints = ((thisWeekScore == null ? 0 : thisWeekScore) - (prevWeekScore == null ? 0 : prevWeekScore)) * 100;
 
         Instant monthStart = LocalDate.now(ZoneOffset.UTC).withDayOfMonth(1).atStartOfDay().toInstant(ZoneOffset.UTC);
-        long certificatesIssuedThisMonth = issuedCertificateRepository.countByIssuedAtAfter(monthStart);
+        long certificatesIssuedThisMonth;
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            certificatesIssuedThisMonth = tenantUserIds.isEmpty() ? 0L : issuedCertificateRepository.countByUserIdInAndIssuedAtAfter(tenantUserIds, monthStart);
+        } else {
+            certificatesIssuedThisMonth = issuedCertificateRepository.countByIssuedAtAfter(monthStart);
+        }
 
         List<AdminOverviewResponse.CompletionByDepartment> completionByDepartment = assignmentRepository
-                .fetchDepartmentStats(tenant.getId(), AssignmentStatus.COMPLETED)
+                .fetchDepartmentStats(tenant.getId(), AssignmentStatus.COMPLETED, createdByFilter)
                 .stream()
                 .map(r -> {
                     String departmentName = "UNKNOWN";
@@ -358,9 +451,9 @@ public class AdminAnalyticsService {
                     long completed = ((Number) r[2]).longValue();
                     double progressPercent = total == 0 ? 0 : (completed * 100.0) / total;
                     return new AdminOverviewResponse.CompletionByDepartment(
-                            departmentName,
-                            progressPercent,
-                            classifyDepartmentStatus(progressPercent)
+                             departmentName,
+                             progressPercent,
+                             classifyDepartmentStatus(progressPercent)
                     );
                 })
                 .sorted(Comparator.comparing(AdminOverviewResponse.CompletionByDepartment::department, String.CASE_INSENSITIVE_ORDER))
@@ -389,10 +482,10 @@ public class AdminAnalyticsService {
                 })
                 .toList();
 
-        List<AdminOverviewResponse.ActivityItem> activityFeed = buildActivityFeed(tenant, now, usersById);
+        List<AdminOverviewResponse.ActivityItem> activityFeed = buildActivityFeed(tenant, now, usersById, tenantUserIds, actorMembership);
 
         List<AdminOverviewResponse.QuizPerformanceByDepartment> quizPerformanceByDepartment = assessmentAttemptRepository
-                .getAssessmentPerformanceByDepartment(tenant.getId())
+                .getAssessmentPerformanceByDepartment(tenant.getId(), createdByFilter)
                 .stream()
                 .map(row -> {
                     String dept = "UNKNOWN";
@@ -411,7 +504,7 @@ public class AdminAnalyticsService {
                 .toList();
 
         List<AdminOverviewResponse.HighestFailureLesson> highestFailureLessons = assessmentAttemptRepository
-                .getAssessmentFailureRateByDepartment(tenant.getId())
+                .getAssessmentFailureRateByDepartment(tenant.getId(), createdByFilter)
                 .stream()
                 .limit(10)
                 .map(row -> {
@@ -499,11 +592,25 @@ public class AdminAnalyticsService {
 
     private long countRiskUsers() {
         Tenant tenant = currentTenant();
-        List<UUID> learnerUserIds = tenantUserRepository.findByTenantId(tenant.getId())
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
                 .stream()
                 .filter(m -> "LEARNER".equals(m.getRole()))
-                .map(TenantUser::getUserId)
                 .toList();
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            UUID finalActorId = actorId;
+            memberships = memberships.stream()
+                    .filter(m -> finalActorId.equals(m.getCreatedBy()))
+                    .toList();
+        }
+
+        List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
 
         List<UserAssignment> assignments = assignmentRepository.findAll().stream()
                 .filter(a -> learnerUserIds.contains(a.getUserId()))
@@ -577,13 +684,28 @@ public class AdminAnalyticsService {
     private List<AdminOverviewResponse.ActivityItem> buildActivityFeed(
             Tenant tenant,
             Instant now,
-            Map<UUID, User> usersById
+            Map<UUID, User> usersById,
+            List<UUID> tenantUserIds,
+            TenantUser actorMembership
     ) {
-        return auditLogRepository.findByTenantSlugAndActionIn(
-                tenant.getSlug(), 
-                MAJOR_ACTIVITY_ACTIONS,
-                PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"))
-            ).stream()
+        PageRequest pageRequest = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<com.icentric.Icentric.audit.entity.AuditLog> logs;
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            logs = tenantUserIds.isEmpty() ? List.of() : auditLogRepository.findByTenantSlugAndActionInAndUserIdIn(
+                    tenant.getSlug(), 
+                    MAJOR_ACTIVITY_ACTIONS,
+                    tenantUserIds,
+                    pageRequest
+            ).getContent();
+        } else {
+            logs = auditLogRepository.findByTenantSlugAndActionIn(
+                    tenant.getSlug(), 
+                    MAJOR_ACTIVITY_ACTIONS,
+                    pageRequest
+            ).getContent();
+        }
+
+        return logs.stream()
             .map(log -> {
                 String userName = "System";
                 if (log.getUserId() != null) {
@@ -729,14 +851,28 @@ public class AdminAnalyticsService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         Tenant tenant = currentTenant();
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
         Instant now = Instant.now();
 
         // Only LEARNER roles
-        List<UUID> learnerUserIds = tenantUserRepository.findByTenantId(tenant.getId())
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
                 .stream()
                 .filter(m -> "LEARNER".equals(m.getRole()))
-                .map(TenantUser::getUserId)
                 .toList();
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            UUID finalActorId = actorId;
+            memberships = memberships.stream()
+                    .filter(m -> finalActorId.equals(m.getCreatedBy()))
+                    .toList();
+        }
+
+        List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
 
         // Filter down to requested users if caller supplied a list
         List<UUID> scopedUserIds = (targetUserIds == null || targetUserIds.isEmpty())
