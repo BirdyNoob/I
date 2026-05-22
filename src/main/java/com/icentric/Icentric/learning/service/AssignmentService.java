@@ -8,6 +8,10 @@ import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.identity.entity.UserGroup;
+import com.icentric.Icentric.identity.entity.GroupMembership;
+import com.icentric.Icentric.identity.repository.UserGroupRepository;
+import com.icentric.Icentric.identity.repository.GroupMembershipRepository;
 import com.icentric.Icentric.identity.service.TenantAccessGuard;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.dto.AdminAssignmentSearchResponse;
@@ -47,6 +51,8 @@ public class AssignmentService {
     private final AuditMetadataService auditMetadataService;
     private final TenantAccessGuard tenantAccessGuard;
     private final EmailService emailService;
+    private final UserGroupRepository userGroupRepository;
+    private final GroupMembershipRepository groupMembershipRepository;
     private final String publicBaseUrl;
 
     public AssignmentService(
@@ -61,6 +67,8 @@ public class AssignmentService {
             AuditMetadataService auditMetadataService,
             TenantAccessGuard tenantAccessGuard,
             EmailService emailService,
+            UserGroupRepository userGroupRepository,
+            GroupMembershipRepository groupMembershipRepository,
             @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl
     ) {
         this.repository = repository;
@@ -74,6 +82,8 @@ public class AssignmentService {
         this.auditMetadataService = auditMetadataService;
         this.tenantAccessGuard = tenantAccessGuard;
         this.emailService = emailService;
+        this.userGroupRepository = userGroupRepository;
+        this.groupMembershipRepository = groupMembershipRepository;
         this.publicBaseUrl = publicBaseUrl;
     }
 
@@ -192,8 +202,40 @@ public class AssignmentService {
 
             List<UUID> userIds = memberships.stream().map(TenantUser::getUserId).toList();
             users = userRepository.findByIdIn(userIds);
+        } else if (request.groupId() != null) {
+            UUID groupId = request.groupId();
+            UserGroup group = userGroupRepository.findByIdAndTenantId(groupId, tenant.getId())
+                    .orElseThrow(() -> new NoSuchElementException("Group not found: " + groupId));
+
+            if (adminUserId != null) {
+                TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(adminUserId, tenant.getId()).orElse(null);
+                if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                    if (!adminUserId.equals(group.getCreatedBy())) {
+                        throw new org.springframework.security.access.AccessDeniedException("Access denied: You do not have permission to access this group");
+                    }
+                }
+            }
+
+            List<GroupMembership> memberships = groupMembershipRepository.findByGroupIdOrderByCreatedAtDesc(groupId);
+            List<UUID> memberUserIds = memberships.stream().map(GroupMembership::getUserId).toList();
+
+            if (adminUserId != null) {
+                TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(adminUserId, tenant.getId()).orElse(null);
+                if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                    List<TenantUser> targetMemberships = tenantUserRepository.findByTenantIdAndUserIdIn(tenant.getId(), new HashSet<>(memberUserIds));
+                    List<UUID> onboardedUserIds = targetMemberships.stream()
+                            .filter(m -> adminUserId.equals(m.getCreatedBy()))
+                            .map(TenantUser::getUserId)
+                            .toList();
+                    users = userRepository.findByIdIn(onboardedUserIds);
+                } else {
+                    users = userRepository.findByIdIn(memberUserIds);
+                }
+            } else {
+                users = userRepository.findByIdIn(memberUserIds);
+            }
         } else {
-            throw new IllegalArgumentException("Provide userIds or department");
+            throw new IllegalArgumentException("Provide userIds, department, or groupId");
         }
 
         int total = users.size();

@@ -29,4 +29,7 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, UUID> {
 
     @Query("select tu.userId from TenantUser tu where tu.tenantId = :tenantId and tu.userId in :userIds")
     List<UUID> findUserIdsByTenantIdAndUserIdIn(UUID tenantId, Collection<UUID> userIds);
+
+    @Query("select tu.userId from TenantUser tu where tu.tenantId = :tenantId and tu.createdBy = :createdBy")
+    List<UUID> findUserIdsByTenantIdAndCreatedBy(UUID tenantId, UUID createdBy);
 }

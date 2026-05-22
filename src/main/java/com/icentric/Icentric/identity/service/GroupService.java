@@ -82,6 +82,17 @@ public class GroupService {
     public List<GroupResponse> listGroups() {
         UUID tenantId = tenantAccessGuard.currentTenantId();
         List<UserGroup> groups = userGroupRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+
+        UUID actorId = currentActorUserId();
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenantId).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                groups = groups.stream()
+                        .filter(g -> actorId.equals(g.getCreatedBy()))
+                        .toList();
+            }
+        }
+
         if (groups.isEmpty()) {
             return List.of();
         }
@@ -133,6 +144,18 @@ public class GroupService {
         UUID tenantId = tenantAccessGuard.currentTenantId();
         UserGroup group = getTenantGroup(groupId, tenantId);
         tenantAccessGuard.assertUserBelongsToCurrentTenant(userId);
+
+        UUID actorId = currentActorUserId();
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenantId).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                TenantUser targetUserMembership = tenantUserRepository.findByUserIdAndTenantId(userId, tenantId)
+                        .orElseThrow(() -> new IllegalArgumentException("User not found in tenant"));
+                if (!actorId.equals(targetUserMembership.getCreatedBy())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You can only add users you onboarded to groups");
+                }
+            }
+        }
 
         if (groupMembershipRepository.existsByGroupIdAndUserId(groupId, userId)) {
             throw new IllegalStateException("User is already in this group");
@@ -190,8 +213,19 @@ public class GroupService {
     }
 
     private UserGroup getTenantGroup(UUID groupId, UUID tenantId) {
-        return userGroupRepository.findByIdAndTenantId(groupId, tenantId)
+        UserGroup group = userGroupRepository.findByIdAndTenantId(groupId, tenantId)
                 .orElseThrow(() -> new NoSuchElementException("Group not found: " + groupId));
+
+        UUID actorId = currentActorUserId();
+        if (actorId != null) {
+            TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenantId).orElse(null);
+            if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                if (!actorId.equals(group.getCreatedBy())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You do not have permission to access this group");
+                }
+            }
+        }
+        return group;
     }
 
     private GroupResponse toGroupResponse(UserGroup group, long memberCount) {

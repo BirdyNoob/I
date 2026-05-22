@@ -18,6 +18,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -64,6 +66,38 @@ public class AuditService {
             Instant createdTo
     ) {
         String tenant = TenantContext.getTenant();
+
+        // 1. Identify current authenticated user
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        UUID authUserId = null;
+        if (auth != null && auth.getDetails() != null) {
+            try {
+                authUserId = UUID.fromString(auth.getDetails().toString());
+            } catch (IllegalArgumentException ignored) {}
+        }
+
+        // 2. Fetch tenant entity
+        Tenant tenantEntity = tenantRepository.findBySlug(tenant).orElse(null);
+        UUID tenantId = tenantEntity != null ? tenantEntity.getId() : null;
+
+        // 3. Check role and determine onboarded users if standard manager (ADMIN)
+        boolean isStandardAdmin = false;
+        List<UUID> onboardedUserIds = new ArrayList<>();
+        if (authUserId != null && tenantId != null) {
+            TenantUser authTenantUser = tenantUserRepository.findByUserIdAndTenantId(authUserId, tenantId).orElse(null);
+            if (authTenantUser != null && "ADMIN".equals(authTenantUser.getRole())) {
+                isStandardAdmin = true;
+                List<UUID> foundUserIds = tenantUserRepository.findUserIdsByTenantIdAndCreatedBy(tenantId, authUserId);
+                if (foundUserIds != null) {
+                    onboardedUserIds.addAll(foundUserIds);
+                }
+            }
+        }
+
+        final boolean standardAdminFlag = isStandardAdmin;
+        final UUID finalAuthUserId = authUserId;
+        final List<UUID> finalOnboardedUserIds = onboardedUserIds;
+
         Specification<AuditLog> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -84,6 +118,23 @@ public class AuditService {
             }
             if (createdTo != null) {
                 predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), createdTo));
+            }
+
+            // If standard manager, restrict logs to themselves or users they onboarded
+            if (standardAdminFlag && finalAuthUserId != null) {
+                List<UUID> scopedUserIds = new ArrayList<>();
+                scopedUserIds.add(finalAuthUserId);
+                scopedUserIds.addAll(finalOnboardedUserIds);
+
+                List<String> scopedUserIdStrings = scopedUserIds.stream().map(UUID::toString).toList();
+
+                Predicate actorPredicate = root.get("userId").in(scopedUserIds);
+                Predicate targetPredicate = criteriaBuilder.and(
+                        criteriaBuilder.equal(criteriaBuilder.upper(root.get("entityType")), "USER"),
+                        root.get("entityId").in(scopedUserIdStrings)
+                );
+
+                predicates.add(criteriaBuilder.or(actorPredicate, targetPredicate));
             }
 
             return criteriaBuilder.and(predicates.toArray(Predicate[]::new));
@@ -111,7 +162,7 @@ public class AuditService {
                                 .distinct()
                                 .toList()
                 ).stream()
-                .collect(java.util.stream.Collectors.toMap(Tenant::getSlug, tenantEntity -> tenantEntity));
+                .collect(java.util.stream.Collectors.toMap(Tenant::getSlug, t -> t));
 
         Map<String, TenantUser> membershipsByTenantAndUser = resolveMemberships(logs, tenantsBySlug);
         Map<String, String> entityDisplayNames = resolveEntityDisplayNames(logs, usersById);

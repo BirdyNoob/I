@@ -15,6 +15,10 @@ import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.common.enums.Department;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantSchemaService;
+import com.icentric.Icentric.identity.entity.UserGroup;
+import com.icentric.Icentric.identity.entity.GroupMembership;
+import com.icentric.Icentric.identity.repository.UserGroupRepository;
+import com.icentric.Icentric.identity.repository.GroupMembershipRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -75,6 +79,10 @@ class AssignmentServiceTest {
     com.icentric.Icentric.identity.service.TenantAccessGuard tenantAccessGuard;
     @Mock
     com.icentric.Icentric.common.mail.EmailService emailService;
+    @Mock
+    UserGroupRepository userGroupRepository;
+    @Mock
+    GroupMembershipRepository groupMembershipRepository;
 
     @InjectMocks
     AssignmentService assignmentService;
@@ -315,6 +323,172 @@ class AssignmentServiceTest {
         assertThatThrownBy(() -> assignmentService.searchAssignments(null, null, targetUserId, pageable))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("You are not authorized to view this user's assignments");
+    }
+
+    @Test
+    @DisplayName("bulkAssign by SUPER_ADMIN for group assigns to all members")
+    void bulkAssign_withGroup_asSuperAdmin_assignsToAllGroupMembers() {
+        UUID trackId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID user1Id = UUID.randomUUID();
+        UUID user2Id = UUID.randomUUID();
+
+        com.icentric.Icentric.platform.tenant.entity.Tenant tenant = new com.icentric.Icentric.platform.tenant.entity.Tenant("acme", "Acme Corp");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+
+        UserGroup group = new UserGroup();
+        group.setId(groupId);
+        group.setTenantId(tenant.getId());
+        group.setName("Engineering");
+        when(userGroupRepository.findByIdAndTenantId(groupId, tenant.getId()))
+                .thenReturn(Optional.of(group));
+
+        GroupMembership gm1 = new GroupMembership();
+        gm1.setGroupId(groupId);
+        gm1.setUserId(user1Id);
+
+        GroupMembership gm2 = new GroupMembership();
+        gm2.setGroupId(groupId);
+        gm2.setUserId(user2Id);
+
+        when(groupMembershipRepository.findByGroupIdOrderByCreatedAtDesc(groupId))
+                .thenReturn(List.of(gm1, gm2));
+
+        User user1 = new User();
+        user1.setId(user1Id);
+        user1.setEmail("u1@icentric.com");
+        User user2 = new User();
+        user2.setId(user2Id);
+        user2.setEmail("u2@icentric.com");
+
+        when(userRepository.findByIdIn(List.of(user1Id, user2Id)))
+                .thenReturn(List.of(user1, user2));
+
+        Track track = new Track();
+        track.setId(trackId);
+        track.setVersion(1);
+        when(trackRepository.findById(trackId)).thenReturn(Optional.of(track));
+
+        BulkAssignmentRequest request = new BulkAssignmentRequest(
+                trackId,
+                null,
+                null,
+                groupId,
+                Instant.now().plusSeconds(3600)
+        );
+
+        var result = assignmentService.bulkAssign(request);
+        assertThat(result.get("total")).isEqualTo(2);
+        assertThat(result.get("success")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("bulkAssign by ADMIN for group assigns only to members onboarded by that ADMIN")
+    void bulkAssign_withGroup_asAdmin_assignsOnlyToOnboardedGroupMembers() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        UUID trackId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID user1Id = UUID.randomUUID();
+        UUID user2Id = UUID.randomUUID();
+
+        com.icentric.Icentric.platform.tenant.entity.Tenant tenant = new com.icentric.Icentric.platform.tenant.entity.Tenant("acme", "Acme Corp");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+
+        UserGroup group = new UserGroup();
+        group.setId(groupId);
+        group.setTenantId(tenant.getId());
+        group.setName("Engineering");
+        group.setCreatedBy(adminId); // created by this admin
+        when(userGroupRepository.findByIdAndTenantId(groupId, tenant.getId()))
+                .thenReturn(Optional.of(group));
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        GroupMembership gm1 = new GroupMembership();
+        gm1.setGroupId(groupId);
+        gm1.setUserId(user1Id);
+
+        GroupMembership gm2 = new GroupMembership();
+        gm2.setGroupId(groupId);
+        gm2.setUserId(user2Id);
+
+        when(groupMembershipRepository.findByGroupIdOrderByCreatedAtDesc(groupId))
+                .thenReturn(List.of(gm1, gm2));
+
+        TenantUser tu1 = new TenantUser(user1Id, tenant.getId(), "LEARNER");
+        tu1.setCreatedBy(adminId); // onboarded by admin
+
+        TenantUser tu2 = new TenantUser(user2Id, tenant.getId(), "LEARNER");
+        tu2.setCreatedBy(UUID.randomUUID()); // onboarded by another admin
+
+        when(tenantUserRepository.findByTenantIdAndUserIdIn(tenant.getId(), new HashSet<>(List.of(user1Id, user2Id))))
+                .thenReturn(List.of(tu1, tu2));
+
+        User user1 = new User();
+        user1.setId(user1Id);
+        user1.setEmail("u1@icentric.com");
+
+        when(userRepository.findByIdIn(List.of(user1Id)))
+                .thenReturn(List.of(user1));
+
+        Track track = new Track();
+        track.setId(trackId);
+        track.setVersion(1);
+        when(trackRepository.findById(trackId)).thenReturn(Optional.of(track));
+        when(repository.save(any(UserAssignment.class))).thenAnswer(inv -> inv.getArgument(0, UserAssignment.class));
+
+        BulkAssignmentRequest request = new BulkAssignmentRequest(
+                trackId,
+                null,
+                null,
+                groupId,
+                Instant.now().plusSeconds(3600)
+        );
+
+        var result = assignmentService.bulkAssign(request);
+        assertThat(result.get("total")).isEqualTo(1);
+        assertThat(result.get("success")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("bulkAssign by ADMIN for group created by another ADMIN throws AccessDeniedException")
+    void bulkAssign_withGroup_asAdmin_notCreatorOfGroup_throwsAccessDenied() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        UUID trackId = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+
+        com.icentric.Icentric.platform.tenant.entity.Tenant tenant = new com.icentric.Icentric.platform.tenant.entity.Tenant("acme", "Acme Corp");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+
+        UserGroup group = new UserGroup();
+        group.setId(groupId);
+        group.setTenantId(tenant.getId());
+        group.setName("Engineering");
+        group.setCreatedBy(UUID.randomUUID()); // created by another admin
+        when(userGroupRepository.findByIdAndTenantId(groupId, tenant.getId()))
+                .thenReturn(Optional.of(group));
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        BulkAssignmentRequest request = new BulkAssignmentRequest(
+                trackId,
+                null,
+                null,
+                groupId,
+                Instant.now().plusSeconds(3600)
+        );
+
+        assertThatThrownBy(() -> assignmentService.bulkAssign(request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("You do not have permission to access this group");
     }
 }
 

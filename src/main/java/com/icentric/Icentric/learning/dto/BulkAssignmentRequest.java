@@ -16,15 +16,21 @@ public record BulkAssignmentRequest(
         UUID trackId,
         List<@NotNull UUID> userIds,
         Department department,
+        UUID groupId,
         @NotNull
         @Future
         Instant dueDate
 
 ) {
-    @AssertTrue(message = "Provide at least one userId or a department")
+    public BulkAssignmentRequest(UUID trackId, List<UUID> userIds, Department department, Instant dueDate) {
+        this(trackId, userIds, department, null, dueDate);
+    }
+
+    @AssertTrue(message = "Provide at least one userId, a department, or a groupId")
     public boolean hasAudience() {
         boolean hasUserIds = userIds != null && !userIds.isEmpty();
         boolean hasDepartment = department != null;
-        return hasUserIds || hasDepartment;
+        boolean hasGroupId = groupId != null;
+        return hasUserIds || hasDepartment || hasGroupId;
     }
 }

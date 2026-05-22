@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>Welcome to Icentric — Your Manager account is ready</title>
+  <!--[if mso]>
+  <noscript>
+    <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    * { box-sizing: border-box; }
+    body, table, td, p, a, li {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; line-height: 100%; outline: none; text-decoration: none; }
+    body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    .preview-text { display: none; max-height: 0; overflow: hidden; mso-hide: all; }
+
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; }
+      .hide-mobile { display: none !important; }
+      .hero-title { font-size: 28px !important; line-height: 1.25 !important; }
+      .pad-mobile { padding: 24px 20px !important; }
+      .grid-col { display: block !important; width: 100% !important; padding-right: 0 !important; padding-bottom: 16px !important; }
+      .grid-col:last-child { padding-bottom: 0 !important; }
+      .btn-container { display: block !important; width: 100% !important; }
+      .btn-container td { display: block !important; width: 100% !important; padding-left: 0 !important; padding-top: 12px !important; }
+      .btn-container td:first-child { padding-top: 0 !important; }
+      .btn-full { width: 100% !important; text-align: center !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#F1F5F9;font-family:'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+
+  <!-- Preview text -->
+  <div class="preview-text" th:text="|You have been added as a Manager for ${tenantName} on Icentric. Access your dashboard and onboard your team. &nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌|">
+    You have been added as a Manager on Icentric. Access your dashboard and onboard your team. &nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌&nbsp;‌
+  </div>
+
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F1F5F9;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+
+        <!-- Email container -->
+        <table class="email-container" role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #E2E8F0;box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.03);">
+
+          <!-- HEADER -->
+          <tr>
+            <td>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="padding:20px 28px;background-color:#0F172A;border-bottom:none;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      <tr>
+                        <td valign="middle">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td valign="middle" style="padding-right:10px;">
+                                <div style="width:32px;height:32px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:7px;display:inline-block;text-align:center;line-height:32px;font-size:16px;">🛡</div>
+                              </td>
+                              <td valign="middle">
+                                <span style="font-family:'Inter',sans-serif;font-size:20px;font-weight:800;letter-spacing:-0.03em;color:#FFFFFF;">I<span style="color:#6366F1;">centric</span></span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                        <td align="right" valign="middle">
+                          <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:0.08em;text-transform:uppercase;">Manager Portal</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- HERO SECTION -->
+          <tr>
+            <td style="background-color:#ffffff;">
+              <!-- Indigo/violet gradient accent line -->
+              <div style="height:4px;background:linear-gradient(90deg,#4F46E5,#6366F1,transparent);"></div>
+
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td class="pad-mobile" style="padding:40px 40px 32px;">
+
+                    <!-- Status pill -->
+                    <div style="display:inline-block;margin-bottom:20px;">
+                      <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#4F46E5;background-color:#EEF2FF;border:1px solid #C7D2FE;padding:5px 14px;border-radius:9999px;letter-spacing:0.04em;text-transform:uppercase;">💼 &nbsp;Manager Account Active</span>
+                    </div>
+
+                    <!-- Headline -->
+                    <h1 class="hero-title" style="font-family:'Inter',sans-serif;font-size:34px;font-weight:800;line-height:1.25;letter-spacing:-0.03em;color:#0F172A;margin:0 0 16px 0;">
+                      Welcome to Icentric,<br>
+                      <span style="color:#4F46E5;" th:text="${userName}">Alex Smith</span>.
+                    </h1>
+
+                    <!-- Sub -->
+                    <p style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#334155;margin:0 0 28px 0;">
+                      You have been invited as a **Manager** for the **<span th:text="${tenantName}">Acme Corp</span>** learning workspace. You now have scoped administrative privileges to onboard your team, assign tracks, and monitor training progress.
+                    </p>
+
+                    <!-- CTA Buttons -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" class="btn-container">
+                      <tr>
+                        <td style="border-radius:8px;background:linear-gradient(135deg,#4F46E5 0%,#6366F1 100%);box-shadow: 0 4px 6px -1px rgba(79,70,229,0.2), 0 2px 4px -1px rgba(79,70,229,0.1);">
+                          <a th:href="${loginUrl}" target="_blank" style="font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;padding:14px 30px;display:inline-block;border-radius:8px;letter-spacing:0.01em;" class="btn-full">
+                            Sign in to Portal →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ACCOUNT DETAILS CARD -->
+          <tr>
+            <td style="background-color:#ffffff;padding:0 40px 32px;" class="pad-mobile">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:12px;box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);overflow:hidden;">
+                <!-- Card Header -->
+                <tr>
+                  <td style="padding:18px 24px;border-bottom:1px solid #E2E8F0;background-color:#F8FAFC;">
+                    <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#475569;letter-spacing:0.08em;text-transform:uppercase;">Your Account Details</span>
+                  </td>
+                </tr>
+                <!-- Rows -->
+                <tr>
+                  <td style="padding:8px 24px 20px;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      <!-- Company -->
+                      <tr>
+                        <td style="padding:10px 0;border-bottom:1px solid #F1F5F9;">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td width="160" valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;font-weight:500;">Workspace</span></td>
+                              <td valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#0F172A;font-weight:600;" th:text="${tenantName}">Acme Corp</span></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <!-- Role -->
+                      <tr>
+                        <td style="padding:10px 0;border-bottom:1px solid #F1F5F9;">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td width="160" valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;font-weight:500;">Assigned Role</span></td>
+                              <td valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#047857;background-color:#D1FAE5;border:1px solid #A7F3D0;padding:3px 10px;border-radius:6px;font-weight:600;">Manager (ADMIN)</span></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <!-- Email -->
+                      <tr>
+                        <td style="padding:10px 0;border-bottom:1px solid #F1F5F9;">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td width="160" valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;font-weight:500;">Email Address</span></td>
+                              <td valign="middle"><span style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#4F46E5;font-weight:700;" th:text="${managerEmail}">manager@acmecorp.com</span></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <!-- Password -->
+                      <tr>
+                        <td style="padding:12px 0;border-bottom:1px solid #F1F5F9;">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td width="160" valign="top" style="padding-top:2px;"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;font-weight:500;">Initial Password</span></td>
+                              <td valign="top">
+                                <span style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#0F172A;background:#EFF6FF;border:1px solid #BFDBFE;padding:3px 8px;border-radius:6px;font-weight:700;" th:text="${password}">password123</span>
+                                <div style="font-family:'Inter',sans-serif;font-size:11px;color:#EF4444;margin-top:6px;font-weight:500;">⚠ You must change this upon first login</div>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <!-- Portal URL -->
+                      <tr>
+                        <td style="padding:10px 0 0 0;">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                              <td width="160" valign="middle"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#64748B;font-weight:500;">Your Portal URL</span></td>
+                              <td valign="middle"><a th:href="${portalUrl}" target="_blank" style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#4F46E5;font-weight:700;text-decoration:none;" th:text="${portalUrl}">acmecorp.icentric.com</a></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- TIMELINE GET STARTED STEPS -->
+          <tr>
+            <td style="background-color:#ffffff;padding:0 40px 36px;" class="pad-mobile">
+              <p style="font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:#64748B;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 24px 0;">Your Management Workflow</p>
+
+              <!-- Step 1 -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td width="36" valign="top" align="center" style="padding-top:2px;">
+                    <div style="width:28px;height:28px;background:rgba(79,70,229,0.12);border:1px solid rgba(79,70,229,0.25);border-radius:8px;text-align:center;line-height:28px;font-family:'Inter',sans-serif;font-size:13px;font-weight:800;color:#4F46E5;">1</div>
+                    <div style="width:1px;height:24px;background-color:#E2E8F0;margin:8px auto 0 auto;"></div>
+                  </td>
+                  <td valign="top" style="padding-left:14px;padding-bottom:12px;">
+                    <p style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#0F172A;margin:0 0 4px 0;">Onboard your department</p>
+                    <p style="font-family:'Inter',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.55;">Add new users individually or upload a CSV file using our interactive Review Step to inspect formatting or relational database duplicate errors.</p>
+                  </td>
+                </tr>
+                <!-- Step 2 -->
+                <tr>
+                  <td width="36" valign="top" align="center" style="padding-top:2px;">
+                    <div style="width:28px;height:28px;background:rgba(79,70,229,0.12);border:1px solid rgba(79,70,229,0.25);border-radius:8px;text-align:center;line-height:28px;font-family:'Inter',sans-serif;font-size:13px;font-weight:800;color:#4F46E5;">2</div>
+                    <div style="width:1px;height:24px;background-color:#E2E8F0;margin:8px auto 0 auto;"></div>
+                  </td>
+                  <td valign="top" style="padding-left:14px;padding-bottom:12px;">
+                    <p style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#0F172A;margin:0 0 4px 0;">Scope ownership mappings</p>
+                    <p style="font-family:'Inter',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.55;">Users you onboard belong securely under your scope. You hold exclusive administrative rights over their dashboard progress and learning status details.</p>
+                  </td>
+                </tr>
+                <!-- Step 3 -->
+                <tr>
+                  <td width="36" valign="top" align="center" style="padding-top:2px;">
+                    <div style="width:28px;height:28px;background:rgba(79,70,229,0.12);border:1px solid rgba(79,70,229,0.25);border-radius:8px;text-align:center;line-height:28px;font-family:'Inter',sans-serif;font-size:13px;font-weight:800;color:#4F46E5;">3</div>
+                  </td>
+                  <td valign="top" style="padding-left:14px;">
+                    <p style="font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#0F172A;margin:0 0 4px 0;">Monitor compliance &amp; assign courses</p>
+                    <p style="font-family:'Inter',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.55;">Distribute learning tracks, verify exam submissions, download CSV/Excel reports, and keep your department audit-ready for security compliance.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- INCLUDED FEATURES GRID -->
+          <tr>
+            <td style="background-color:#ffffff;padding:0 40px 32px;" class="pad-mobile">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;">
+                <tr>
+                  <td style="padding:24px 24px;">
+                    <p style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:#64748B;letter-spacing:0.1em;text-transform:uppercase;margin:0 0 18px 0;">Your Scoped Privileges</p>
+                    
+                    <!-- 2x2 Feature Checklist -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      <tr>
+                        <td width="50%" valign="top" style="padding-bottom:14px;padding-right:12px;" class="grid-col">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td valign="top" style="padding-right:8px;padding-top:1px;"><span style="color:#059669;font-weight:700;font-size:14px;">✓</span></td>
+                              <td valign="top"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#475569;line-height:1.4;">Add users &amp; manage groups</span></td>
+                            </tr>
+                          </table>
+                        </td>
+                        <td width="50%" valign="top" style="padding-bottom:14px;" class="grid-col">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td valign="top" style="padding-right:8px;padding-top:1px;"><span style="color:#059669;font-weight:700;font-size:14px;">✓</span></td>
+                              <td valign="top"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#475569;line-height:1.4;">Assign training tracks</span></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td width="50%" valign="top" style="padding-right:12px;" class="grid-col">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td valign="top" style="padding-right:8px;padding-top:1px;"><span style="color:#059669;font-weight:700;font-size:14px;">✓</span></td>
+                              <td valign="top"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#475569;line-height:1.4;">Download scoped excel reports</span></td>
+                            </tr>
+                          </table>
+                        </td>
+                        <td width="50%" valign="top" class="grid-col">
+                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                            <tr>
+                              <td valign="top" style="padding-right:8px;padding-top:1px;"><span style="color:#059669;font-weight:700;font-size:14px;">✓</span></td>
+                              <td valign="top"><span style="font-family:'Inter',sans-serif;font-size:13px;color:#475569;line-height:1.4;">Track progress &amp; metrics</span></td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="background-color:#F8FAFC;border-top:1px solid #E2E8F0;padding:28px 28px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td>
+                    <p style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B;margin:0 0 8px 0;line-height:1.6;" th:utext="|This email was sent to &lt;span style='color:#334155;font-weight:500;'&gt;${managerEmail}&lt;/span&gt; because your manager account was created on Icentric.|">
+                      This email was sent to <span style="color:#334155;font-weight:500;">manager@acmecorp.com</span> because your manager account was created on Icentric.
+                    </p>
+                    <p style="font-family:'Inter',sans-serif;font-size:12px;color:#64748B;margin:0;line-height:1.6;">
+                      Need help? <a href="mailto:support@icentric.com" style="color:#4F46E5;text-decoration:underline;">support@icentric.com</a> &nbsp;·&nbsp;
+                      <a href="https://docs.icentric.com" style="color:#4F46E5;text-decoration:underline;">Documentation</a> &nbsp;·&nbsp;
+                      <a href="https://icentric.com/privacy" style="color:#64748B;text-decoration:none;">Privacy policy</a>
+                    </p>
+                  </td>
+                  <td align="right" valign="top" style="padding-left:16px;" class="hide-mobile">
+                    <span style="font-family:'Inter',sans-serif;font-size:12px;font-weight:800;letter-spacing:-0.02em;color:#0F172A;">I<span style="color:#6366F1;">centric</span></span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

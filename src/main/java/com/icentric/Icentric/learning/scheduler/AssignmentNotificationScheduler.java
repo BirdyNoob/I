@@ -166,9 +166,19 @@ public class AssignmentNotificationScheduler {
                 continue;
             }
 
+            TenantUser learnerTenantUser = tenantUserRepository.findByUserIdAndTenantId(assignment.getUserId(), tenant.getId()).orElse(null);
+
             String message = buildAdminEscalationMessage(assignment);
             for (TenantUser admin : admins) {
                 UUID adminUserId = admin.getUserId();
+
+                // Notification Isolation: Standard manager (ADMIN) only receives escalations for users they onboarded.
+                if (!"SUPER_ADMIN".equals(admin.getRole())) {
+                    if (learnerTenantUser == null || !adminUserId.equals(learnerTenantUser.getCreatedBy())) {
+                        continue;
+                    }
+                }
+
                 String eventKey = escalationEventKey(assignment.getId(), adminUserId, settings.escalationDelayHours());
                 if (notificationRepository.existsByEventKey(eventKey)) {
                     continue;

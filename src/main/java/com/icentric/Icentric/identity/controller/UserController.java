@@ -3,6 +3,8 @@ package com.icentric.Icentric.identity.controller;
 import com.icentric.Icentric.common.enums.Department;
 
 import com.icentric.Icentric.identity.dto.BulkUploadResponse;
+import com.icentric.Icentric.identity.dto.BulkUploadValidateResponse;
+import com.icentric.Icentric.identity.dto.BulkUploadConfirmRequest;
 import com.icentric.Icentric.identity.dto.CreateUserRequest;
 import com.icentric.Icentric.identity.dto.UpdateUserRequest;
 import com.icentric.Icentric.identity.dto.UserDetailResponse;
@@ -134,6 +136,34 @@ public class UserController {
         return service.bulkUploadUsers(file, autoAssignTracks);
     }
 
+    @Operation(summary = "Validate bulk upload CSV (Dry-Run)", description = "Parses the uploaded CSV and returns a detailed validation report with inline errors without writing to the database.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "CSV file validated successfully. Returns row-by-row status and formatting or database conflict errors."),
+            @ApiResponse(responseCode = "400", description = "Invalid file or file format"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @PostMapping(value = "/bulk-upload/validate", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public BulkUploadValidateResponse validateUpload(
+            @Parameter(description = "CSV file to validate") @RequestParam("file") @NotNull MultipartFile file
+    ) {
+        return service.validateBulkUpload(file);
+    }
+
+    @Operation(summary = "Confirm stateless bulk user import", description = "Accepts a list of validated/corrected user records to import and persist them in the database.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Bulk users imported successfully. Returns number of successes and failures."),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @PostMapping(value = "/bulk-upload/confirm", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public BulkUploadResponse confirmUpload(
+            @Parameter(description = "List of user records to import") @RequestBody @Valid @NotNull BulkUploadConfirmRequest request
+    ) {
+        return service.confirmBulkUpload(request);
+    }
+
     @Operation(summary = "Get bulk upload template", description = "Downloads a CSV template format required for the bulk upload API.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "CSV template downloaded successfully"),
@@ -146,6 +176,21 @@ public class UserController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=tenant-user-bulk-upload-template.csv")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(service.getBulkUploadTemplateCsv());
+    }
+
+    @Operation(summary = "Get bulk upload instructions PDF", description = "Downloads a reference PDF detailing the allowed fields, roles, and departments.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "PDF downloaded successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping("/users/bulk-upload-instructions-pdf")
+    public ResponseEntity<byte[]> getBulkUploadInstructionsPdf() {
+        byte[] pdf = service.getBulkUploadInstructionsPdf();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=tenant-user-bulk-upload-guide.pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     @Operation(summary = "Search users", description = "Search for users within the tenant by email, department, role, or active status.")

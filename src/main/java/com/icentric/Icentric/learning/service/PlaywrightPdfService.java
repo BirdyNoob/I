@@ -32,6 +32,17 @@ public class PlaywrightPdfService {
      * @return raw PDF bytes
      */
     public byte[] render(String html) {
+        return render(html, true);
+    }
+
+    /**
+     * Renders the given HTML string to a PDF byte array with specified orientation.
+     *
+     * @param html fully substituted HTML
+     * @param landscape true for landscape A4, false for portrait A4
+     * @return raw PDF bytes
+     */
+    public byte[] render(String html, boolean landscape) {
         // Write HTML to a temp file so Playwright can load it via file:// URL.
         // This is required for relative resources and correct base-URI resolution.
         Path tmpHtml = null;
@@ -54,16 +65,16 @@ public class PlaywrightPdfService {
                     // Print to PDF — landscape A4, no browser margin (template handles its own padding)
                     com.microsoft.playwright.options.Margin noMargin =
                             new com.microsoft.playwright.options.Margin()
-                                    .setTop("0").setBottom("0").setLeft("0").setRight("0");
+                                     .setTop("0").setBottom("0").setLeft("0").setRight("0");
 
                     byte[] pdf = page.pdf(new Page.PdfOptions()
                             .setFormat("A4")
-                            .setLandscape(true)
+                            .setLandscape(landscape)
                             .setPrintBackground(true)
                             .setMargin(noMargin)
                     );
 
-                    log.info("Playwright rendered PDF: {} bytes", pdf.length);
+                    log.info("Playwright rendered PDF (landscape={}): {} bytes", landscape, pdf.length);
                     return pdf;
                 }
             }
