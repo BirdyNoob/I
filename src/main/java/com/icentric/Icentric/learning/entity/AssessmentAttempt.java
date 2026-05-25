@@ -52,4 +52,7 @@ public class AssessmentAttempt {
 
     @Column(name = "last_saved_at")
     private Instant lastSavedAt;
+
+    @Column(name = "started_at")
+    private Instant startedAt;
 }

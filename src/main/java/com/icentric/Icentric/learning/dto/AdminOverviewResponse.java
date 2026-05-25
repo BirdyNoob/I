@@ -19,7 +19,9 @@ public record AdminOverviewResponse(
             OverdueSummary overdueUsers,
             double avgAssessmentScorePercent,
             double avgAssessmentTrendPoints,
-            long certificatesIssuedThisMonth
+            long certificatesIssuedThisMonth,
+            long laggingLearnersCount,
+            double overallPassRatePercent
     ) {}
 
     public record ActiveLearners(long active, long total) {}

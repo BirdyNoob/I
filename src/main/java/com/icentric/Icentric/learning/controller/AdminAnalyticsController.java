@@ -3,10 +3,12 @@ package com.icentric.Icentric.learning.controller;
 import com.icentric.Icentric.learning.dto.*;
 import com.icentric.Icentric.learning.service.AdminAnalyticsService;
 import com.icentric.Icentric.learning.service.AdminAnalyticsService.OverdueNotificationResult;
+import com.icentric.Icentric.learning.service.AssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,9 +21,11 @@ import java.util.UUID;
 public class AdminAnalyticsController {
 
     private final AdminAnalyticsService service;
+    private final AssignmentService assignmentService;
 
-    public AdminAnalyticsController(AdminAnalyticsService service) {
+    public AdminAnalyticsController(AdminAnalyticsService service, AssignmentService assignmentService) {
         this.service = service;
+        this.assignmentService = assignmentService;
     }
 
     @Operation(summary = "Get overall overview", description = "Retrieves high-level analytics overview metrics for the admin dashboard.")
@@ -68,6 +72,7 @@ public class AdminAnalyticsController {
     public AdminOverviewResponse dashboard() {
         return service.getDashboard();
     }
+
     @Operation(
             summary = "Notify overdue learners",
             description = "Sends an email reminder to all learners (or specific users) who have overdue assignments. "
@@ -84,4 +89,49 @@ public class AdminAnalyticsController {
     ) {
         return ResponseEntity.ok(service.notifyOverdueUsers(userIds));
     }
+
+    @Operation(summary = "Get lagging learners", description = "Retrieves a list of learners who have exhausted their assessment attempts without passing.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved lagging learners list")
+    })
+    @GetMapping("/lagging-learners")
+    public List<LaggingLearnerResponse> laggingLearners() {
+        return service.getLaggingLearners();
+    }
+
+    @Operation(summary = "Reset assessment attempts", description = "Clears all assessment attempt history for a specific user and assessment configuration.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully reset assessment attempts"),
+            @ApiResponse(responseCode = "403", description = "Forbidden if standard manager has no scoping permissions")
+    })
+    @PostMapping("/attempts/reset")
+    public ResponseEntity<Void> resetAttempts(@Valid @RequestBody ResetAttemptsRequest request) {
+        service.resetAttempts(request.userId(), request.assessmentConfigId());
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Assign remedial track", description = "Assigns a remedial learning track to a lagging learner with optional due date.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully assigned remedial track"),
+            @ApiResponse(responseCode = "403", description = "Forbidden if standard manager has no scoping permissions")
+    })
+    @PostMapping("/attempts/remediate")
+    public ResponseEntity<Void> remediate(@Valid @RequestBody RemediationRequest request) {
+        assignmentService.assignTrack(new CreateAssignmentRequest(
+                request.userId(),
+                request.trackId(),
+                request.dueDate()
+        ));
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Get assessment reset history", description = "Retrieves audit logs of learners who failed assessments and had their attempts reset by a manager.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved reset history")
+    })
+    @GetMapping("/attempts/reset-history")
+    public List<AssessmentResetLogResponse> getResetHistory() {
+        return service.getAssessmentResetHistory();
+    }
 }
+

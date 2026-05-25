@@ -14,6 +14,7 @@ import java.util.UUID;
 public interface AssessmentAttemptRepository extends JpaRepository<AssessmentAttempt, UUID> {
 
     List<AssessmentAttempt> findByUserId(UUID userId);
+    List<AssessmentAttempt> findByUserIdIn(List<UUID> userIds);
     List<AssessmentAttempt> findByUserIdAndAssessmentConfigId(UUID userId, String assessmentConfigId);
     long countByUserIdAndAssessmentConfigId(UUID userId, String assessmentConfigId);
     List<AssessmentAttempt> findByUserIdAndStatus(UUID userId, String status);

@@ -19,6 +19,7 @@ public interface UserAssignmentRepository
         extends JpaRepository<UserAssignment, UUID> {
 
     List<UserAssignment> findByUserId(UUID userId);
+    List<UserAssignment> findByUserIdIn(List<UUID> userIds);
     long count();
     long countByStatus(AssignmentStatus status);
     List<UserAssignment> findAll();

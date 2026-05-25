@@ -54,7 +54,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     private final EntityManager entityManager;
     private final AuditService auditService;
 
-    private static final int RETAKE_COOLDOWN_HOURS = 24;
+    // No cooldown: manager reset is the only way to unblock a user who exhausted retakes.
 
     // ── Dashboard ──────────────────────────────────────────────────────────────
 
@@ -172,23 +172,14 @@ public class AssessmentServiceImpl implements AssessmentService {
 
             JsonNode configObj = cfgData.path("config");
             
-            // ── Retake policy & cooldown ───────────────────────────────────────
+            // ── Retake policy ────────────────────────────────────────────────
+            // No cooldown: once the attempt limit is reached, only a manager reset unblocks the user.
             String retakePolicyText = configObj.path("retakePolicy").asText("UNLIMITED").toUpperCase();
             boolean retakeAllowed;
-            Instant retakeAvailableAt = null;
+            Instant retakeAvailableAt = null; // Always null — no cooldown window
             try {
                 int limit = Integer.parseInt(retakePolicyText);
                 retakeAllowed = attemptCount < limit;
-                
-                if (!retakeAllowed && latestAttempt != null && latestAttempt.getDateCompleted() != null && !"PASSED".equals(currentStatus)) {
-                    Instant cooldownEnd = latestAttempt.getDateCompleted().plus(RETAKE_COOLDOWN_HOURS, ChronoUnit.HOURS);
-                    if (Instant.now().isBefore(cooldownEnd)) {
-                        retakeAvailableAt = cooldownEnd;
-                    } else {
-                        // Cooldown expired, grant a new attempt
-                        retakeAllowed = true;
-                    }
-                }
             } catch (NumberFormatException e) {
                 retakeAllowed = true; // UNLIMITED
             }
@@ -295,10 +286,8 @@ public class AssessmentServiceImpl implements AssessmentService {
                         .build();
             }
 
-            // Apply COOLDOWN status override if retakeAvailableAt is set
-            if (retakeAvailableAt != null && !"PASSED".equals(currentStatus) && !"FAILED".equals(currentStatus) && !"IN_PROGRESS".equals(currentStatus)) {
-                currentStatus = "COOLDOWN";
-            }
+            // No cooldown status: retake exhaustion is surfaced as FAILED.
+            // Only a manager reset (POST /attempts/reset) can unblock the user.
 
             FinalAssessmentDto dto = FinalAssessmentDto.builder()
                     .id(configId)
@@ -324,7 +313,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                     .build();
 
             // ── Upcoming: first AVAILABLE or IN_PROGRESS assessment ───────────
-            if (upcoming == null && ("AVAILABLE".equals(currentStatus) || "COOLDOWN".equals(currentStatus) || "IN_PROGRESS".equals(currentStatus))) {
+            if (upcoming == null && ("AVAILABLE".equals(currentStatus) || "IN_PROGRESS".equals(currentStatus))) {
                 Integer lastScore = latestAttempt != null ? latestAttempt.getScore() : null;
                 upcoming = UpcomingAssessmentDto.builder()
                         .assessmentId(configId)
@@ -436,18 +425,8 @@ public class AssessmentServiceImpl implements AssessmentService {
                             .filter(a -> "PASSED".equalsIgnoreCase(a.getStatus()) || "FAILED".equalsIgnoreCase(a.getStatus()))
                             .count();
                     if (completedAttempts >= limit) {
-                        AssessmentAttempt latestAttempt = attempts.stream()
-                                .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
-                                .orElse(null);
-                        
-                        if (latestAttempt != null && latestAttempt.getDateCompleted() != null) {
-                            Instant cooldownEnd = latestAttempt.getDateCompleted().plus(RETAKE_COOLDOWN_HOURS, ChronoUnit.HOURS);
-                            if (Instant.now().isBefore(cooldownEnd)) {
-                                throw new RuntimeException("Maximum attempts reached. Retake not allowed until cooldown expires.");
-                            }
-                        } else {
-                            throw new RuntimeException("Maximum attempts reached. Retake not allowed.");
-                        }
+                        // Hard block: no cooldown. Manager must reset attempts to unblock the user.
+                        throw new RuntimeException("Maximum attempts reached. Please contact your manager to reset your assessment.");
                     }
                 } catch (NumberFormatException ignored) {}
             }
@@ -475,6 +454,7 @@ public class AssessmentServiceImpl implements AssessmentService {
             newAttempt.setStatus("IN_PROGRESS");
             newAttempt.setQuestionsAnswered(0);
             newAttempt.setScore(0);
+            newAttempt.setStartedAt(Instant.now());
             assessmentAttemptRepository.save(newAttempt);
 
             String assessmentTitle = configData.path("title").asText("Assessment");
@@ -582,15 +562,16 @@ public class AssessmentServiceImpl implements AssessmentService {
                     .filter(a -> "IN_PROGRESS".equals(a.getStatus()))
                     .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
                     .orElse(null);
-            
-            // If still no attempt, create a new one
-            if (attempt == null) {
-                attempt = new AssessmentAttempt();
-                attempt.setId(UUID.randomUUID());
-                attempt.setUserId(userId);
-                attempt.setAssessmentConfigId(assessmentId);
-                attempt.setAttemptNumber(attempts.size() + 1);
-            }
+        }
+
+        // Strict Immutability Guard: finalized attempts cannot have their progress modified
+        if (attempt != null && !"IN_PROGRESS".equals(attempt.getStatus())) {
+            throw new IllegalStateException("This assessment attempt has already been finalized and cannot be modified.");
+        }
+
+        // Reject saving progress if no active attempt exists
+        if (attempt == null) {
+            throw new IllegalStateException("No active, uncompleted assessment attempt was found for this session. You must start the assessment first.");
         }
 
         attempt.setStatus("IN_PROGRESS");
@@ -695,12 +676,25 @@ public class AssessmentServiceImpl implements AssessmentService {
                     .orElse(null);
         }
 
+        // Strict Immutability Guard: finalized attempts cannot be tampered with or resubmitted
+        if (attempt != null && !"IN_PROGRESS".equals(attempt.getStatus())) {
+            throw new IllegalStateException("This assessment attempt has already been finalized and cannot be resubmitted.");
+        }
+
+        // Server-Side Time Limit Validation: enforce hard limit on submission time
+        if (attempt != null && attempt.getStartedAt() != null) {
+            int timeLimitSeconds = configObj.path("timeLimitSeconds").asInt(3600); // Default to 60 minutes
+            Instant mustSubmitBy = attempt.getStartedAt().plusSeconds(timeLimitSeconds).plusSeconds(60); // 60-second grace period
+            if (Instant.now().isAfter(mustSubmitBy)) {
+                score = 0;
+                status = "FAILED";
+                log.warn("Assessment attempt {} submitted after time limit expired (Started: {}, Limit: {}s). Force-failing attempt.",
+                        attempt.getId(), attempt.getStartedAt(), timeLimitSeconds);
+            }
+        }
+
         if (attempt == null) {
-            attempt = new AssessmentAttempt();
-            attempt.setId(UUID.randomUUID());
-            attempt.setUserId(userId);
-            attempt.setAssessmentConfigId(assessmentId);
-            attempt.setAttemptNumber(attemptNumber);
+            throw new IllegalStateException("No active, uncompleted assessment attempt was found for this session. You must start the assessment first.");
         }
 
         attempt.setStatus(status);
