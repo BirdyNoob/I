@@ -12,6 +12,8 @@ import com.icentric.Icentric.learning.entity.LessonProgress;
 import com.icentric.Icentric.learning.exception.SequentialLockException;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
+import com.icentric.Icentric.learning.entity.ModuleProgress;
+import com.icentric.Icentric.learning.repository.ModuleProgressRepository;
 import com.icentric.Icentric.platform.tenant.service.TenantProvisioningService;
 import com.icentric.Icentric.tenant.TenantContext;
 import jakarta.persistence.EntityManager;
@@ -35,6 +37,7 @@ public class LessonProgressService {
     private final ModuleRepository moduleRepository;
     private final AuditService auditService;
     private final AuditMetadataService auditMetadataService;
+    private final ModuleProgressRepository moduleProgressRepository;
 
     public LessonProgressService(
             LessonProgressRepository repository,
@@ -45,7 +48,8 @@ public class LessonProgressService {
             com.icentric.Icentric.content.repository.LessonStepRepository lessonStepRepository,
             ModuleRepository moduleRepository,
             AuditService auditService,
-            AuditMetadataService auditMetadataService
+            AuditMetadataService auditMetadataService,
+            ModuleProgressRepository moduleProgressRepository
     ) {
         this.repository = repository;
         this.entityManager = entityManager;
@@ -56,6 +60,7 @@ public class LessonProgressService {
         this.moduleRepository = moduleRepository;
         this.auditService = auditService;
         this.auditMetadataService = auditMetadataService;
+        this.moduleProgressRepository = moduleProgressRepository;
     }
 
     @Transactional
@@ -116,12 +121,15 @@ public class LessonProgressService {
         LessonProgress saved = repository.save(progress);
 
         // 7. Analytics and tracking
-        UUID trackId = lessonRepository.findById(lessonId)
+        UUID moduleId = lessonRepository.findById(lessonId)
                 .map(Lesson::getModuleId)
-                .flatMap(moduleRepository::findById)
+                .orElseThrow(() -> new NoSuchElementException("Lesson not found: " + lessonId));
+
+        UUID trackId = moduleRepository.findById(moduleId)
                 .orElseThrow().getTrackId();
 
         markInProgress(userId, trackId, lessonId);
+        trackModuleStartAndTime(userId, moduleId);
 
         if (created[0]) {
             auditService.log(
@@ -175,6 +183,7 @@ public class LessonProgressService {
         UUID trackId = moduleRepository.findById(targetLesson.getModuleId())
                 .orElseThrow().getTrackId();
         markInProgress(userId, trackId, request.lessonId());
+        trackModuleStartAndTime(userId, targetLesson.getModuleId());
 
         if (created[0]) {
             auditService.log(
@@ -297,5 +306,73 @@ public class LessonProgressService {
                             + " after finishing " + completedLessons + " lessons"
             );
         }
+    }
+
+    private void trackModuleStartAndTime(UUID userId, UUID moduleId) {
+        Instant now = Instant.now();
+        ModuleProgress mp = moduleProgressRepository.findByUserIdAndModuleId(userId, moduleId)
+                .orElseGet(() -> {
+                    ModuleProgress newMp = new ModuleProgress();
+                    newMp.setId(UUID.randomUUID());
+                    newMp.setUserId(userId);
+                    newMp.setModuleId(moduleId);
+                    newMp.setStatus("IN_PROGRESS");
+                    newMp.setStartedAt(now);
+                    newMp.setSpentSeconds(0);
+                    newMp.setLastActiveAt(now);
+                    return newMp;
+                });
+
+        if (mp.getStartedAt() == null) {
+            mp.setStartedAt(now);
+        }
+
+        if (mp.getLastActiveAt() != null) {
+            long diffSecs = now.getEpochSecond() - mp.getLastActiveAt().getEpochSecond();
+            if (diffSecs > 0 && diffSecs < 15 * 60) {
+                mp.setSpentSeconds((mp.getSpentSeconds() != null ? mp.getSpentSeconds() : 0) + (int) diffSecs);
+            }
+        }
+        mp.setLastActiveAt(now);
+
+        boolean allLessonsDone = checkModuleCompleted(userId, moduleId);
+        if (allLessonsDone) {
+            mp.setStatus("COMPLETED");
+            if (mp.getCompletedAt() == null) {
+                mp.setCompletedAt(now);
+            }
+        } else {
+            mp.setStatus("IN_PROGRESS");
+        }
+
+        moduleProgressRepository.save(mp);
+    }
+
+    private boolean checkModuleCompleted(UUID userId, UUID moduleId) {
+        List<Lesson> lessons = lessonRepository.findByModuleIdOrderBySortOrder(moduleId);
+        if (lessons.isEmpty()) {
+            return false;
+        }
+
+        for (Lesson lesson : lessons) {
+            boolean lessonDone = repository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
+            if (!lessonDone) {
+                var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+                if (!steps.isEmpty()) {
+                    var progressOpt = repository.findByUserIdAndLessonId(userId, lesson.getId());
+                    if (progressOpt.isPresent()) {
+                        var progress = progressOpt.get();
+                        if (progress.getCompletedStepIds().size() < steps.size()) {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }

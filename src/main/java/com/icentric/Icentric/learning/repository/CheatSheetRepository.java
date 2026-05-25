@@ -17,16 +17,16 @@ public interface CheatSheetRepository extends JpaRepository<CheatSheet, String> 
 
     /**
      * Returns cheat sheets that are:
-     *   1. Global  (track_id IS NULL), OR
-     *   2. Linked to any of the user's assigned track IDs
+     *   1. Global  (module_id IS NULL), OR
+     *   2. Linked to any of the user's completed module IDs
      *
      * Used by the learner API.
      */
-    @Query("SELECT c FROM CheatSheet c WHERE c.trackId IS NULL OR c.trackId IN :trackIds")
-    List<CheatSheet> findGlobalOrByTrackIds(@Param("trackIds") List<UUID> trackIds);
+    @Query("SELECT c FROM CheatSheet c WHERE c.moduleId IS NULL OR c.moduleId IN :moduleIds")
+    List<CheatSheet> findGlobalOrByModuleIds(@Param("moduleIds") List<UUID> moduleIds);
 
     /**
-     * All cheat sheets for a specific track (used by admin per-track view).
+     * All cheat sheets for a specific module (used by admin per-module view).
      */
-    List<CheatSheet> findByTrackId(UUID trackId);
+    List<CheatSheet> findByModuleId(UUID moduleId);
 }

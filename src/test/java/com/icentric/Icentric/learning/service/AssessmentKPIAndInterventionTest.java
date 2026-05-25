@@ -65,6 +65,7 @@ class AssessmentKPIAndInterventionTest {
     @Mock AuditLogRepository auditLogRepository;
     @Mock AssessmentConfigRepository assessmentConfigRepository;
     @Mock AuditService auditService;
+    @Mock com.icentric.Icentric.learning.repository.AssessmentResetLogRepository assessmentResetLogRepository;
 
     @InjectMocks
     AdminAnalyticsService adminAnalyticsService;

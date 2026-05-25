@@ -32,4 +32,10 @@ GROUP BY m.trackId
 """)
     List<Object[]> countLessonsInTracks(Collection<UUID> trackIds);
 
+    @Query("""
+SELECT l.moduleId, COUNT(l)
+FROM Lesson l
+GROUP BY l.moduleId
+""")
+    List<Object[]> countTotalLessonsByModule();
 }

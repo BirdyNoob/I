@@ -2,10 +2,12 @@ package com.icentric.Icentric.learning.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.entity.CheatSheet;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.CheatSheetRepository;
+import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
@@ -24,6 +26,8 @@ public class CheatSheetService {
     private final UserAssignmentRepository assignmentRepository;
     private final TenantRepository tenantRepository;
     private final TenantSchemaService tenantSchemaService;
+    private final LessonRepository lessonRepository;
+    private final LessonProgressRepository lessonProgressRepository;
 
     public CheatSheetService(
             CheatSheetRepository repository,
@@ -31,7 +35,9 @@ public class CheatSheetService {
             UserRepository userRepository,
             UserAssignmentRepository assignmentRepository,
             TenantRepository tenantRepository,
-            TenantSchemaService tenantSchemaService
+            TenantSchemaService tenantSchemaService,
+            LessonRepository lessonRepository,
+            LessonProgressRepository lessonProgressRepository
     ) {
         this.repository = repository;
         this.objectMapper = objectMapper;
@@ -39,6 +45,8 @@ public class CheatSheetService {
         this.assignmentRepository = assignmentRepository;
         this.tenantRepository = tenantRepository;
         this.tenantSchemaService = tenantSchemaService;
+        this.lessonRepository = lessonRepository;
+        this.lessonProgressRepository = lessonProgressRepository;
     }
 
     // ── ADMIN ─────────────────────────────────────────────────────────────────
@@ -57,13 +65,13 @@ public class CheatSheetService {
         String type = payload.get("type").toString();
         String description = getStringOrNull(payload, "description");
 
-        // trackId — nullable; null = global cheat sheet visible to all learners
-        UUID trackId = null;
-        if (payload.containsKey("trackId") && payload.get("trackId") != null) {
+        // moduleId — nullable; null = global cheat sheet visible to all learners
+        UUID moduleId = null;
+        if (payload.containsKey("moduleId") && payload.get("moduleId") != null) {
             try {
-                trackId = UUID.fromString(payload.get("trackId").toString());
+                moduleId = UUID.fromString(payload.get("moduleId").toString());
             } catch (IllegalArgumentException e) {
-                throw new IllegalArgumentException("Invalid trackId UUID: " + payload.get("trackId"));
+                throw new IllegalArgumentException("Invalid moduleId UUID: " + payload.get("moduleId"));
             }
         }
 
@@ -72,7 +80,7 @@ public class CheatSheetService {
         dataMap.remove("id");
         dataMap.remove("title");
         dataMap.remove("type");
-        dataMap.remove("trackId");
+        dataMap.remove("moduleId");
         dataMap.remove("description");
 
         JsonNode dataNode = objectMapper.valueToTree(dataMap);
@@ -81,7 +89,7 @@ public class CheatSheetService {
         cheatSheet.setId(id);
         cheatSheet.setTitle(title);
         cheatSheet.setType(type);
-        cheatSheet.setTrackId(trackId);
+        cheatSheet.setModuleId(moduleId);
         cheatSheet.setDescription(description);
         cheatSheet.setData(dataNode);
 
@@ -104,8 +112,8 @@ public class CheatSheetService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getCheatSheetsByTrack(UUID trackId) {
-        return repository.findByTrackId(trackId).stream()
+    public List<Map<String, Object>> getCheatSheetsByModule(UUID moduleId) {
+        return repository.findByModuleId(moduleId).stream()
                 .map(this::formatCheatSheet)
                 .collect(Collectors.toList());
     }
@@ -134,19 +142,46 @@ public class CheatSheetService {
         UUID userId = currentActorUserId();
         if (userId == null) {
             // No authenticated user — return only global sheets
-            return repository.findGlobalOrByTrackIds(Collections.emptyList()).stream()
+            return repository.findGlobalOrByModuleIds(Collections.emptyList()).stream()
                     .map(this::formatCheatSheet)
                     .collect(Collectors.toList());
         }
 
-        // Fetch track IDs the user is assigned to (queries tenant-schema user_assignments)
-        List<UUID> assignedTrackIds = assignmentRepository.findByUserId(userId).stream()
-                .map(UserAssignment::getTrackId)
-                .distinct()
-                .collect(Collectors.toList());
+        // Fetch completed counts per module for this user
+        List<Object[]> completedRows = lessonProgressRepository.countCompletedLessonsByModule(userId);
+        Map<UUID, Long> completedMap = new HashMap<>();
+        for (Object[] row : completedRows) {
+            if (row[0] != null && row[1] != null) {
+                completedMap.put((UUID) row[0], ((Number) row[1]).longValue());
+            }
+        }
 
-        // Returns global (trackId IS NULL) + track-specific sheets in one query
-        return repository.findGlobalOrByTrackIds(assignedTrackIds).stream()
+        // Fetch total counts per module
+        List<Object[]> totalRows = lessonRepository.countTotalLessonsByModule();
+        Map<UUID, Long> totalMap = new HashMap<>();
+        for (Object[] row : totalRows) {
+            if (row[0] != null && row[1] != null) {
+                totalMap.put((UUID) row[0], ((Number) row[1]).longValue());
+            }
+        }
+
+        // Find module IDs that are 100% completed
+        List<UUID> completedModuleIds = new ArrayList<>();
+        totalMap.forEach((moduleId, totalCount) -> {
+            long completedCount = completedMap.getOrDefault(moduleId, 0L);
+            if (totalCount > 0 && completedCount >= totalCount) {
+                completedModuleIds.add(moduleId);
+            }
+        });
+
+        if (completedModuleIds.isEmpty()) {
+            return repository.findGlobalOrByModuleIds(Collections.emptyList()).stream()
+                    .map(this::formatCheatSheet)
+                    .collect(Collectors.toList());
+        }
+
+        // Returns global (moduleId IS NULL) + module-specific sheets in one query
+        return repository.findGlobalOrByModuleIds(completedModuleIds).stream()
                 .map(this::formatCheatSheet)
                 .collect(Collectors.toList());
     }
@@ -180,8 +215,8 @@ public class CheatSheetService {
         response.put("title", cs.getTitle());
         response.put("type", cs.getType());
 
-        if (cs.getTrackId() != null) {
-            response.put("trackId", cs.getTrackId());
+        if (cs.getModuleId() != null) {
+            response.put("moduleId", cs.getModuleId());
         }
         if (cs.getDescription() != null) {
             response.put("description", cs.getDescription());

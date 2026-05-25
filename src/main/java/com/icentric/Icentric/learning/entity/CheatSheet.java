@@ -29,11 +29,11 @@ public class CheatSheet {
     private String type;
 
     /**
-     * When set, this cheat sheet is only shown to learners assigned to this track.
+     * When set, this cheat sheet is only shown to learners who have completed this module.
      * When NULL, it is global — visible to all learners.
      */
-    @Column(name = "track_id")
-    private UUID trackId;
+    @Column(name = "module_id")
+    private UUID moduleId;
 
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     private com.icentric.Icentric.common.enums.Department department;

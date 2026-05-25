@@ -15,6 +15,8 @@ import com.icentric.Icentric.content.entity.Track;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
+import com.icentric.Icentric.learning.entity.ModuleProgress;
+import com.icentric.Icentric.learning.repository.ModuleProgressRepository;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +47,7 @@ public class LearnerDashboardService {
     private final CertificateRepository certificateRepository;
     private final TenantSchemaService tenantSchemaService;
     private final UserRepository userRepository;
+    private final ModuleProgressRepository moduleProgressRepository;
 
     public LearnerDashboardService(
             UserAssignmentRepository assignmentRepository,
@@ -56,7 +59,8 @@ public class LearnerDashboardService {
             IssuedCertificateRepository issuedCertificateRepository,
             CertificateRepository certificateRepository,
             TenantSchemaService tenantSchemaService,
-            UserRepository userRepository
+            UserRepository userRepository,
+            ModuleProgressRepository moduleProgressRepository
     ) {
         this.assignmentRepository = assignmentRepository;
         this.progressRepository = progressRepository;
@@ -68,6 +72,7 @@ public class LearnerDashboardService {
         this.certificateRepository = certificateRepository;
         this.tenantSchemaService = tenantSchemaService;
         this.userRepository = userRepository;
+        this.moduleProgressRepository = moduleProgressRepository;
     }
 
     @Transactional(readOnly = true)
@@ -180,6 +185,12 @@ public class LearnerDashboardService {
 
         List<UserAssignment> assignments = assignmentRepository.findByUserId(userId);
         List<LearningPathResponse> result = new ArrayList<>();
+
+        List<ModuleProgress> moduleProgressList = moduleProgressRepository.findByUserId(userId);
+        Map<UUID, ModuleProgress> moduleProgressMap = new HashMap<>();
+        for (ModuleProgress mp : moduleProgressList) {
+            moduleProgressMap.put(mp.getModuleId(), mp);
+        }
 
         DateTimeFormatter dateFormatter      = DateTimeFormatter.ofPattern("MMM d, yyyy").withZone(ZoneOffset.UTC);
         DateTimeFormatter shortDateFormatter = DateTimeFormatter.ofPattern("MMM d").withZone(ZoneOffset.UTC);
@@ -313,7 +324,12 @@ public class LearnerDashboardService {
                 if (moduleCompleted) {
                     moduleStatus = "COMPLETED";
                 } else if (previousModuleComplete) {
-                    moduleStatus = "IN_PROGRESS";
+                    var mp = moduleProgressMap.get(module.getId());
+                    if (mp != null) {
+                        moduleStatus = mp.getStatus(); // "IN_PROGRESS" or "COMPLETED"
+                    } else {
+                        moduleStatus = (completedLessonsInModule > 0) ? "IN_PROGRESS" : "NOT_STARTED";
+                    }
                 } else {
                     moduleStatus = "LOCKED";
                 }
@@ -327,6 +343,8 @@ public class LearnerDashboardService {
                     moduleMeta = "Completed";
                 } else if (moduleStatus.equals("LOCKED")) {
                     moduleMeta = "Unlocks after completing previous module";
+                } else if (moduleStatus.equals("NOT_STARTED")) {
+                    moduleMeta = "Not started";
                 } else {
                     moduleMeta = completedLessonsInModule + " of " + totalLessonsInModule + " lessons done";
                 }
@@ -351,11 +369,14 @@ public class LearnerDashboardService {
                     timelineLabel = "Completed";
                 } else if (moduleStatus.equals("LOCKED")) {
                     timelineLabel = "Locked";
+                } else if (moduleStatus.equals("NOT_STARTED")) {
+                    timelineLabel = "Not started";
                 } else {
                     timelineLabel = "In progress " + progressPercent + "%";
                 }
                 String timelineStatus = moduleCompleted ? "COMPLETE"
-                        : (moduleStatus.equals("LOCKED") ? "LOCKED" : "CURRENT");
+                        : (moduleStatus.equals("LOCKED") ? "LOCKED"
+                        : (moduleStatus.equals("NOT_STARTED") ? "NOT_STARTED" : "CURRENT"));
 
                 timelineItems.add(new LearningPathResponse.TimelineItem(
                         module.getId(),

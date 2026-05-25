@@ -92,4 +92,13 @@ AND lp.lessonId IN (
 """)
     void deleteByUserIdAndTrackId(UUID userId, UUID trackId);
 
+    @Query("""
+SELECT l.moduleId, COUNT(lp) 
+FROM LessonProgress lp
+JOIN Lesson l ON lp.lessonId = l.id
+WHERE lp.userId = :userId
+AND lp.status = 'COMPLETED'
+GROUP BY l.moduleId
+""")
+    List<Object[]> countCompletedLessonsByModule(@org.springframework.data.repository.query.Param("userId") UUID userId);
 }

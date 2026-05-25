@@ -760,9 +760,9 @@ public class AdminAnalyticsService {
         TenantUser targetMembership = tenantUserRepository.findByUserIdAndTenantId(targetUserId, tenant.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Target user not found in this tenant"));
 
-        // MANAGER role is scoped: can only reset attempts for users they personally onboarded.
-        // ADMIN/SUPER_ADMIN has unrestricted access across the tenant.
-        if (actorMembership != null && "MANAGER".equals(actorMembership.getRole())) {
+        // Standard manager (ADMIN role) is scoped: can only reset attempts for users they personally onboarded.
+        // SUPER_ADMIN has unrestricted access across the tenant.
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
             if (!actorId.equals(targetMembership.getCreatedBy())) {
                 throw new org.springframework.security.access.AccessDeniedException("Access denied: You are not authorized to reset attempts for this user");
             }

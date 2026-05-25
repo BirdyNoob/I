@@ -234,8 +234,22 @@ public class AssignmentService {
             } else {
                 users = userRepository.findByIdIn(memberUserIds);
             }
+        } else if (request.allCompany() != null && request.allCompany()) {
+            List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId());
+
+            if (adminUserId != null) {
+                TenantUser actorMembership = tenantUserRepository.findByUserIdAndTenantId(adminUserId, tenant.getId()).orElse(null);
+                if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+                    memberships = memberships.stream()
+                            .filter(m -> adminUserId.equals(m.getCreatedBy()))
+                            .toList();
+                }
+            }
+
+            List<UUID> userIds = memberships.stream().map(TenantUser::getUserId).toList();
+            users = userRepository.findByIdIn(userIds);
         } else {
-            throw new IllegalArgumentException("Provide userIds, department, or groupId");
+            throw new IllegalArgumentException("Provide userIds, department, groupId, or set allCompany to true");
         }
 
         int total = users.size();

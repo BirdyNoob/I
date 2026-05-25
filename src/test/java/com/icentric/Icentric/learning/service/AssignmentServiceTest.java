@@ -490,5 +490,100 @@ class AssignmentServiceTest {
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("You do not have permission to access this group");
     }
+
+    @Test
+    @DisplayName("bulkAssign by SUPER_ADMIN with allCompany flag assigns to all company users")
+    void bulkAssign_withAllCompany_asSuperAdmin_assignsToAllCompanyUsers() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        UUID trackId = UUID.randomUUID();
+        UUID user1Id = UUID.randomUUID();
+        UUID user2Id = UUID.randomUUID();
+
+        com.icentric.Icentric.platform.tenant.entity.Tenant tenant = new com.icentric.Icentric.platform.tenant.entity.Tenant("acme", "Acme Corp");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "SUPER_ADMIN");
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        TenantUser member1 = new TenantUser(user1Id, tenant.getId(), "LEARNER");
+        TenantUser member2 = new TenantUser(user2Id, tenant.getId(), "LEARNER");
+        when(tenantUserRepository.findByTenantId(tenant.getId())).thenReturn(List.of(member1, member2));
+
+        User user1 = new User();
+        user1.setId(user1Id);
+        User user2 = new User();
+        user2.setId(user2Id);
+        when(userRepository.findByIdIn(any())).thenReturn(List.of(user1, user2));
+
+        Track track = new Track();
+        track.setId(trackId);
+        track.setVersion(1);
+        when(trackRepository.findById(trackId)).thenReturn(Optional.of(track));
+        when(repository.save(any(UserAssignment.class))).thenAnswer(inv -> inv.getArgument(0, UserAssignment.class));
+
+        BulkAssignmentRequest request = new BulkAssignmentRequest(
+                trackId,
+                null,
+                null,
+                null,
+                true, // allCompany
+                Instant.now().plusSeconds(3600)
+        );
+
+        var result = assignmentService.bulkAssign(request);
+        assertThat(result.get("total")).isEqualTo(2);
+        assertThat(result.get("success")).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("bulkAssign by ADMIN with allCompany flag assigns only to users onboarded by that ADMIN")
+    void bulkAssign_withAllCompany_asAdmin_assignsOnlyToOnboardedCompanyUsers() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        UUID trackId = UUID.randomUUID();
+        UUID user1Id = UUID.randomUUID();
+        UUID user2Id = UUID.randomUUID();
+
+        com.icentric.Icentric.platform.tenant.entity.Tenant tenant = new com.icentric.Icentric.platform.tenant.entity.Tenant("acme", "Acme Corp");
+        when(tenantAccessGuard.currentTenant()).thenReturn(tenant);
+
+        TenantUser adminMembership = new TenantUser(adminId, tenant.getId(), "ADMIN");
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenant.getId()))
+                .thenReturn(Optional.of(adminMembership));
+
+        TenantUser member1 = new TenantUser(user1Id, tenant.getId(), "LEARNER");
+        member1.setCreatedBy(adminId); // onboarded by this admin
+        TenantUser member2 = new TenantUser(user2Id, tenant.getId(), "LEARNER");
+        member2.setCreatedBy(UUID.randomUUID()); // onboarded by another admin
+        
+        when(tenantUserRepository.findByTenantId(tenant.getId())).thenReturn(List.of(member1, member2));
+
+        User user1 = new User();
+        user1.setId(user1Id);
+        when(userRepository.findByIdIn(List.of(user1Id))).thenReturn(List.of(user1));
+
+        Track track = new Track();
+        track.setId(trackId);
+        track.setVersion(1);
+        when(trackRepository.findById(trackId)).thenReturn(Optional.of(track));
+        when(repository.save(any(UserAssignment.class))).thenAnswer(inv -> inv.getArgument(0, UserAssignment.class));
+
+        BulkAssignmentRequest request = new BulkAssignmentRequest(
+                trackId,
+                null,
+                null,
+                null,
+                true, // allCompany
+                Instant.now().plusSeconds(3600)
+        );
+
+        var result = assignmentService.bulkAssign(request);
+        assertThat(result.get("total")).isEqualTo(1);
+        assertThat(result.get("success")).isEqualTo(1);
+    }
 }
 

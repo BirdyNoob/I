@@ -68,13 +68,13 @@ public class CheatSheetAdminController {
     }
 
     /**
-     * Get cheat sheets for a specific track.
+     * Get cheat sheets for a specific module.
      */
-    @Operation(summary = "Get cheat sheets for a specific track")
-    @GetMapping("/by-track/{trackId}")
+    @Operation(summary = "Get cheat sheets for a specific module")
+    @GetMapping("/by-module/{moduleId}")
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
-    public ResponseEntity<List<Map<String, Object>>> getByTrack(@PathVariable UUID trackId) {
-        return ResponseEntity.ok(service.getCheatSheetsByTrack(trackId));
+    public ResponseEntity<List<Map<String, Object>>> getByModule(@PathVariable UUID moduleId) {
+        return ResponseEntity.ok(service.getCheatSheetsByModule(moduleId));
     }
 
     /**
