@@ -4,9 +4,14 @@ package com.icentric.Icentric.learning.service;
 import com.icentric.Icentric.content.repository.LessonRepository;
 import com.icentric.Icentric.content.repository.LessonStepRepository;
 import com.icentric.Icentric.content.entity.CourseModule;
+import com.icentric.Icentric.content.entity.Lesson;
+import com.icentric.Icentric.content.entity.LessonStep;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.learning.dto.*;
 import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.entity.LessonProgress;
+import com.icentric.Icentric.learning.entity.Certificate;
+import com.icentric.Icentric.learning.entity.IssuedCertificate;
 import com.icentric.Icentric.learning.repository.CertificateRepository;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
@@ -22,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.stream.Collectors;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -134,35 +140,80 @@ public class LearnerDashboardService {
     public NextLessonResponse getNextLesson(UUID userId) {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        var assignments = assignmentRepository.findByUserId(userId);
+        List<UserAssignment> assignments = assignmentRepository.findByUserId(userId);
+        if (assignments.isEmpty()) {
+            return null;
+        }
+
+        List<UUID> trackIds = assignments.stream().map(UserAssignment::getTrackId).toList();
+        List<Track> tracks = trackRepository.findAllById(trackIds);
+        if (tracks.isEmpty()) {
+            tracks = new ArrayList<>();
+            for (UUID trackId : trackIds) {
+                trackRepository.findById(trackId).ifPresent(tracks::add);
+            }
+        }
+        Map<UUID, Track> trackMap = tracks.stream()
+                .filter(t -> Boolean.TRUE.equals(t.getIsPublished()))
+                .collect(Collectors.toMap(Track::getId, t -> t, (a, b) -> a));
+
+        List<CourseModule> allModules = moduleRepository.findByTrackIdIn(trackIds);
+        if (allModules.isEmpty()) {
+            allModules = new ArrayList<>();
+            for (UUID trackId : trackIds) {
+                allModules.addAll(moduleRepository.findByTrackIdOrderBySortOrder(trackId));
+            }
+        }
+        Map<UUID, List<CourseModule>> modulesByTrackId = allModules.stream()
+                .collect(Collectors.groupingBy(CourseModule::getTrackId));
+
+        List<UUID> moduleIds = allModules.stream().map(CourseModule::getId).toList();
+        List<Lesson> allLessons = moduleIds.isEmpty() ? List.of() : lessonRepository.findByModuleIdIn(moduleIds);
+        if (allLessons.isEmpty() && !moduleIds.isEmpty()) {
+            allLessons = new ArrayList<>();
+            for (UUID moduleId : moduleIds) {
+                allLessons.addAll(lessonRepository.findByModuleIdOrderBySortOrder(moduleId));
+            }
+        }
+        Map<UUID, List<Lesson>> lessonsByModuleId = allLessons.stream()
+                .collect(Collectors.groupingBy(Lesson::getModuleId));
+
+        List<UUID> lessonIds = allLessons.stream().map(Lesson::getId).toList();
+        List<LessonProgress> progressList = (lessonIds.isEmpty()) 
+                ? List.of() 
+                : progressRepository.findByUserIdAndLessonIdIn(userId, lessonIds);
+        if (progressList.isEmpty() && !lessonIds.isEmpty()) {
+            progressList = new ArrayList<>();
+            for (UUID lessonId : lessonIds) {
+                progressRepository.findByUserIdAndLessonId(userId, lessonId).ifPresent(progressList::add);
+            }
+        }
+        Map<UUID, LessonProgress> progressMap = progressList.stream()
+                .collect(Collectors.toMap(LessonProgress::getLessonId, p -> p, (a, b) -> a));
 
         for (var assignment : assignments) {
-
-            var trackOpt = trackRepository.findById(assignment.getTrackId());
-            if (trackOpt.isEmpty() || !Boolean.TRUE.equals(trackOpt.get().getIsPublished())) {
+            Track track = trackMap.get(assignment.getTrackId());
+            if (track == null) {
                 continue;
             }
-            var track = trackOpt.get();
 
-            var modules = moduleRepository
-                    .findByTrackIdOrderBySortOrder(track.getId());
+            List<CourseModule> modules = modulesByTrackId.getOrDefault(track.getId(), List.of()).stream()
+                    .sorted(Comparator.comparingInt(CourseModule::getSortOrder))
+                    .toList();
 
             for (CourseModule module : modules) {
-
-                var lessons = lessonRepository
-                        .findByModuleIdOrderBySortOrder(module.getId());
+                List<Lesson> lessons = lessonsByModuleId.getOrDefault(module.getId(), List.of()).stream()
+                        .sorted(Comparator.comparingInt(l -> l.getSortOrder() != null ? l.getSortOrder() : 0))
+                        .toList();
 
                 for (var lesson : lessons) {
-
-                    boolean completed =
-                            progressRepository.existsByUserIdAndLessonIdAndStatus(
-                                    userId,
-                                    lesson.getId(),
-                                    "COMPLETED"
-                            );
+                    LessonProgress progress = progressMap.get(lesson.getId());
+                    boolean completed = progress != null && "COMPLETED".equals(progress.getStatus());
+                    if (!completed) {
+                        completed = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
+                    }
 
                     if (!completed) {
-
                         return new NextLessonResponse(
                                 track.getId(),
                                 module.getId(),
@@ -184,6 +235,66 @@ public class LearnerDashboardService {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
         List<UserAssignment> assignments = assignmentRepository.findByUserId(userId);
+        if (assignments.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> trackIds = assignments.stream().map(UserAssignment::getTrackId).toList();
+        List<Track> tracks = trackRepository.findAllById(trackIds);
+        if (tracks.isEmpty()) {
+            tracks = new ArrayList<>();
+            for (UUID trackId : trackIds) {
+                trackRepository.findById(trackId).ifPresent(tracks::add);
+            }
+        }
+        Map<UUID, Track> trackMap = tracks.stream()
+                .filter(t -> Boolean.TRUE.equals(t.getIsPublished()))
+                .collect(Collectors.toMap(Track::getId, t -> t, (a, b) -> a));
+
+        List<CourseModule> allModules = moduleRepository.findByTrackIdIn(trackIds);
+        if (allModules.isEmpty()) {
+            allModules = new ArrayList<>();
+            for (UUID trackId : trackIds) {
+                allModules.addAll(moduleRepository.findByTrackIdOrderBySortOrder(trackId));
+            }
+        }
+        Map<UUID, List<CourseModule>> modulesByTrackId = allModules.stream()
+                .collect(Collectors.groupingBy(CourseModule::getTrackId));
+
+        List<UUID> moduleIds = allModules.stream().map(CourseModule::getId).toList();
+        List<Lesson> allLessons = moduleIds.isEmpty() ? List.of() : lessonRepository.findByModuleIdIn(moduleIds);
+        if (allLessons.isEmpty() && !moduleIds.isEmpty()) {
+            allLessons = new ArrayList<>();
+            for (UUID moduleId : moduleIds) {
+                allLessons.addAll(lessonRepository.findByModuleIdOrderBySortOrder(moduleId));
+            }
+        }
+        Map<UUID, List<Lesson>> lessonsByModuleId = allLessons.stream()
+                .collect(Collectors.groupingBy(Lesson::getModuleId));
+
+        List<UUID> lessonIds = allLessons.stream().map(Lesson::getId).toList();
+        List<LessonStep> allSteps = lessonIds.isEmpty() ? List.of() : lessonStepRepository.findByLessonIdIn(lessonIds);
+        if (allSteps.isEmpty() && !lessonIds.isEmpty()) {
+            allSteps = new ArrayList<>();
+            for (UUID lessonId : lessonIds) {
+                allSteps.addAll(lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lessonId));
+            }
+        }
+        Map<UUID, List<LessonStep>> stepsByLessonId = allSteps.stream()
+                .collect(Collectors.groupingBy(LessonStep::getLessonId));
+
+        List<LessonProgress> progressList = (lessonIds.isEmpty()) 
+                ? List.of() 
+                : progressRepository.findByUserIdAndLessonIdIn(userId, lessonIds);
+        if (progressList.isEmpty() && !lessonIds.isEmpty()) {
+            progressList = new ArrayList<>();
+            for (UUID lessonId : lessonIds) {
+                progressRepository.findByUserIdAndLessonId(userId, lessonId).ifPresent(progressList::add);
+            }
+        }
+        Map<UUID, LessonProgress> progressMap = progressList.stream()
+                .collect(Collectors.toMap(LessonProgress::getLessonId, p -> p, (a, b) -> a));
+
         List<LearningPathResponse> result = new ArrayList<>();
 
         List<ModuleProgress> moduleProgressList = moduleProgressRepository.findByUserId(userId);
@@ -196,12 +307,13 @@ public class LearnerDashboardService {
         DateTimeFormatter shortDateFormatter = DateTimeFormatter.ofPattern("MMM d").withZone(ZoneOffset.UTC);
 
         for (UserAssignment assignment : assignments) {
-            var trackOpt = trackRepository.findById(assignment.getTrackId());
-            if (trackOpt.isEmpty() || !Boolean.TRUE.equals(trackOpt.get().getIsPublished())) {
+            Track track = trackMap.get(assignment.getTrackId());
+            if (track == null) {
                 continue;
             }
-            var track = trackOpt.get();
-            var modules = moduleRepository.findByTrackIdOrderBySortOrder(track.getId());
+            List<CourseModule> modules = modulesByTrackId.getOrDefault(track.getId(), List.of()).stream()
+                    .sorted(Comparator.comparingInt(CourseModule::getSortOrder))
+                    .toList();
 
             int completedModulesCount = 0;
             int totalModulesCount     = modules.size();
@@ -211,52 +323,47 @@ public class LearnerDashboardService {
             List<LearningPathResponse.TimelineItem> timelineItems = new ArrayList<>();
 
             boolean previousModuleComplete = true;
-            // FIX 1: use a 1-based counter so moduleNumber is always correct
-            //         regardless of how sortOrder is stored in the DB
             int moduleIndex = 1;
 
             for (CourseModule module : modules) {
-                var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+                List<Lesson> lessons = lessonsByModuleId.getOrDefault(module.getId(), List.of()).stream()
+                        .sorted(Comparator.comparingInt(l -> l.getSortOrder() != null ? l.getSortOrder() : 0))
+                        .toList();
 
                 int totalLessonsInModule     = lessons.size();
                 int completedLessonsInModule = 0;
                 List<LearningPathResponse.LessonItem> lessonItems = new ArrayList<>();
 
-                // Collect topics and display items across all lessons in this module.
-                // Universal rule:
-                //   - Lesson HAS steps → expand steps as items; topics = step types (human-readable)
-                //   - Lesson has NO steps  → lesson is the item; topics = prefix before ':' in title
                 var topicSet = new java.util.LinkedHashSet<String>();
                 int totalDisplayItems = 0;   // steps or lessons, whichever applies
 
                 boolean previousLessonComplete = true;
 
                 for (var lesson : lessons) {
-                    boolean lessonDone = false;
+                    LessonProgress p = progressMap.get(lesson.getId());
+                    boolean lessonDone = p != null && "COMPLETED".equals(p.getStatus());
+                    if (!lessonDone) {
+                        lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
+                    }
                     java.util.List<UUID> completedStepIds = new java.util.ArrayList<>();
-                    progressRepository.findByUserIdAndLessonId(userId, lesson.getId())
-                            .ifPresent(p -> {
-                                if (p.getCompletedStepIds() != null) {
-                                    completedStepIds.addAll(p.getCompletedStepIds());
-                                }
-                            });
-                    lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
+                    if (p != null && p.getCompletedStepIds() != null) {
+                        completedStepIds.addAll(p.getCompletedStepIds());
+                    }
 
-                    var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+                    List<LessonStep> steps = stepsByLessonId.getOrDefault(lesson.getId(), List.of()).stream()
+                            .sorted(Comparator.comparingInt(s -> s.getSortOrder() != null ? s.getSortOrder() : 0))
+                            .toList();
 
                     if (!steps.isEmpty()) {
-                        // ── NEW architecture: lesson wraps steps ──────────────────────────
                         steps.forEach(s -> topicSet.add(humanizeStepType(s.getStepType().name())));
                         totalDisplayItems += steps.size();
 
                         if (lessonDone || completedStepIds.size() >= steps.size()) {
-                            // All steps show as completed
                             completedLessonsInModule += steps.size();
                             steps.forEach(s -> lessonItems.add(new LearningPathResponse.LessonItem(
                                     lesson.getId(), s.getTitle(), "COMPLETED", "Done", "Review"
                             )));
                         } else if (previousLessonComplete && previousModuleComplete) {
-                            // Find the edge between completed steps and upcoming steps
                             boolean firstIncompleteFound = false;
                             for (var s : steps) {
                                 if (completedStepIds.contains(s.getId())) {
@@ -277,15 +384,12 @@ public class LearnerDashboardService {
                             }
                             remainingMinsTotal += (lesson.getEstimatedMins() != null ? lesson.getEstimatedMins() : 0);
                         } else {
-                            // Module locked — all steps locked
                             steps.forEach(s -> lessonItems.add(new LearningPathResponse.LessonItem(
                                     lesson.getId(), s.getTitle(), "UPCOMING", "Upcoming", "Locked"
                             )));
                             remainingMinsTotal += (lesson.getEstimatedMins() != null ? lesson.getEstimatedMins() : 0);
                         }
-                        previousLessonComplete = lessonDone;
                     } else {
-                        // ── OLD architecture: lesson is the atomic unit ───────────────────
                         String t = lesson.getTitle();
                         int colon = t.indexOf(':');
                         topicSet.add(colon >= 0 ? t.substring(0, colon).trim() : t);
@@ -326,7 +430,7 @@ public class LearnerDashboardService {
                 } else if (previousModuleComplete) {
                     var mp = moduleProgressMap.get(module.getId());
                     if (mp != null) {
-                        moduleStatus = mp.getStatus(); // "IN_PROGRESS" or "COMPLETED"
+                        moduleStatus = mp.getStatus();
                     } else {
                         moduleStatus = (completedLessonsInModule > 0) ? "IN_PROGRESS" : "NOT_STARTED";
                     }
@@ -360,10 +464,9 @@ public class LearnerDashboardService {
                         lessonItems,
                         progressPercent,
                         completedLessonsInModule,
-                        totalDisplayItems   // real count: steps if step-based, lessons otherwise
+                        totalDisplayItems
                 ));
 
-                // FIX 5: timeline label uses meaningful status text per module
                 String timelineLabel;
                 if (moduleCompleted) {
                     timelineLabel = "Completed";
@@ -397,7 +500,6 @@ public class LearnerDashboardService {
                     : "";
 
             int estimatedMins = track.getEstimatedMins() != null ? track.getEstimatedMins() : 0;
-            // FIX 4: actual computed remaining from incomplete lessons
             String remainingLabel = remainingMinsTotal > 0
                     ? "~" + remainingMinsTotal + " min remaining"
                     : "All done!";
@@ -411,7 +513,7 @@ public class LearnerDashboardService {
                     "~" + estimatedMins + " min total",
                     completedModulesCount,
                     totalModulesCount,
-                    remainingLabel,            // FIX 4
+                    remainingLabel,
                     deadlineLabel,
                     daysRemainingLabel,
                     timelineItems,
@@ -446,14 +548,33 @@ public class LearnerDashboardService {
         List<TrainingItem> trainings = new ArrayList<>();
 
         Map<UUID, String> trackTitles = new HashMap<>();
-        Map<UUID, Long> totalLessonsByTrack = new HashMap<>();
-        Map<UUID, Long> completedLessonsByTrack = new HashMap<>();
 
         if (!trackIds.isEmpty()) {
             trackRepository.findAllById(trackIds).stream()
                     .filter(t -> Boolean.TRUE.equals(t.getIsPublished()))
                     .forEach(track -> trackTitles.put(track.getId(), track.getTitle()));
         }
+
+        // 🔥 Pre-fetch progress hierarchy data
+        List<CourseModule> allModules = trackIds.isEmpty() ? List.of() : moduleRepository.findByTrackIdIn(trackIds);
+        Map<UUID, List<CourseModule>> modulesByTrackId = allModules.stream()
+                .collect(Collectors.groupingBy(CourseModule::getTrackId));
+
+        List<UUID> moduleIds = allModules.stream().map(CourseModule::getId).toList();
+        List<Lesson> allLessons = moduleIds.isEmpty() ? List.of() : lessonRepository.findByModuleIdIn(moduleIds);
+        Map<UUID, List<Lesson>> lessonsByModuleId = allLessons.stream()
+                .collect(Collectors.groupingBy(Lesson::getModuleId));
+
+        List<UUID> lessonIds = allLessons.stream().map(Lesson::getId).toList();
+        List<LessonStep> allSteps = lessonIds.isEmpty() ? List.of() : lessonStepRepository.findByLessonIdIn(lessonIds);
+        Map<UUID, List<LessonStep>> stepsByLessonId = allSteps.stream()
+                .collect(Collectors.groupingBy(LessonStep::getLessonId));
+
+        List<LessonProgress> progressList = (lessonIds.isEmpty()) 
+                ? List.of() 
+                : progressRepository.findByUserIdAndLessonIdIn(userId, lessonIds);
+        Map<UUID, LessonProgress> progressByLessonId = progressList.stream()
+                .collect(Collectors.toMap(LessonProgress::getLessonId, p -> p, (a, b) -> a));
 
         for (UserAssignment a : assignments) {
             if (!trackTitles.containsKey(a.getTrackId())) {
@@ -462,8 +583,14 @@ public class LearnerDashboardService {
             
             AssignmentStatus status = resolveAssignmentStatus(a);
 
-            // Calculate step-aware progress for this track
-            int progress = calculateTrackProgressPercent(userId, a.getTrackId());
+            // Calculate step-aware progress in memory
+            int progress = calculateTrackProgressPercent(
+                    a.getTrackId(),
+                    modulesByTrackId,
+                    lessonsByModuleId,
+                    stepsByLessonId,
+                    progressByLessonId
+            );
 
             Long daysLeft = calculateDaysLeft(a);
 
@@ -487,26 +614,33 @@ public class LearnerDashboardService {
                         .thenComparing(TrainingItem::trackTitle, String.CASE_INSENSITIVE_ORDER)
         );
 
-        // 🔥 Certificates
-        List<CertificateItem> certificates =
-                issuedCertificateRepository.findByUserId(userId)
-                        .stream()
-                        .map(c -> new CertificateItem(
-                                c.getId(),
-                                c.getTrackId(),
-                                certificateRepository.findById(c.getCertificateId())
-                                        .map(cert -> cert.getTitle())
-                                        .orElse("Certificate"),
-                                c.getIssuedAt(),
-                                c.getStatus(),
-                                c.getDownloadUrl()
-                        ))
-                        .toList();
+        // 🔥 Certificates — Pre-fetch titles in a single query
+        List<IssuedCertificate> issuedCerts = issuedCertificateRepository.findByUserId(userId);
+        List<UUID> certificateIds = issuedCerts.stream().map(IssuedCertificate::getCertificateId).distinct().toList();
+        Map<UUID, String> certificateTitles = certificateIds.isEmpty() ? Map.of() : certificateRepository.findAllById(certificateIds).stream()
+                .collect(Collectors.toMap(Certificate::getId, Certificate::getTitle, (a, b) -> a));
+
+        List<CertificateItem> certificates = issuedCerts.stream()
+                .map(c -> new CertificateItem(
+                        c.getId(),
+                        c.getTrackId(),
+                        certificateTitles.getOrDefault(c.getCertificateId(), "Certificate"),
+                        c.getIssuedAt(),
+                        c.getStatus(),
+                        c.getDownloadUrl()
+                ))
+                .toList();
 
         int modulesCompleted = 0;
         int totalModules = 0;
         if (!trackIds.isEmpty()) {
-            int[] stats = calculateModuleStats(userId, trackIds);
+            int[] stats = calculateModuleStats(
+                    trackIds,
+                    modulesByTrackId,
+                    lessonsByModuleId,
+                    stepsByLessonId,
+                    progressByLessonId
+            );
             modulesCompleted = stats[0];
             totalModules = stats[1];
         }
@@ -522,31 +656,43 @@ public class LearnerDashboardService {
         );
     }
 
-    private int[] calculateModuleStats(UUID userId, List<UUID> trackIds) {
+    private int[] calculateModuleStats(
+            List<UUID> trackIds,
+            Map<UUID, List<CourseModule>> modulesByTrackId,
+            Map<UUID, List<Lesson>> lessonsByModuleId,
+            Map<UUID, List<LessonStep>> stepsByLessonId,
+            Map<UUID, LessonProgress> progressByLessonId
+    ) {
         int completedCount = 0;
         int totalCount = 0;
         for (UUID trackId : trackIds) {
-            var modules = moduleRepository.findByTrackIdOrderBySortOrder(trackId);
+            List<CourseModule> modules = modulesByTrackId.getOrDefault(trackId, List.of()).stream()
+                    .sorted(Comparator.comparingInt(CourseModule::getSortOrder))
+                    .toList();
             totalCount += modules.size();
             for (CourseModule module : modules) {
-                var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+                List<Lesson> lessons = lessonsByModuleId.getOrDefault(module.getId(), List.of()).stream()
+                        .sorted(Comparator.comparingInt(l -> l.getSortOrder() != null ? l.getSortOrder() : 0))
+                        .toList();
                 if (lessons.isEmpty()) continue;
 
                 int totalDisplayItems = 0;
                 int completedDisplayItems = 0;
 
                 for (var lesson : lessons) {
-                    boolean lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(userId, lesson.getId(), "COMPLETED");
-                    var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+                    LessonProgress progress = progressByLessonId.get(lesson.getId());
+                    boolean lessonDone = progress != null && "COMPLETED".equals(progress.getStatus());
+                    List<LessonStep> steps = stepsByLessonId.getOrDefault(lesson.getId(), List.of()).stream()
+                            .sorted(Comparator.comparingInt(s -> s.getSortOrder() != null ? s.getSortOrder() : 0))
+                            .toList();
 
                     if (!steps.isEmpty()) {
                         totalDisplayItems += steps.size();
                         if (lessonDone) {
                             completedDisplayItems += steps.size();
                         } else {
-                            var pOpt = progressRepository.findByUserIdAndLessonId(userId, lesson.getId());
-                            if (pOpt.isPresent() && pOpt.get().getCompletedStepIds() != null) {
-                                completedDisplayItems += pOpt.get().getCompletedStepIds().size();
+                            if (progress != null && progress.getCompletedStepIds() != null) {
+                                completedDisplayItems += progress.getCompletedStepIds().size();
                             }
                         }
                     } else {
@@ -573,21 +719,35 @@ public class LearnerDashboardService {
                 .orElseThrow(() -> new java.util.NoSuchElementException("Track not found: " + trackId));
 
         var modules = moduleRepository.findByTrackIdOrderBySortOrder(trackId);
+        List<UUID> moduleIds = modules.stream().map(CourseModule::getId).toList();
+
+        List<Lesson> allLessons = moduleIds.isEmpty() ? List.of() : lessonRepository.findByModuleIdIn(moduleIds);
+        Map<UUID, List<Lesson>> lessonsByModuleId = allLessons.stream()
+                .collect(Collectors.groupingBy(Lesson::getModuleId));
+
+        List<UUID> lessonIds = allLessons.stream().map(Lesson::getId).toList();
+        List<LessonProgress> progressList = (lessonIds.isEmpty()) 
+                ? List.of() 
+                : progressRepository.findByUserIdAndLessonIdIn(userId, lessonIds);
+        Map<UUID, LessonProgress> progressMap = progressList.stream()
+                .collect(Collectors.toMap(LessonProgress::getLessonId, p -> p, (a, b) -> a));
 
         int totalLessons = 0;
         int completedLessons = 0;
         var moduleProgressList = new ArrayList<TrackProgressResponse.ModuleProgress>();
 
         for (var module : modules) {
-            var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+            List<Lesson> lessons = lessonsByModuleId.getOrDefault(module.getId(), List.of()).stream()
+                    .sorted(Comparator.comparingInt(l -> l.getSortOrder() != null ? l.getSortOrder() : 0))
+                    .toList();
             var lessonStatuses = new java.util.ArrayList<TrackProgressResponse.LessonStatus>();
 
             boolean previousComplete = true; // first lesson is always unlocked
             int moduleCompleted = 0;
 
             for (var lesson : lessons) {
-                boolean done = progressRepository.existsByUserIdAndLessonIdAndStatus(
-                        userId, lesson.getId(), "COMPLETED");
+                LessonProgress progress = progressMap.get(lesson.getId());
+                boolean done = progress != null && "COMPLETED".equals(progress.getStatus());
                 boolean locked = !previousComplete; // locked if the one before wasn't done
 
                 lessonStatuses.add(new TrackProgressResponse.LessonStatus(
@@ -688,13 +848,6 @@ public class LearnerDashboardService {
         return streak;
     }
 
-    /**
-     * Converts a StepType enum name to a human-readable topic label.
-     * Used to populate the `topics` list in the learning-path response
-     * when a lesson is step-based (new architecture).
-     *
-     * Examples: CONCEPT → "Concept", DO_DONT → "Do & Don't", QUIZ → "Quiz"
-     */
     private String humanizeStepType(String stepTypeName) {
         return switch (stepTypeName) {
             case "CONCEPT"  -> "Concept";
@@ -708,39 +861,41 @@ public class LearnerDashboardService {
         };
     }
 
-    /**
-     * Calculate progress percentage for a track, accounting for step-level progress.
-     * For lessons with steps, counts completed steps toward progress.
-     * For lessons without steps, counts completed lessons.
-     * This provides granular progress tracking (e.g., 40% if 2 of 5 steps done).
-     */
-    private int calculateTrackProgressPercent(UUID userId, UUID trackId) {
-        var modules = moduleRepository.findByTrackIdOrderBySortOrder(trackId);
+    private int calculateTrackProgressPercent(
+            UUID trackId,
+            Map<UUID, List<CourseModule>> modulesByTrackId,
+            Map<UUID, List<Lesson>> lessonsByModuleId,
+            Map<UUID, List<LessonStep>> stepsByLessonId,
+            Map<UUID, LessonProgress> progressByLessonId
+    ) {
+        List<CourseModule> modules = modulesByTrackId.getOrDefault(trackId, List.of()).stream()
+                .sorted(Comparator.comparingInt(CourseModule::getSortOrder))
+                .toList();
         long totalDisplayItems = 0;
         long completedDisplayItems = 0;
 
         for (var module : modules) {
-            var lessons = lessonRepository.findByModuleIdOrderBySortOrder(module.getId());
+            List<Lesson> lessons = lessonsByModuleId.getOrDefault(module.getId(), List.of()).stream()
+                    .sorted(Comparator.comparingInt(l -> l.getSortOrder() != null ? l.getSortOrder() : 0))
+                    .toList();
             for (var lesson : lessons) {
-                var steps = lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
+                List<LessonStep> steps = stepsByLessonId.getOrDefault(lesson.getId(), List.of()).stream()
+                        .sorted(Comparator.comparingInt(s -> s.getSortOrder() != null ? s.getSortOrder() : 0))
+                        .toList();
 
                 if (!steps.isEmpty()) {
-                    // Lesson has steps: count step-level progress
                     totalDisplayItems += steps.size();
-                    var progressOpt = progressRepository.findByUserIdAndLessonId(userId, lesson.getId());
-                    if (progressOpt.isPresent() && progressOpt.get().getCompletedStepIds() != null) {
-                        completedDisplayItems += progressOpt.get().getCompletedStepIds().size();
+                    LessonProgress progress = progressByLessonId.get(lesson.getId());
+                    if (progress != null && progress.getCompletedStepIds() != null) {
+                        completedDisplayItems += progress.getCompletedStepIds().size();
                     }
-                    // If lesson status is COMPLETED, all steps are done
-                    if (progressOpt.isPresent() && "COMPLETED".equals(progressOpt.get().getStatus())) {
+                    if (progress != null && "COMPLETED".equals(progress.getStatus())) {
                         completedDisplayItems = Math.max(completedDisplayItems, (long) steps.size());
                     }
                 } else {
-                    // Lesson has no steps: count at lesson level
                     totalDisplayItems++;
-                    boolean lessonDone = progressRepository.existsByUserIdAndLessonIdAndStatus(
-                            userId, lesson.getId(), "COMPLETED");
-                    if (lessonDone) {
+                    LessonProgress progress = progressByLessonId.get(lesson.getId());
+                    if (progress != null && "COMPLETED".equals(progress.getStatus())) {
                         completedDisplayItems++;
                     }
                 }

@@ -18,6 +18,7 @@ public interface LessonProgressRepository
             UUID userId,
             UUID lessonId
     );
+    List<LessonProgress> findByUserIdAndLessonIdIn(UUID userId, java.util.Collection<UUID> lessonIds);
     long countByUserIdAndStatus(UUID userId, String status);
 
     long countByUserId(UUID userId);

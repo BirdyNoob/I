@@ -1,5 +1,8 @@
 package com.icentric.Icentric.config;
 
+import com.icentric.Icentric.identity.service.IcentricOidcUserService;
+import com.icentric.Icentric.identity.service.OidcFailureHandler;
+import com.icentric.Icentric.identity.service.OidcSuccessHandler;
 import com.icentric.Icentric.security.JwtAuthenticationFilter;
 import com.icentric.Icentric.security.JwtService;
 import com.icentric.Icentric.tenant.TenantFilter;
@@ -33,7 +36,10 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtFilter,
-            TenantFilter tenantFilter
+            TenantFilter tenantFilter,
+            IcentricOidcUserService oidcUserService,
+            OidcSuccessHandler oidcSuccessHandler,
+            OidcFailureHandler oidcFailureHandler
     ) throws Exception {
 
         http.csrf(csrf -> csrf.disable());
@@ -52,7 +58,10 @@ public class SecurityConfig {
                         "/api/v1/auth/logout",
                         "/api/v1/public/**",
                         "/swagger-ui/**",
-                        "/v3/api-docs/**"
+                        "/v3/api-docs/**",
+                        // ── SSO / OIDC endpoints ──────────────────────────────
+                        "/oauth2/authorization/**",   // Initiates SSO redirect (Google/Microsoft)
+                        "/login/oauth2/code/**"        // OIDC callback from provider
                 ).permitAll()
 
                 // Platform Admin only
@@ -81,6 +90,17 @@ public class SecurityConfig {
 
                 // Everything else requires authentication
                 .anyRequest().authenticated()
+        );
+
+        // ── OIDC / SSO Login ──────────────────────────────────────────────────
+        // Plugs into the existing JWT pipeline: OIDC success issues the same
+        // Icentric JWT format — JwtAuthenticationFilter is completely unchanged.
+        http.oauth2Login(oauth2 -> oauth2
+                .userInfoEndpoint(userInfo -> userInfo
+                        .oidcUserService(oidcUserService)
+                )
+                .successHandler(oidcSuccessHandler)
+                .failureHandler(oidcFailureHandler)
         );
 
         /*

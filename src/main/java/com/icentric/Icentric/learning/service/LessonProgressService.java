@@ -295,6 +295,7 @@ public class LessonProgressService {
                     .findByUserIdAndTrackId(userId, trackId)
                     .orElseThrow();
             assignment.setStatus(AssignmentStatus.COMPLETED);
+            assignment.setCompletedAt(Instant.now());   // BUG 2 fix: stamp completion time
             assignmentRepository.save(assignment);
             auditService.log(
                     userId,

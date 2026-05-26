@@ -15,6 +15,7 @@ public interface LessonRepository
     List<Lesson> findByModuleId(UUID moduleId);
     long countByModuleId(UUID moduleId);
     List<Lesson> findByModuleIdOrderBySortOrder(UUID moduleId);
+    List<Lesson> findByModuleIdIn(java.util.Collection<UUID> moduleIds);
 @Query("""
 SELECT COUNT(l)
 FROM Lesson l

@@ -130,9 +130,10 @@ public class AdminAnalyticsService {
         
         List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
 
-        List<UserAssignment> assignments = assignmentRepository.findAll().stream()
-                .filter(a -> learnerUserIds.contains(a.getUserId()))
-                .toList();
+        // BUG 3 FIX: never load all assignments from all tenants — scope to this tenant's learners.
+        List<UserAssignment> assignments = learnerUserIds.isEmpty()
+                ? List.of()
+                : assignmentRepository.findByUserIdIn(learnerUserIds);
 
         long totalAssignments = assignments.size();
 
@@ -144,6 +145,7 @@ public class AdminAnalyticsService {
                 totalAssignments == 0 ? 0 :
                         (completedAssignments * 100.0) / totalAssignments;
 
+        // BUG 1 FIX: AssessmentAttempt.score is already Integer 0-100; no *100 needed.
         Double avgScore;
         if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
             avgScore = learnerUserIds.isEmpty() ? 0.0 : assessmentAttemptRepository.getAverageScoreByUserIds(learnerUserIds);
@@ -156,7 +158,7 @@ public class AdminAnalyticsService {
                 totalAssignments,
                 completedAssignments,
                 completionRate,
-                avgScore == null ? 0 : avgScore * 100
+                avgScore == null ? 0 : avgScore   // score is 0-100; was incorrectly * 100
         );
     }
 
@@ -185,9 +187,10 @@ public class AdminAnalyticsService {
 
         List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
 
-        List<UserAssignment> assignments = assignmentRepository.findAll().stream()
-                .filter(a -> learnerUserIds.contains(a.getUserId()))
-                .toList();
+        // BUG 3 FIX: scope to this tenant's learners only — never load all tenants' data.
+        List<UserAssignment> assignments = learnerUserIds.isEmpty()
+                ? List.of()
+                : assignmentRepository.findByUserIdIn(learnerUserIds);
 
         Map<UUID, List<UserAssignment>> userAssignments =
                 assignments.stream().collect(Collectors.groupingBy(UserAssignment::getUserId));
@@ -201,13 +204,15 @@ public class AdminAnalyticsService {
 
             var user = userRepository.findById(userId).orElseThrow();
 
-            long completed =
-                    progressRepository.countCompletedByUser(userId);
-
-            long total = userAssgn.size();
+            // BUG 4 FIX: denominator must be total LESSONS across assigned tracks,
+            // not the number of track assignments (completely different units).
+            long totalLessons = userAssgn.stream()
+                    .mapToLong(a -> lessonRepository.countLessonsInTrack(a.getTrackId()))
+                    .sum();
+            long completed = progressRepository.countCompletedByUser(userId);
 
             double completionPercent =
-                    total == 0 ? 0 : (completed * 100.0) / total;
+                    totalLessons == 0 ? 0 : (completed * 100.0) / totalLessons;
 
             Double avgScore =
                     assessmentAttemptRepository.getAverageScoreByUser(userId);
@@ -333,14 +338,15 @@ public class AdminAnalyticsService {
 
                 UUID userId = member.getUserId();
 
-                long completed =
-                        progressRepository.countCompletedByUser(userId);
+                // BUG 5 FIX: totalAssignments must count LESSONS, not track assignments.
+                List<UserAssignment> memberAssignments = assignmentRepository.findByUserId(userId);
+                long memberTotalLessons = memberAssignments.stream()
+                        .mapToLong(a -> lessonRepository.countLessonsInTrack(a.getTrackId()))
+                        .sum();
+                totalAssignments += memberTotalLessons;
 
+                long completed = progressRepository.countCompletedByUser(userId);
                 totalCompleted += completed;
-
-                totalAssignments += assignmentRepository
-                        .findByUserId(userId)
-                        .size();
 
                 Double avg =
                         assessmentAttemptRepository.getAverageScoreByUser(userId);
@@ -458,7 +464,7 @@ public class AdminAnalyticsService {
                     String name = user == null ? "Unknown User" : (user.getName() != null && !user.getName().isBlank() ? user.getName() : user.getEmail());
                     String department = tenantUser == null || tenantUser.getDepartment() == null ? "UNKNOWN" : tenantUser.getDepartment().name();
                     long daysOverdue = Math.max(0, (now.getEpochSecond() - a.getDueDate().getEpochSecond()) / 86_400);
-                    return new AdminOverviewResponse.OverdueUser(name, department, daysOverdue);
+                    return new AdminOverviewResponse.OverdueUser(a.getUserId(), name, department, daysOverdue);
                 })
                 .toList();
 
@@ -746,6 +752,113 @@ public class AdminAnalyticsService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public DepartmentLeaderboardResponse getDepartmentLeaderboard() {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        Tenant tenant = currentTenant();
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
+        UUID createdByFilter = null;
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            createdByFilter = actorId;
+        }
+
+        // 1. Fetch raw department completion stats
+        Map<String, double[]> completionStats = new HashMap<>();
+        assignmentRepository.fetchDepartmentStats(tenant.getId(), AssignmentStatus.COMPLETED, createdByFilter)
+                .forEach(r -> {
+                    String deptName = "UNKNOWN";
+                    if (r[0] instanceof Department d) {
+                        deptName = d.getDisplayName();
+                    } else if (r[0] != null) {
+                        deptName = r[0].toString();
+                    }
+                    long total = ((Number) r[1]).longValue();
+                    long completed = ((Number) r[2]).longValue();
+                    double completionRate = total == 0 ? 0 : (completed * 100.0) / total;
+                    completionStats.put(deptName, new double[]{completionRate, (double) completed, (double) total});
+                });
+
+        // 2. Fetch raw quiz performance stats
+        Map<String, double[]> quizStats = new HashMap<>();
+        assessmentAttemptRepository.getAssessmentPerformanceByDepartment(tenant.getId(), createdByFilter)
+                .forEach(r -> {
+                    String deptName = "UNKNOWN";
+                    if (r[0] instanceof Department d) {
+                        deptName = d.getDisplayName();
+                    } else if (r[0] != null) {
+                        deptName = r[0].toString();
+                    }
+                    double avgScore = r[1] == null ? 0.0 : (Double) r[1];
+                    double passRate = r[2] == null ? 0.0 : ((Double) r[2]) * 100.0;
+                    quizStats.put(deptName, new double[]{avgScore, passRate});
+                });
+
+        // 3. Combine and calculate Leaderboard scores
+        List<DepartmentLeaderboardResponse.LeaderboardRow> rows = new ArrayList<>();
+        java.util.Set<String> allDepartments = new java.util.HashSet<>();
+        allDepartments.addAll(completionStats.keySet());
+        allDepartments.addAll(quizStats.keySet());
+
+        for (String dept : allDepartments) {
+            double[] comp = completionStats.getOrDefault(dept, new double[]{0.0, 0.0, 0.0});
+            double[] quiz = quizStats.getOrDefault(dept, new double[]{0.0, 0.0});
+
+            double completionRate = comp[0];
+            long completed = (long) comp[1];
+            long total = (long) comp[2];
+            double avgScore = quiz[0];
+            double passRate = quiz[1];
+
+            // Apply our Leaderboard Composite Formula
+            double compositeScore = (completionRate * 0.6) + (avgScore * 0.3) + (passRate * 0.1);
+
+            rows.add(new DepartmentLeaderboardResponse.LeaderboardRow(
+                    0, // rank (to be populated during sorting)
+                    dept,
+                    Math.round(compositeScore * 10.0) / 10.0,
+                    Math.round(completionRate * 10.0) / 10.0,
+                    Math.round(avgScore * 10.0) / 10.0,
+                    completed,
+                    total,
+                    ""
+            ));
+        }
+
+        // 4. Sort by composite score (highest first) and set Rank
+        List<DepartmentLeaderboardResponse.LeaderboardRow> sortedRows = rows.stream()
+                .sorted(Comparator.comparingDouble(DepartmentLeaderboardResponse.LeaderboardRow::leaderboardScore).reversed())
+                .collect(Collectors.toList());
+
+        for (int i = 0; i < sortedRows.size(); i++) {
+            int rank = i + 1;
+            DepartmentLeaderboardResponse.LeaderboardRow original = sortedRows.get(i);
+            String status = "ON_TRACK";
+            if (rank == 1) {
+                status = "LEADER";
+            } else if (original.completionRatePercent() < 50.0) {
+                status = "FALLING_BEHIND";
+            }
+
+            sortedRows.set(i, new DepartmentLeaderboardResponse.LeaderboardRow(
+                    rank,
+                    original.departmentDisplayName(),
+                    original.leaderboardScore(),
+                    original.completionRatePercent(),
+                    original.averageQuizScorePercent(),
+                    original.completedAssignments(),
+                    original.totalAssignments(),
+                    status
+            ));
+        }
+
+        return new DepartmentLeaderboardResponse(sortedRows);
+    }
+
     @Transactional
     public void resetAttempts(UUID targetUserId, String assessmentConfigId) {
         tenantSchemaService.applyCurrentTenantSearchPath();
@@ -862,9 +975,10 @@ public class AdminAnalyticsService {
 
         List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
 
-        List<UserAssignment> assignments = assignmentRepository.findAll().stream()
-                .filter(a -> learnerUserIds.contains(a.getUserId()))
-                .toList();
+        // BUG 3 FIX: scope to this tenant's learners only — never load all tenants' data.
+        List<UserAssignment> assignments = learnerUserIds.isEmpty()
+                ? List.of()
+                : assignmentRepository.findByUserIdIn(learnerUserIds);
 
         Map<UUID, List<UserAssignment>> userAssignments =
                 assignments.stream().collect(Collectors.groupingBy(UserAssignment::getUserId));
@@ -875,10 +989,13 @@ public class AdminAnalyticsService {
             UUID userId = entry.getKey();
             List<UserAssignment> userAssgn = entry.getValue();
 
+            // BUG 4 FIX (countRiskUsers): use lesson count as denominator.
+            long totalLessons = userAssgn.stream()
+                    .mapToLong(a -> lessonRepository.countLessonsInTrack(a.getTrackId()))
+                    .sum();
             long completed = progressRepository.countCompletedByUser(userId);
-            long total = userAssgn.size();
 
-            double completionPercent = total == 0 ? 0 : (completed * 100.0) / total;
+            double completionPercent = totalLessons == 0 ? 0 : (completed * 100.0) / totalLessons;
             Double avgScore = assessmentAttemptRepository.getAverageScoreByUser(userId);
             double score = avgScore == null ? 0 : avgScore * 100;
 
@@ -897,18 +1014,35 @@ public class AdminAnalyticsService {
         return riskUsersCount;
     }
 
+    /**
+     * BUG 2 FIX: Completion delta now filters by {@code completedAt} — the timestamp
+     * written when a learner actually finishes a track — not {@code assignedAt} which
+     * is when the admin created the assignment.  The old logic compared
+     * "assignments created this week" vs "last week", which is unrelated to completions.
+     *
+     * <p>Numerator  = completions that happened inside the window.<br>
+     * Denominator = all assignments (total pool) — gives a rate of
+     * "how many assignments got completed this week out of all assignments".
+     */
     private double computeCompletionDelta(List<UserAssignment> assignments, Instant sevenDaysAgo, Instant fourteenDaysAgo) {
-        List<UserAssignment> currentWindow = assignments.stream()
-                .filter(a -> a.getAssignedAt() != null && !a.getAssignedAt().isBefore(sevenDaysAgo))
-                .toList();
-        List<UserAssignment> previousWindow = assignments.stream()
-                .filter(a -> a.getAssignedAt() != null
-                        && !a.getAssignedAt().isBefore(fourteenDaysAgo)
-                        && a.getAssignedAt().isBefore(sevenDaysAgo))
-                .toList();
+        long totalAssignments = assignments.size();
+        if (totalAssignments == 0) return 0.0;
 
-        double currentRate = currentWindow.isEmpty() ? 0 : (currentWindow.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count() * 100.0) / currentWindow.size();
-        double previousRate = previousWindow.isEmpty() ? 0 : (previousWindow.stream().filter(a -> a.getStatus() == AssignmentStatus.COMPLETED).count() * 100.0) / previousWindow.size();
+        long completedThisWeek = assignments.stream()
+                .filter(a -> a.getStatus() == AssignmentStatus.COMPLETED
+                          && a.getCompletedAt() != null
+                          && !a.getCompletedAt().isBefore(sevenDaysAgo))
+                .count();
+
+        long completedPrevWeek = assignments.stream()
+                .filter(a -> a.getStatus() == AssignmentStatus.COMPLETED
+                          && a.getCompletedAt() != null
+                          && !a.getCompletedAt().isBefore(fourteenDaysAgo)
+                          && a.getCompletedAt().isBefore(sevenDaysAgo))
+                .count();
+
+        double currentRate  = (completedThisWeek  * 100.0) / totalAssignments;
+        double previousRate = (completedPrevWeek  * 100.0) / totalAssignments;
         return currentRate - previousRate;
     }
 
@@ -931,7 +1065,7 @@ public class AdminAnalyticsService {
             AuditAction.QUIZ_LOCKED_MAX_ATTEMPTS
     );
 
-    private List<AdminOverviewResponse.ActivityItem> buildActivityFeed(
+    List<AdminOverviewResponse.ActivityItem> buildActivityFeed(
             Tenant tenant,
             Instant now,
             Map<UUID, User> usersById,
@@ -973,60 +1107,80 @@ public class AdminAnalyticsService {
                 String actionText = userName + " performed an action";
                 AdminOverviewResponse.ActivityItem.Type type = AdminOverviewResponse.ActivityItem.Type.INFO;
 
+                String details = cleanAuditDetail(log.getDetails());
+
                 switch (log.getAction()) {
                     case CERTIFICATE_ISSUED -> {
-                        actionText = userName + " earned a new certificate";
+                        if (details != null && !details.isBlank()) {
+                            String msg = details.replaceAll("\\.?\\s*Generation queued asynchronously\\.?", "");
+                            msg = msg.replaceAll("\\.?\\s*Generation re-queued\\.?", "");
+                            msg = msg.trim();
+                            if (msg.startsWith("Issued certificate to ")) {
+                                actionText = "Certificate issued to " + msg.substring("Issued certificate to ".length());
+                            } else {
+                                actionText = msg;
+                            }
+                        } else {
+                            actionText = userName + " earned a new certificate";
+                        }
                         type = AdminOverviewResponse.ActivityItem.Type.SUCCESS;
                     }
                     case QUIZ_PASSED -> {
-                        actionText = userName + " passed an assessment";
+                        actionText = (details != null && !details.isBlank()) ? details : userName + " passed an assessment";
                         type = AdminOverviewResponse.ActivityItem.Type.SUCCESS;
                     }
                     case COURSE_COMPLETED -> {
-                        actionText = userName + " completed a track";
+                        actionText = (details != null && !details.isBlank()) ? details : userName + " completed a track";
                         type = AdminOverviewResponse.ActivityItem.Type.SUCCESS;
                     }
                     case QUIZ_ATTEMPT -> {
-                        actionText = userName + " attempted an assessment";
+                        actionText = (details != null && !details.isBlank()) ? details : userName + " attempted an assessment";
                         type = AdminOverviewResponse.ActivityItem.Type.INFO;
                     }
                     case LESSON_COMPLETED -> {
-                        actionText = userName + " completed a lesson";
+                        actionText = (details != null && !details.isBlank()) ? details : userName + " completed a lesson";
                         type = AdminOverviewResponse.ActivityItem.Type.INFO;
                     }
                     case ASSIGNMENT_OVERDUE -> {
-                        actionText = userName + " has an overdue assignment";
+                        if (details != null && !details.isBlank()) {
+                            actionText = details.replaceAll("\\s+with due date.*$", "");
+                        } else {
+                            actionText = userName + " has an overdue assignment";
+                        }
                         type = AdminOverviewResponse.ActivityItem.Type.WARNING;
                     }
                     case QUIZ_FAILED_RETRY_AVAILABLE -> {
-                        actionText = userName + " failed an assessment but can retry";
+                        actionText = (details != null && !details.isBlank()) ? details : userName + " failed an assessment but can retry";
                         type = AdminOverviewResponse.ActivityItem.Type.WARNING;
                     }
                     case ASSIGNMENT_ESCALATION_SENT -> {
-                        actionText = "Escalation email sent for " + userName;
+                        actionText = (details != null && !details.isBlank()) ? details : "Escalation email sent for " + userName;
                         type = AdminOverviewResponse.ActivityItem.Type.WARNING;
                     }
                     case QUIZ_LOCKED_MAX_ATTEMPTS -> {
-                        actionText = userName + " was locked out of an assessment (max attempts)";
+                        actionText = (details != null && !details.isBlank()) ? details : userName + " was locked out of an assessment (max attempts)";
                         type = AdminOverviewResponse.ActivityItem.Type.ERROR;
                     }
                     case COURSE_FAILED -> {
-                        actionText = userName + " failed a track";
+                        actionText = (details != null && !details.isBlank()) ? details : userName + " failed a track";
                         type = AdminOverviewResponse.ActivityItem.Type.ERROR;
                     }
                     case CREATE_USER -> {
-                        actionText = "New user account created";
+                        actionText = (details != null && !details.isBlank()) ? details : "New user account created";
                         type = AdminOverviewResponse.ActivityItem.Type.INFO;
                     }
                     case ASSIGN_TRACK -> {
-                        actionText = "Track assigned to " + userName;
+                        actionText = (details != null && !details.isBlank()) ? details : "Track assigned to " + userName;
                         type = AdminOverviewResponse.ActivityItem.Type.INFO;
                     }
-                    default -> actionText = userName + " triggered " + log.getAction().name().replace("_", " ").toLowerCase();
+                    default -> {
+                        if (details != null && !details.isBlank()) {
+                            actionText = details;
+                        } else {
+                            actionText = userName + " triggered " + log.getAction().name().replace("_", " ").toLowerCase();
+                        }
+                    }
                 }
-
-                // If we have details (JSON/String), we could potentially extract the track title, but for now we keep it generic and safe
-                // You could parse `log.getDetails()` if it contains {"trackTitle": "..."} to say "completed track 'Security'"
 
                 return new AdminOverviewResponse.ActivityItem(
                         type,
@@ -1048,6 +1202,25 @@ public class AdminAnalyticsService {
         long days = hours / 24;
         if (days == 1) return "yesterday";
         return days + "d ago";
+    }
+
+    String cleanAuditDetail(String details) {
+        if (details == null || details.isBlank()) {
+            return null;
+        }
+        // 1. Remove emails like <test@test.com>
+        String clean = details.replaceAll("<[^>]*>", "");
+        // 2. Remove department=... and role=... fields
+        clean = clean.replaceAll(",?\\s*(department|role)=[^,\\s]*", "");
+        // 3. Remove UUIDs in brackets like [a1b2c3d4-...]
+        clean = clean.replaceAll("\\[[^\\]]*\\]", "");
+        // 4. Clean up consecutive commas
+        clean = clean.replaceAll(",\\s*,", ",");
+        clean = clean.replaceAll("\\s+,", ",");
+        clean = clean.replaceAll(",\\s*$", "");
+        // 5. Collapse multiple spaces and trim
+        clean = clean.replaceAll("\\s+", " ").trim();
+        return clean.isEmpty() ? null : clean;
     }
 
     private List<DepartmentStat> rankDepartmentStats(List<DepartmentAggregate> aggregates) {
@@ -1130,11 +1303,13 @@ public class AdminAnalyticsService {
                 : learnerUserIds.stream().filter(targetUserIds::contains).toList();
 
         // Find overdue assignments (past due date, not completed) for scoped users
-        List<UserAssignment> overdueAssignments = assignmentRepository.findAll().stream()
-                .filter(a -> scopedUserIds.contains(a.getUserId()))
-                .filter(a -> a.getStatus() != AssignmentStatus.COMPLETED)
-                .filter(a -> a.getDueDate() != null && a.getDueDate().isBefore(now))
-                .toList();
+        // BUG 3 FIX: scope to this tenant's learners only — never load all tenants' data.
+        List<UserAssignment> overdueAssignments = scopedUserIds.isEmpty()
+                ? List.of()
+                : assignmentRepository.findByUserIdIn(scopedUserIds).stream()
+                        .filter(a -> a.getStatus() != AssignmentStatus.COMPLETED)
+                        .filter(a -> a.getDueDate() != null && a.getDueDate().isBefore(now))
+                        .toList();
 
         // Deduplicate: one email per user (summarise all their overdue tracks)
         Map<UUID, List<UserAssignment>> byUser = overdueAssignments.stream()

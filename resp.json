@@ -1,0 +1,236 @@
+[
+  {
+    "trackId": "58a4bc75-8e33-4a8f-ace6-89634eddc642",
+    "title": "Core AI Safety Track",
+    "version": "v2",
+    "description": "Mandatory for all employees. Covers AI fundamentals, data privacy, and safe prompting.",
+    "mandatory": true,
+    "estimatedMinutesLabel": "~60 min total",
+    "completedModules": 1,
+    "totalModules": 1,
+    "remainingMinutesLabel": "All done!",
+    "deadlineLabel": "No deadline",
+    "daysRemainingLabel": "",
+    "timeline": [
+      {
+        "moduleId": "741944c0-9f69-4ccc-8270-e7b4abc8a329",
+        "title": "Module 1: AI Basics at Work",
+        "label": "Completed",
+        "status": "COMPLETE"
+      }
+    ],
+    "modules": [
+      {
+        "moduleId": "741944c0-9f69-4ccc-8270-e7b4abc8a329",
+        "moduleNumber": 1,
+        "title": "Module 1: AI Basics at Work",
+        "status": "COMPLETED",
+        "topics": [
+          "Concept",
+          "Scenario",
+          "Quiz",
+          "Do & Don't",
+          "Summary"
+        ],
+        "meta": "Completed",
+        "scorePercent": 100,
+        "lessons": [
+          {
+            "lessonId": "8c2a11d7-49a7-4e1d-86df-d2259ffc81d3",
+            "title": "1. AI Basics & SNS Rule",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "8c2a11d7-49a7-4e1d-86df-d2259ffc81d3",
+            "title": "2. What Would You Do?",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "8c2a11d7-49a7-4e1d-86df-d2259ffc81d3",
+            "title": "3. Knowledge Check",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "8c2a11d7-49a7-4e1d-86df-d2259ffc81d3",
+            "title": "4. Action Rules",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "8c2a11d7-49a7-4e1d-86df-d2259ffc81d3",
+            "title": "5. Key Takeaway",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          }
+        ],
+        "progressPercent": 100,
+        "completedSteps": 5,
+        "totalSteps": 5
+      }
+    ]
+  },
+  {
+    "trackId": "ba66b3eb-8e85-4b88-ad4d-89c7a3dfe24f",
+    "title": "Company AI Policies & Approved Tools",
+    "version": "v1",
+    "description": "Understand why company AI policies exist, what makes a tool approved or prohibited, and why the tool you choose is as important as the data you share.",
+    "mandatory": true,
+    "estimatedMinutesLabel": "~10 min total",
+    "completedModules": 1,
+    "totalModules": 1,
+    "remainingMinutesLabel": "All done!",
+    "deadlineLabel": "May 18, 2026",
+    "daysRemainingLabel": "7 days overdue",
+    "timeline": [
+      {
+        "moduleId": "35532c9a-ac11-4536-bcc8-840972625641",
+        "title": "Module 2: Company AI Policies & Approved Tools",
+        "label": "Completed",
+        "status": "COMPLETE"
+      }
+    ],
+    "modules": [
+      {
+        "moduleId": "35532c9a-ac11-4536-bcc8-840972625641",
+        "moduleNumber": 1,
+        "title": "Module 2: Company AI Policies & Approved Tools",
+        "status": "COMPLETED",
+        "topics": [
+          "Concept",
+          "Scenario",
+          "Quiz",
+          "Do & Don't",
+          "Summary"
+        ],
+        "meta": "Completed",
+        "scorePercent": 100,
+        "lessons": [
+          {
+            "lessonId": "068a6e0c-b54b-43e8-a73d-7813b49b3336",
+            "title": "1. AI Policies & Approved Tools",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "068a6e0c-b54b-43e8-a73d-7813b49b3336",
+            "title": "2. What Would You Do?",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "068a6e0c-b54b-43e8-a73d-7813b49b3336",
+            "title": "3. Knowledge Check",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "068a6e0c-b54b-43e8-a73d-7813b49b3336",
+            "title": "4. Action Rules",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "068a6e0c-b54b-43e8-a73d-7813b49b3336",
+            "title": "5. Key Takeaway",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          }
+        ],
+        "progressPercent": 100,
+        "completedSteps": 5,
+        "totalSteps": 5
+      }
+    ]
+  },
+  {
+    "trackId": "e97c8f4c-e151-4479-b599-56ffd22db82b",
+    "title": "Confidential Data Leakage",
+    "version": "v1",
+    "description": "Understand what confidential data leakage is, how it happens through AI tools, and why even small pieces of data can cause serious exposure.",
+    "mandatory": true,
+    "estimatedMinutesLabel": "~10 min total",
+    "completedModules": 1,
+    "totalModules": 1,
+    "remainingMinutesLabel": "All done!",
+    "deadlineLabel": "May 19, 2026",
+    "daysRemainingLabel": "7 days overdue",
+    "timeline": [
+      {
+        "moduleId": "33bedb7c-f8d6-472f-8ec4-3adfcb9cf081",
+        "title": "Module 1: Confidential Data Leakage",
+        "label": "Completed",
+        "status": "COMPLETE"
+      }
+    ],
+    "modules": [
+      {
+        "moduleId": "33bedb7c-f8d6-472f-8ec4-3adfcb9cf081",
+        "moduleNumber": 1,
+        "title": "Module 1: Confidential Data Leakage",
+        "status": "COMPLETED",
+        "topics": [
+          "Concept",
+          "Scenario",
+          "Quiz",
+          "Do & Don't",
+          "Summary"
+        ],
+        "meta": "Completed",
+        "scorePercent": 100,
+        "lessons": [
+          {
+            "lessonId": "d1769c2d-35a9-476a-a65d-1a2355c9db00",
+            "title": "1. Confidential Data Leakage",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "d1769c2d-35a9-476a-a65d-1a2355c9db00",
+            "title": "2. What Would You Do?",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "d1769c2d-35a9-476a-a65d-1a2355c9db00",
+            "title": "3. Knowledge Check",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "d1769c2d-35a9-476a-a65d-1a2355c9db00",
+            "title": "4. Action Rules",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          },
+          {
+            "lessonId": "d1769c2d-35a9-476a-a65d-1a2355c9db00",
+            "title": "5. Key Takeaway",
+            "status": "COMPLETED",
+            "meta": "Done",
+            "actionLabel": "Review"
+          }
+        ],
+        "progressPercent": 100,
+        "completedSteps": 5,
+        "totalSteps": 5
+      }
+    ]
+  }
+]

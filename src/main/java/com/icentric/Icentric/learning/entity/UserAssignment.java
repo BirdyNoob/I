@@ -35,6 +35,9 @@ public class UserAssignment {
 
     private Instant dueDate;
 
+    /** Populated the moment this assignment transitions to COMPLETED. Used for trend KPIs. */
+    private Instant completedAt;
+
     @Enumerated(EnumType.STRING)
     private AssignmentStatus status;
 

@@ -10,5 +10,6 @@ import java.util.UUID;
 @Repository
 public interface LessonStepRepository extends JpaRepository<LessonStep, UUID> {
     List<LessonStep> findByLessonIdOrderBySortOrderAsc(UUID lessonId);
+    List<LessonStep> findByLessonIdIn(java.util.Collection<UUID> lessonIds);
     void deleteByLessonId(UUID lessonId);
 }

@@ -12,5 +12,6 @@ public interface ModuleRepository extends JpaRepository<CourseModule, UUID> {
 
     List<CourseModule> findByTrackId(UUID trackId);
     List<CourseModule> findByTrackIdOrderBySortOrder(UUID trackId);
+    List<CourseModule> findByTrackIdIn(java.util.Collection<UUID> trackIds);
 
 }

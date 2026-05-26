@@ -64,6 +64,15 @@ public class AdminAnalyticsController {
         return service.getDepartmentPerformance();
     }
 
+    @Operation(summary = "Get department leaderboard", description = "Retrieves a ranked compliance and quiz performance leaderboard of departments.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved department leaderboard")
+    })
+    @GetMapping("/department-leaderboard")
+    public DepartmentLeaderboardResponse departmentLeaderboard() {
+        return service.getDepartmentLeaderboard();
+    }
+
     @Operation(summary = "Get admin dashboard data", description = "Retrieves aggregated data to populate the main admin analytics dashboard.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully retrieved dashboard data")
@@ -85,8 +94,9 @@ public class AdminAnalyticsController {
     })
     @PostMapping("/notify-overdue")
     public ResponseEntity<OverdueNotificationResult> notifyOverdue(
-            @RequestBody(required = false) List<UUID> userIds
+            @RequestBody(required = false) NotifyOverdueRequest request
     ) {
+        java.util.List<UUID> userIds = (request != null) ? request.userIds() : null;
         return ResponseEntity.ok(service.notifyOverdueUsers(userIds));
     }
 

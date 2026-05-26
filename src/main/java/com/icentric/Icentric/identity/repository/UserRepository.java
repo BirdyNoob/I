@@ -25,6 +25,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
     long countByCreatedAtAfter(Instant createdAt);
 
+    /**
+     * Used for returning SSO users — matches by the stable provider identity
+     * (Google's {@code sub} claim / Microsoft's {@code oid} claim).
+     * More reliable than email because provider subject never changes.
+     */
+    Optional<User> findByAuthProviderAndProviderSubject(String authProvider, String providerSubject);
+
     @Query("SELECT u FROM User u WHERE lower(u.email) IN :emails")
     List<User> findAllByEmailLowerIn(@Param("emails") Collection<String> emails);
 

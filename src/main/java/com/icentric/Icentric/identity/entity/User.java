@@ -35,6 +35,14 @@ public class User {
     @Column(name = "auth_provider", nullable = false)
     private String authProvider = "LOCAL";
 
+    /**
+     * Stable subject ID from the SSO provider.
+     * Google → {@code sub} claim. Microsoft → {@code oid} claim.
+     * Null for LOCAL accounts. Populated on first SSO login.
+     */
+    @Column(name = "provider_subject")
+    private String providerSubject;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 

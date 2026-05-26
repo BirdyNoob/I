@@ -12,6 +12,8 @@ import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.dto.LaggingLearnerResponse;
 import com.icentric.Icentric.learning.dto.AdminOverviewResponse;
+import com.icentric.Icentric.learning.dto.DepartmentLeaderboardResponse;
+import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.entity.AssessmentAttempt;
 import com.icentric.Icentric.learning.entity.AssessmentConfig;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
@@ -373,5 +375,106 @@ class AssessmentKPIAndInterventionTest {
                 eq(configId),
                 contains("Reset final assessment attempts for user ID " + learnerId)
         );
+    }
+
+    @Test
+    @DisplayName("cleanAuditDetail successfully strips emails, department metadata, role metadata, UUIDs, and cleans extra spacing")
+    void cleanAuditDetail_removesMetadataAndCleansSpacing() {
+        String raw = "Escalation sent to Admin User <admin@icentric.com> [f47ac10b-58cc-4372-a567-0e02b2c3d479], department=Sales, role=ADMIN about overdue learner Learner Name <learner@icentric.com> [f47ac10b-58cc-4372-a567-0e02b2c3d480], department=Sales, role=LEARNER on Security Awareness [f47ac10b-58cc-4372-a567-0e02b2c3d481]";
+        String cleaned = adminAnalyticsService.cleanAuditDetail(raw);
+        assertThat(cleaned).isEqualTo("Escalation sent to Admin User about overdue learner Learner Name on Security Awareness");
+    }
+
+    @Test
+    @DisplayName("buildActivityFeed uses clean details for ASSIGNMENT_ESCALATION_SENT and other major actions")
+    void buildActivityFeed_usesCleanDetailsForEscalationsAndOtherActions() {
+        Tenant tenant = new Tenant();
+        tenant.setSlug("test-tenant");
+        tenant.setId(UUID.randomUUID());
+
+        com.icentric.Icentric.audit.entity.AuditLog log1 = new com.icentric.Icentric.audit.entity.AuditLog();
+        log1.setId(UUID.randomUUID());
+        log1.setAction(AuditAction.ASSIGNMENT_ESCALATION_SENT);
+        log1.setDetails("Escalation sent to Admin User <admin@icentric.com> [f47ac10b-58cc-4372-a567-0e02b2c3d479], department=Sales, role=ADMIN about overdue learner Learner Name <learner@icentric.com> [f47ac10b-58cc-4372-a567-0e02b2c3d480], department=Sales, role=LEARNER on Security Awareness [f47ac10b-58cc-4372-a567-0e02b2c3d481]");
+        log1.setCreatedAt(Instant.now());
+
+        com.icentric.Icentric.audit.entity.AuditLog log2 = new com.icentric.Icentric.audit.entity.AuditLog();
+        log2.setId(UUID.randomUUID());
+        log2.setAction(AuditAction.CERTIFICATE_ISSUED);
+        log2.setDetails("Issued certificate to Jane Smith <jane@smith.com> [f47ac10b-58cc-4372-a567-0e02b2c3d480], department=HR, role=LEARNER for Cybersecurity Basics [f47ac10b-58cc-4372-a567-0e02b2c3d481]. Generation queued asynchronously.");
+        log2.setCreatedAt(Instant.now());
+
+        com.icentric.Icentric.audit.entity.AuditLog log3 = new com.icentric.Icentric.audit.entity.AuditLog();
+        log3.setId(UUID.randomUUID());
+        log3.setAction(AuditAction.ASSIGNMENT_OVERDUE);
+        log3.setDetails("Learner Name <learner@icentric.com> [f47ac10b-58cc-4372-a567-0e02b2c3d480], department=Sales, role=LEARNER became overdue on Cybersecurity Basics [f47ac10b-58cc-4372-a567-0e02b2c3d481] with due date 2026-05-26T17:57:30Z");
+        log3.setCreatedAt(Instant.now());
+
+        org.springframework.data.domain.Page<com.icentric.Icentric.audit.entity.AuditLog> page = new org.springframework.data.domain.PageImpl<>(List.of(log1, log2, log3));
+        when(auditLogRepository.findByTenantSlugAndActionIn(any(), any(), any())).thenReturn(page);
+
+        List<AdminOverviewResponse.ActivityItem> feed = adminAnalyticsService.buildActivityFeed(
+                tenant,
+                Instant.now(),
+                Map.of(),
+                List.of(),
+                null
+        );
+
+        assertThat(feed).hasSize(3);
+        assertThat(feed.get(0).text()).isEqualTo("Escalation sent to Admin User about overdue learner Learner Name on Security Awareness");
+        assertThat(feed.get(0).type()).isEqualTo(AdminOverviewResponse.ActivityItem.Type.WARNING);
+
+        assertThat(feed.get(1).text()).isEqualTo("Certificate issued to Jane Smith for Cybersecurity Basics");
+        assertThat(feed.get(1).type()).isEqualTo(AdminOverviewResponse.ActivityItem.Type.SUCCESS);
+
+        assertThat(feed.get(2).text()).isEqualTo("Learner Name became overdue on Cybersecurity Basics");
+        assertThat(feed.get(2).type()).isEqualTo(AdminOverviewResponse.ActivityItem.Type.WARNING);
+    }
+
+    @Test
+    @DisplayName("getDepartmentLeaderboard calculates dynamic composite scores, sorts, ranks and tags statuses correctly")
+    void getDepartmentLeaderboard_calculatesRanksAndScoresCorrectly() {
+        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
+
+        // Mock completion stats
+        List<Object[]> completionData = List.of(
+                new Object[]{Department.ENGINEERING, 10L, 9L},  // 90% completion
+                new Object[]{Department.SALES, 10L, 4L}        // 40% completion
+        );
+        when(assignmentRepository.fetchDepartmentStats(tenantId, AssignmentStatus.COMPLETED, null))
+                .thenReturn(completionData);
+
+        // Mock quiz performance stats
+        List<Object[]> performanceData = List.of(
+                new Object[]{Department.ENGINEERING, 85.5, 0.95}, // 85.5% avg score, 95% pass rate
+                new Object[]{Department.SALES, 60.0, 0.50}        // 60% avg score, 50% pass rate
+        );
+        when(assessmentAttemptRepository.getAssessmentPerformanceByDepartment(tenantId, null))
+                .thenReturn(performanceData);
+
+        DepartmentLeaderboardResponse response = adminAnalyticsService.getDepartmentLeaderboard();
+
+        assertThat(response.rankings()).hasSize(2);
+
+        // First rank: Engineering
+        DepartmentLeaderboardResponse.LeaderboardRow rank1 = response.rankings().get(0);
+        assertThat(rank1.rank()).isEqualTo(1);
+        assertThat(rank1.departmentDisplayName()).isEqualTo("Engineering");
+        // Score: (90 * 0.6) + (85.5 * 0.3) + (95.0 * 0.1) = 54.0 + 25.65 + 9.5 = 89.15 -> rounds to 89.2
+        assertThat(rank1.leaderboardScore()).isEqualTo(89.2);
+        assertThat(rank1.completionRatePercent()).isEqualTo(90.0);
+        assertThat(rank1.averageQuizScorePercent()).isEqualTo(85.5);
+        assertThat(rank1.activeStatus()).isEqualTo("LEADER");
+
+        // Second rank: Sales
+        DepartmentLeaderboardResponse.LeaderboardRow rank2 = response.rankings().get(1);
+        assertThat(rank2.rank()).isEqualTo(2);
+        assertThat(rank2.departmentDisplayName()).isEqualTo("Sales");
+        // Score: (40 * 0.6) + (60 * 0.3) + (50 * 0.1) = 24 + 18 + 5 = 47.0
+        assertThat(rank2.leaderboardScore()).isEqualTo(47.0);
+        assertThat(rank2.completionRatePercent()).isEqualTo(40.0);
+        assertThat(rank2.averageQuizScorePercent()).isEqualTo(60.0);
+        assertThat(rank2.activeStatus()).isEqualTo("FALLING_BEHIND"); // Under 50% completion
     }
 }

@@ -2,6 +2,7 @@ package com.icentric.Icentric.learning.dto;
 
 
 import java.util.List;
+import java.util.UUID;
 
 public record AdminOverviewResponse(
         Kpis kpis,
@@ -49,6 +50,7 @@ public record AdminOverviewResponse(
     ) {}
 
     public record OverdueUser(
+            UUID userId,
             String name,
             String department,
             long daysOverdue
