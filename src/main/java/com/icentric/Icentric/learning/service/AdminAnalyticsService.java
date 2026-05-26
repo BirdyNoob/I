@@ -1072,7 +1072,7 @@ public class AdminAnalyticsService {
             List<UUID> tenantUserIds,
             TenantUser actorMembership
     ) {
-        PageRequest pageRequest = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        PageRequest pageRequest = PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<com.icentric.Icentric.audit.entity.AuditLog> logs;
         if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
             logs = tenantUserIds.isEmpty() ? List.of() : auditLogRepository.findByTenantSlugAndActionInAndUserIdIn(
