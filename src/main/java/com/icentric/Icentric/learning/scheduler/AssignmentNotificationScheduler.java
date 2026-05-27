@@ -1,5 +1,6 @@
 package com.icentric.Icentric.learning.scheduler;
 
+import com.icentric.Icentric.jobs.TenantJobHelper;
 import com.icentric.Icentric.audit.constants.AuditAction;
 import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.content.entity.Track;
@@ -70,17 +71,28 @@ public class AssignmentNotificationScheduler {
         this.reminderConfigService = reminderConfigService;
     }
 
+    private TenantJobHelper tenantJobHelper;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setTenantJobHelper(TenantJobHelper tenantJobHelper) {
+        this.tenantJobHelper = tenantJobHelper;
+    }
+
     @Scheduled(fixedRate = 60000) // every 1 min (for testing)
-    @Transactional
     public void processAssignments() {
         Instant now = Instant.now();
 
         for (var tenant : tenantRepository.findAll()) {
-            processAssignmentsForTenant(tenant, now);
+            try {
+                tenantJobHelper.processTenantAssignments(tenant, now);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(AssignmentNotificationScheduler.class)
+                        .error("Failed to process assignments for tenant: {}", tenant.getSlug(), e);
+            }
         }
     }
 
-    private void processAssignmentsForTenant(Tenant tenant, Instant now) {
+    public void processAssignmentsForTenant(Tenant tenant, Instant now) {
         TenantContext.setTenant(tenant.getSlug());
 
         try {

@@ -56,9 +56,7 @@ public class CheatSheetServiceTest {
         service = new CheatSheetService(
                 repository,
                 objectMapper,
-                userRepository,
                 assignmentRepository,
-                tenantRepository,
                 tenantSchemaService,
                 lessonRepository,
                 lessonProgressRepository
@@ -96,17 +94,12 @@ public class CheatSheetServiceTest {
         UUID userId = UUID.randomUUID();
         String userEmail = "learner@icentric.com";
 
-        // Setup security context
+        // Setup security context matching SecurityUtils.currentUserIdOrNull details lookup
         Authentication auth = mock(Authentication.class);
-        when(auth.getPrincipal()).thenReturn(userEmail);
+        when(auth.getDetails()).thenReturn(userId.toString());
         SecurityContext context = mock(SecurityContext.class);
         when(context.getAuthentication()).thenReturn(auth);
         SecurityContextHolder.setContext(context);
-
-        User mockUser = new User();
-        mockUser.setId(userId);
-        mockUser.setEmail(userEmail);
-        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(mockUser));
 
         UUID activeModuleId = UUID.randomUUID();
         UUID incompleteModuleId = UUID.randomUUID();

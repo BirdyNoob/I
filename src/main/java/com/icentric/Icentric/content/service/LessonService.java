@@ -15,6 +15,7 @@ import com.icentric.Icentric.content.repository.LessonStepRepository;
 import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -310,9 +311,7 @@ public class LessonService {
     }
 
     private UUID currentActorUserId() {
-        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        return userIdRaw == null ? null : UUID.fromString(userIdRaw.toString());
+        return SecurityUtils.currentUserIdOrNull();
     }
 
     /**

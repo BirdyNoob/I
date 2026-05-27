@@ -16,6 +16,7 @@ import com.icentric.Icentric.content.repository.ModuleRepository;
 import com.icentric.Icentric.content.repository.QuestionRepository;
 import com.icentric.Icentric.content.repository.AnswerRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -133,9 +134,7 @@ public class QuestionService {
     }
 
     private UUID currentActorUserId() {
-        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        return userIdRaw == null ? null : UUID.fromString(userIdRaw.toString());
+        return SecurityUtils.currentUserIdOrNull();
     }
 
     private void assertTrackEditable(UUID lessonId) {

@@ -47,6 +47,7 @@ import com.icentric.Icentric.learning.repository.AssessmentResetLogRepository;
 import com.icentric.Icentric.audit.service.AuditService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
@@ -943,11 +944,7 @@ public class AdminAnalyticsService {
     }
 
     private UUID currentActorUserId() {
-        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getDetails() == null) {
-            return null;
-        }
-        return UUID.fromString(authentication.getDetails().toString());
+        return SecurityUtils.currentUserIdOrNull();
     }
 
     public String currentActorUserEmail() {
@@ -1809,7 +1806,7 @@ public class AdminAnalyticsService {
         html.append("<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<style>\n")
             .append("  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');\n")
             .append("  body {\n")
-            .append("    font-family: 'Inter', sans-serif;\n")
+            .append("    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n")
             .append("    background-color: #ffffff;\n")
             .append("    color: #1f2937;\n")
             .append("    margin: 0;\n")
@@ -1825,7 +1822,7 @@ public class AdminAnalyticsService {
             .append("    align-items: flex-end;\n")
             .append("  }\n")
             .append("  .title {\n")
-            .append("    font-family: 'Outfit', sans-serif;\n")
+            .append("    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n")
             .append("    font-size: 24px;\n")
             .append("    font-weight: 700;\n")
             .append("    color: #4f46e5;\n")
@@ -1850,7 +1847,7 @@ public class AdminAnalyticsService {
             .append("    text-align: center;\n")
             .append("  }\n")
             .append("  .stat-val {\n")
-            .append("    font-family: 'Outfit', sans-serif;\n")
+            .append("    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n")
             .append("    font-size: 22px;\n")
             .append("    font-weight: 700;\n")
             .append("    color: #4f46e5;\n")
@@ -1877,7 +1874,7 @@ public class AdminAnalyticsService {
             .append("  }\n")
             .append("  th {\n")
             .append("    background-color: rgba(79, 70, 229, 0.05);\n")
-            .append("    font-family: 'Outfit', sans-serif;\n")
+            .append("    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n")
             .append("    color: #4f46e5;\n")
             .append("    font-weight: 600;\n")
             .append("  }\n")
@@ -2012,6 +2009,43 @@ public class AdminAnalyticsService {
         html.append("    </tbody>\n  </table>\n</body>\n</html>");
 
         return playwrightPdfService.render(html.toString(), true); // landscape A4 format
+    }
+
+    @Transactional(readOnly = true)
+    public String getLearningAuditReportCsv(String search, String departmentFilter, String categoryFilter) {
+        LearningAuditReportResponse report = getLearningAuditReport(0, 10000, search, departmentFilter, categoryFilter);
+
+        StringBuilder csv = new StringBuilder();
+        // Append UTF-8 BOM to ensure Excel opens it correctly with UTF-8 characters
+        csv.append("\uFEFF");
+        csv.append("Employee,Email,Department,Total Assigned,Completed,Overdue,Progress %,Speed to Complete (Days),Learning Score,Avg Quiz Score %,First-Time Pass Rate %,Talent Category\n");
+
+        for (var emp : report.employees()) {
+            csv.append(escapeCsvField(emp.name())).append(",")
+               .append(escapeCsvField(emp.email())).append(",")
+               .append(escapeCsvField(emp.department())).append(",")
+               .append(emp.complianceStatus().totalAssigned()).append(",")
+               .append(emp.complianceStatus().completed()).append(",")
+               .append(emp.complianceStatus().overdue()).append(",")
+               .append(emp.complianceStatus().progressPercent()).append(",")
+               .append(emp.excellenceMetrics().averageDaysToComplete() > 0 ? emp.excellenceMetrics().averageDaysToComplete() : "N/A").append(",")
+               .append(emp.excellenceMetrics().learningScore()).append(",")
+               .append(emp.excellenceMetrics().averageQuizScorePercent()).append(",")
+               .append(emp.excellenceMetrics().firstTimePassRatePercent()).append(",")
+               .append(escapeCsvField(emp.excellenceMetrics().talentCategory())).append("\n");
+        }
+        return csv.toString();
+    }
+
+    private String escapeCsvField(String field) {
+        if (field == null) {
+            return "";
+        }
+        String value = field.replace("\"", "\"\"");
+        if (value.contains(",") || value.contains("\n") || value.contains("\r") || value.contains("\"")) {
+            return "\"" + value + "\"";
+        }
+        return value;
     }
 
     private String escapeHtml(String input) {

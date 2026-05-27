@@ -9,8 +9,8 @@ import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.repository.CheatSheetRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import com.icentric.Icentric.tenant.TenantSchemaService;
-import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,9 +22,7 @@ public class CheatSheetService {
 
     private final CheatSheetRepository repository;
     private final ObjectMapper objectMapper;
-    private final UserRepository userRepository;
     private final UserAssignmentRepository assignmentRepository;
-    private final TenantRepository tenantRepository;
     private final TenantSchemaService tenantSchemaService;
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository lessonProgressRepository;
@@ -32,18 +30,14 @@ public class CheatSheetService {
     public CheatSheetService(
             CheatSheetRepository repository,
             ObjectMapper objectMapper,
-            UserRepository userRepository,
             UserAssignmentRepository assignmentRepository,
-            TenantRepository tenantRepository,
             TenantSchemaService tenantSchemaService,
             LessonRepository lessonRepository,
             LessonProgressRepository lessonProgressRepository
     ) {
         this.repository = repository;
         this.objectMapper = objectMapper;
-        this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
-        this.tenantRepository = tenantRepository;
         this.tenantSchemaService = tenantSchemaService;
         this.lessonRepository = lessonRepository;
         this.lessonProgressRepository = lessonProgressRepository;
@@ -189,18 +183,7 @@ public class CheatSheetService {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private UUID currentActorUserId() {
-        var auth = org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication();
-        if (auth == null) return null;
-
-        // Principal is the user's email (String) in this application
-        Object principal = auth.getPrincipal();
-        if (principal == null) return null;
-
-        String email = principal.toString();
-        return userRepository.findByEmail(email)
-                .map(u -> u.getId())
-                .orElse(null);
+        return SecurityUtils.currentUserIdOrNull();
     }
 
     private String getStringOrNull(Map<String, Object> map, String key) {

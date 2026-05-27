@@ -27,6 +27,7 @@ public class AssignmentScheduler {
     private final NotificationService notificationService;
     private final AuditService auditService;
     private final AuditMetadataService auditMetadataService;
+    private TenantJobHelper tenantJobHelper;
 
     public AssignmentScheduler(
             UserAssignmentRepository assignmentRepository,
@@ -44,13 +45,22 @@ public class AssignmentScheduler {
         this.auditMetadataService = auditMetadataService;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setTenantJobHelper(TenantJobHelper tenantJobHelper) {
+        this.tenantJobHelper = tenantJobHelper;
+    }
+
     @Scheduled(fixedRate = 3600000) // every hour
-    @Transactional
     public void markOverdueAssignments() {
         var tenants = tenantRepository.findAll();
 
         for (var tenant : tenants) {
-            markOverdueAssignmentsForTenant(tenant.getSlug());
+            try {
+                tenantJobHelper.markTenantOverdueAssignments(tenant);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(AssignmentScheduler.class)
+                        .error("Failed to mark overdue assignments for tenant: {}", tenant.getSlug(), e);
+            }
         }
     }
 

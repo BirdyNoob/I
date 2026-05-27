@@ -105,12 +105,26 @@
                     <p style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#334155;margin:0 0 10px 0;">
                       Hello <strong th:text="${adminName}">Administrator</strong>,
                     </p>
-                    <p th:if="${isScheduled}" style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
+                    <p th:if="${isScheduled && !pdfGenerationFailed}" style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
                       Your weekly Corporate Learning Audit &amp; Talent Excellence Report for <strong th:text="${tenantName}">Acme Corp</strong> is ready. Please find the complete PDF report attached to this email.
                     </p>
-                    <p th:if="${!isScheduled}" style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
+                    <p th:if="${!isScheduled && !pdfGenerationFailed}" style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
                       The Corporate Learning Audit &amp; Talent Excellence Report you requested for <strong th:text="${tenantName}">Acme Corp</strong> has been successfully compiled. Please find the complete PDF report attached to this email.
                     </p>
+                    <p th:if="${isScheduled && pdfGenerationFailed}" style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
+                      Your weekly Corporate Learning Audit &amp; Talent Excellence Report metrics for <strong th:text="${tenantName}">Acme Corp</strong> are ready. Please find the compiled data CSV file attached to this email.
+                    </p>
+                    <p th:if="${!isScheduled && pdfGenerationFailed}" style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
+                      The Corporate Learning Audit &amp; Talent Excellence Report data you requested for <strong th:text="${tenantName}">Acme Corp</strong> has been successfully compiled. Please find the compiled data CSV file attached to this email.
+                    </p>
+
+                    <!-- PDF Generation Failed Warning Banner -->
+                    <div th:if="${pdfGenerationFailed}" style="background-color:#FFFBEB; border:1px solid #FCD34D; border-radius:12px; padding:16px 20px; margin-bottom:24px;">
+                      <span style="font-size:18px; margin-right:8px; vertical-align:middle;">⚠️</span>
+                      <span style="font-family:'Inter',sans-serif; font-size:13px; color:#92400E; line-height:1.55; vertical-align:middle; display:inline-block; width:calc(100% - 35px);">
+                        <strong>CSV Data Backup Attached:</strong> Due to a temporary system rendering limit, the landscape A4 PDF report could not be compiled. We have successfully generated and attached your full audit data in standard CSV format so you do not lose any analytical visibility.
+                      </span>
+                    </div>
 
                   </td>
                 </tr>

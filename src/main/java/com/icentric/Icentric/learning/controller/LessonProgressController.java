@@ -8,8 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
-import org.springframework.security.core.Authentication;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -39,16 +38,7 @@ public class LessonProgressController {
     public LessonProgress updateProgress(
             @Valid @RequestBody LessonProgressRequest request
     ) {
-        Authentication authentication = org.springframework.security.core.context
-                .SecurityContextHolder
-                .getContext()
-                .getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        if (userIdRaw == null) {
-            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
-        }
-        UUID userId = UUID.fromString(userIdRaw.toString());
-
+        UUID userId = SecurityUtils.currentUserId();
         return service.updateProgress(userId, request);
     }
 
@@ -66,16 +56,7 @@ public class LessonProgressController {
             @PathVariable UUID lessonId,
             @PathVariable UUID stepId
     ) {
-        Authentication authentication = org.springframework.security.core.context
-                .SecurityContextHolder
-                .getContext()
-                .getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        if (userIdRaw == null) {
-            throw new AuthenticationCredentialsNotFoundException("Missing userId in authentication token");
-        }
-        UUID userId = UUID.fromString(userIdRaw.toString());
-
+        UUID userId = SecurityUtils.currentUserId();
         return service.completeStep(userId, lessonId, stepId);
     }
 }

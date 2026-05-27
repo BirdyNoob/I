@@ -27,6 +27,9 @@ public class LearningAuditAsyncService {
     private final TenantRepository tenantRepository;
     private final TemplateEngine templateEngine;
 
+    // Track active background report compilations to prevent duplicate execution spam
+    private final java.util.Map<String, Boolean> activeCompilations = new java.util.concurrent.ConcurrentHashMap<>();
+
     public LearningAuditAsyncService(
             AdminAnalyticsService adminAnalyticsService,
             EmailService emailService,
@@ -44,9 +47,13 @@ public class LearningAuditAsyncService {
     }
 
     /**
-     * Generates the Learning Audit PDF report asynchronously in the background and sends a professional HTML email with the PDF attached.
+     * Checks if a compilation is currently in progress for the specified user and tenant.
      */
-    @Async
+    public boolean isCompiling(String email, String tenantSlug) {
+        return activeCompilations.containsKey(tenantSlug + ":" + email);
+    }
+
+    @Async("playwrightTaskExecutor")
     @Transactional(readOnly = true)
     public void compileAndEmailReport(
             String recipientEmail,
@@ -56,7 +63,10 @@ public class LearningAuditAsyncService {
             String tenantSlug,
             boolean isScheduled
     ) {
-        log.info("Starting asynchronous PDF report compilation for {} on tenant {}", recipientEmail, tenantSlug);
+        log.info("Starting asynchronous report compilation for {} on tenant {}", recipientEmail, tenantSlug);
+        String jobKey = tenantSlug + ":" + recipientEmail;
+        activeCompilations.put(jobKey, Boolean.TRUE);
+
         TenantContext.setTenant(tenantSlug);
         try {
             tenantSchemaService.applyCurrentTenantSearchPath();
@@ -70,8 +80,23 @@ public class LearningAuditAsyncService {
                     .map(Tenant::getCompanyName)
                     .orElse(tenantSlug);
 
-            // 2. Generate PDF bytes using Playwright and light-theme templates
-            byte[] pdfBytes = adminAnalyticsService.getLearningAuditReportPdf(search, departmentFilter, categoryFilter);
+            byte[] attachmentBytes = null;
+            String filename = null;
+            boolean pdfGenerationFailed = false;
+
+            try {
+                // 2. Generate PDF bytes using Playwright and light-theme templates
+                attachmentBytes = adminAnalyticsService.getLearningAuditReportPdf(search, departmentFilter, categoryFilter);
+                filename = "Learning_Audit_Report_" + LocalDate.now() + ".pdf";
+            } catch (Exception e) {
+                log.error("Failed to generate PDF report via Playwright. Falling back to CSV data attachment.", e);
+                pdfGenerationFailed = true;
+
+                // Failsafe CSV generation
+                String csvData = adminAnalyticsService.getLearningAuditReportCsv(search, departmentFilter, categoryFilter);
+                attachmentBytes = csvData.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                filename = "Learning_Audit_Data_Backup_" + LocalDate.now() + ".csv";
+            }
 
             // 3. Render HTML email using our professional Thymeleaf template
             Context thymeleafContext = new Context();
@@ -82,19 +107,22 @@ public class LearningAuditAsyncService {
             thymeleafContext.setVariable("category", categoryFilter);
             thymeleafContext.setVariable("generationDate", LocalDate.now().toString());
             thymeleafContext.setVariable("isScheduled", isScheduled);
+            thymeleafContext.setVariable("pdfGenerationFailed", pdfGenerationFailed);
 
             String htmlBody = templateEngine.process("email/Icentric_Email_Learning_Audit", thymeleafContext);
 
-            String subject = "Corporate Learning Audit & Talent Excellence Report - " + LocalDate.now();
-            String filename = "Learning_Audit_Report_" + LocalDate.now() + ".pdf";
+            String subject = pdfGenerationFailed 
+                    ? "Corporate Learning Audit Data Export [CSV Backup] - " + LocalDate.now()
+                    : "Corporate Learning Audit & Talent Excellence Report - " + LocalDate.now();
 
-            // 4. Email PDF attachment asynchronously
-            emailService.sendEmailWithAttachment(recipientEmail, subject, htmlBody, pdfBytes, filename).join();
-            log.info("Asynchronous PDF report successfully sent to {}", recipientEmail);
+            // 4. Email PDF/CSV attachment asynchronously
+            emailService.sendEmailWithAttachment(recipientEmail, subject, htmlBody, attachmentBytes, filename).join();
+            log.info("Asynchronous report successfully sent to {}", recipientEmail);
 
         } catch (Exception e) {
-            log.error("Failed to generate and email PDF report to {}", recipientEmail, e);
+            log.error("Failed to generate and email report to {}", recipientEmail, e);
         } finally {
+            activeCompilations.remove(jobKey);
             TenantContext.clear();
         }
     }

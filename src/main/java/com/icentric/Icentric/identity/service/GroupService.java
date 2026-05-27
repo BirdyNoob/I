@@ -16,7 +16,7 @@ import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserGroupRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -272,12 +272,7 @@ public class GroupService {
     }
 
     private UUID currentActorUserId() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        if (userIdRaw == null) {
-            return null;
-        }
-        return UUID.fromString(userIdRaw.toString());
+        return SecurityUtils.currentUserIdOrNull();
     }
 
     private void logGroupAction(AuditAction action, UUID groupId, String details) {

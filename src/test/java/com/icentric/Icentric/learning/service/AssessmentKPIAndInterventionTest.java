@@ -654,4 +654,88 @@ class AssessmentKPIAndInterventionTest {
             eq(true)
         );
     }
+
+    @Test
+    @DisplayName("TenantJobHelper methods are annotated with Propagation.REQUIRES_NEW")
+    void tenantJobHelper_methodsAreAnnotatedWithRequiresNew() throws Exception {
+        var processTenantNotifications = com.icentric.Icentric.jobs.TenantJobHelper.class
+            .getMethod("processTenantNotifications", com.icentric.Icentric.platform.tenant.entity.Tenant.class);
+        var tx1 = processTenantNotifications.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx1).isNotNull();
+        assertThat(tx1.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
+
+        var markTenantOverdueAssignments = com.icentric.Icentric.jobs.TenantJobHelper.class
+            .getMethod("markTenantOverdueAssignments", com.icentric.Icentric.platform.tenant.entity.Tenant.class);
+        var tx2 = markTenantOverdueAssignments.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx2).isNotNull();
+        assertThat(tx2.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
+
+        var processTenantAssignments = com.icentric.Icentric.jobs.TenantJobHelper.class
+            .getMethod("processTenantAssignments", com.icentric.Icentric.platform.tenant.entity.Tenant.class, java.time.Instant.class);
+        var tx3 = processTenantAssignments.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(tx3).isNotNull();
+        assertThat(tx3.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
+    }
+
+    @Test
+    @DisplayName("NotificationScheduler sendNotifications delegates to TenantJobHelper per tenant")
+    void notificationScheduler_delegatesToTenantJobHelper() {
+        var tenantRepositoryMock = mock(com.icentric.Icentric.platform.tenant.repository.TenantRepository.class);
+        var tenantJobHelperMock = mock(com.icentric.Icentric.jobs.TenantJobHelper.class);
+        var scheduler = new com.icentric.Icentric.jobs.NotificationScheduler(tenantRepositoryMock, tenantJobHelperMock);
+
+        var t = new Tenant();
+        t.setId(UUID.randomUUID());
+        t.setSlug("tenant-test");
+        when(tenantRepositoryMock.findAll()).thenReturn(List.of(t));
+
+        scheduler.sendNotifications();
+
+        verify(tenantJobHelperMock).processTenantNotifications(t);
+    }
+
+    @Test
+    @DisplayName("getLearningAuditReportCsv compiles correct CSV format with escaped values")
+    void getLearningAuditReportCsv_generatesCorrectCsvFormat() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
+
+        TenantUser adminMembership = createMembership(adminId, "SUPER_ADMIN", null);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenantId))
+                .thenReturn(Optional.of(adminMembership));
+
+        UUID learnerId = UUID.randomUUID();
+        TenantUser tu = createMembership(learnerId, "LEARNER", UUID.randomUUID());
+        tu.setDepartment(Department.ENGINEERING);
+
+        when(tenantUserRepository.findByTenantId(tenantId))
+                .thenReturn(List.of(adminMembership, tu));
+
+        User user = createUser(learnerId, "Alice, the Learner", "alice@icentric.com");
+        when(userRepository.findByIdIn(List.of(learnerId))).thenReturn(List.of(user));
+
+        // Mock clean environment maps
+        when(assignmentRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of());
+        when(assessmentAttemptRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of());
+        when(issuedCertificateRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of());
+        when(trackRepository.findAll()).thenReturn(List.of());
+
+        String csv = adminAnalyticsService.getLearningAuditReportCsv(null, null, null);
+
+        assertThat(csv).isNotNull();
+        // Verify CSV header
+        assertThat(csv).contains("Employee,Email,Department,Total Assigned,Completed,Overdue,Progress %,Speed to Complete (Days),Learning Score,Avg Quiz Score %,First-Time Pass Rate %,Talent Category");
+        // Verify escaped name and record details
+        assertThat(csv).contains("\"Alice, the Learner\"");
+        assertThat(csv).contains("alice@icentric.com");
+        assertThat(csv).contains("Engineering");
+    }
+
+    @Test
+    @DisplayName("LearningAuditAsyncService correctly tracks compiling state")
+    void learningAuditAsyncService_tracksCompilingState() {
+        assertThat(learningAuditAsyncService.isCompiling("user@test.com", "my-tenant")).isFalse();
+    }
 }

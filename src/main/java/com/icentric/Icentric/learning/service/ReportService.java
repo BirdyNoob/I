@@ -13,8 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.entity.TenantUser;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.icentric.Icentric.common.security.SecurityUtils;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -245,13 +244,6 @@ public class ReportService {
     }
 
     private UUID currentActorUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        if (userIdRaw == null) {
-            return null;
-        }
-        return userIdRaw instanceof String
-                ? UUID.fromString((String) userIdRaw)
-                : UUID.fromString(userIdRaw.toString());
+        return SecurityUtils.currentUserIdOrNull();
     }
 }

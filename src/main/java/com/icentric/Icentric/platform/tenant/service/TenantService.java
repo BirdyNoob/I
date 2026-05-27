@@ -19,7 +19,7 @@ import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import jakarta.persistence.EntityManager;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -475,8 +475,6 @@ public class TenantService {
     ) {}
 
     private UUID currentActorUserId() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        return userIdRaw == null ? null : UUID.fromString(userIdRaw.toString());
+        return SecurityUtils.currentUserIdOrNull();
     }
 }

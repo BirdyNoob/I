@@ -10,7 +10,7 @@ import com.icentric.Icentric.learning.repository.AssignmentNotificationConfigRep
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantContext;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -129,9 +129,7 @@ public class ReminderConfigService {
     }
 
     private UUID currentActorUserId() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        return userIdRaw == null ? null : UUID.fromString(userIdRaw.toString());
+        return SecurityUtils.currentUserIdOrNull();
     }
 
     private List<Integer> normalizeOffsets(List<Integer> offsets) {

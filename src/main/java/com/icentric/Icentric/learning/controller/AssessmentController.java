@@ -11,8 +11,7 @@ import com.icentric.Icentric.learning.dto.assessment.SubmitAssessmentResponse;
 import com.icentric.Icentric.learning.service.AssessmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,11 +29,7 @@ public class AssessmentController {
     private final AssessmentService assessmentService;
 
     private UUID currentUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getDetails() == null) {
-            throw new IllegalStateException("Unauthenticated request");
-        }
-        return UUID.fromString(auth.getDetails().toString());
+        return SecurityUtils.currentUserId();
     }
 
     @GetMapping("/dashboard")

@@ -28,8 +28,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -456,14 +455,7 @@ public class AssignmentService {
     }
 
     private UUID currentActorUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        Object userIdRaw = authentication != null ? authentication.getDetails() : null;
-        if (userIdRaw == null) {
-            return null;
-        }
-        return userIdRaw instanceof String
-                ? UUID.fromString((String) userIdRaw)
-                : UUID.fromString(userIdRaw.toString());
+        return SecurityUtils.currentUserIdOrNull();
     }
 
     /**

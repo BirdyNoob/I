@@ -129,9 +129,15 @@ public class AdminAnalyticsController {
     ) {
         String recipientEmail = service.currentActorUserEmail();
         String tenantSlug = com.icentric.Icentric.tenant.TenantContext.getTenant();
-        
+
+        if (learningAuditAsyncService.isCompiling(recipientEmail, tenantSlug)) {
+            String busyMessage = "A Corporate Learning Audit report compilation is already in progress for your account. Please check your inbox shortly.";
+            return ResponseEntity.status(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new LearningAuditEmailResponse(false, busyMessage, recipientEmail));
+        }
+
         learningAuditAsyncService.compileAndEmailReport(recipientEmail, search, department, category, tenantSlug, false);
-        
+
         String message = "Your Corporate Learning Audit & Talent Excellence Report generation has been queued. You will receive the compiled PDF at " + recipientEmail + " shortly.";
         return ResponseEntity.accepted().body(new LearningAuditEmailResponse(true, message, recipientEmail));
     }

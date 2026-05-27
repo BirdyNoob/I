@@ -56,6 +56,9 @@ public class PlaywrightPdfService {
                     BrowserContext ctx = browser.newContext();
                     Page page = ctx.newPage();
 
+                    // Set absolute timeout of 15 seconds to prevent browser hangups
+                    page.setDefaultTimeout(15000);
+
                     // Load the HTML file
                     page.navigate("file://" + tmpHtml.toAbsolutePath());
 

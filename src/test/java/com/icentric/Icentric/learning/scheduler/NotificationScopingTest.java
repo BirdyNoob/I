@@ -60,8 +60,6 @@ class NotificationScopingTest {
         tenant.setId(UUID.randomUUID());
         tenant.setSlug("test-tenant");
 
-        when(tenantRepository.findAll()).thenReturn(List.of(tenant));
-
         // Configure escalation settings
         ReminderConfigService.ReminderSettings settings = new ReminderConfigService.ReminderSettings(
                 true, List.of(24), true, 24
@@ -125,8 +123,8 @@ class NotificationScopingTest {
         // Ensure notifications don't already exist
         when(notificationRepository.existsByEventKey(any())).thenReturn(false);
 
-        // Run processAssignments
-        scheduler.processAssignments();
+        // Run processAssignmentsForTenant directly
+        scheduler.processAssignmentsForTenant(tenant, Instant.now());
 
         // Verify:
         // 1. Super Admin got the notification

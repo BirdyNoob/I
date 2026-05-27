@@ -46,7 +46,7 @@ public class CertificateIssuanceAsyncService {
         this.auditMetadataService = auditMetadataService;
     }
 
-    @Async
+    @Async("playwrightTaskExecutor")
     @Transactional
     public void generateAndStore(UUID issuedCertificateId, String tenantSlug) {
         TenantContext.setTenant(tenantSlug);

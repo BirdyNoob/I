@@ -18,4 +18,15 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "playwrightTaskExecutor")
+    public java.util.concurrent.Executor playwrightTaskExecutor() {
+        org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor executor = new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("PlaywrightTask-");
+        executor.initialize();
+        return executor;
+    }
 }

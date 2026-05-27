@@ -18,8 +18,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.Authentication;
+import com.icentric.Icentric.common.security.AdminScopeHelper;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -40,6 +39,7 @@ public class AuditService {
     private final TenantRepository tenantRepository;
     private final TrackRepository trackRepository;
     private final CertificateRepository certificateRepository;
+    private final AdminScopeHelper adminScopeHelper;
 
     public AuditService(
             AuditLogRepository repository,
@@ -47,7 +47,8 @@ public class AuditService {
             TenantUserRepository tenantUserRepository,
             TenantRepository tenantRepository,
             TrackRepository trackRepository,
-            CertificateRepository certificateRepository
+            CertificateRepository certificateRepository,
+            AdminScopeHelper adminScopeHelper
     ) {
         this.repository = repository;
         this.userRepository = userRepository;
@@ -55,6 +56,7 @@ public class AuditService {
         this.tenantRepository = tenantRepository;
         this.trackRepository = trackRepository;
         this.certificateRepository = certificateRepository;
+        this.adminScopeHelper = adminScopeHelper;
     }
 
     public Page<AuditLogResponse> getLogs(
@@ -65,38 +67,10 @@ public class AuditService {
             Instant createdFrom,
             Instant createdTo
     ) {
-        String tenant = TenantContext.getTenant();
-
-        // 1. Identify current authenticated user
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        UUID authUserId = null;
-        if (auth != null && auth.getDetails() != null) {
-            try {
-                authUserId = UUID.fromString(auth.getDetails().toString());
-            } catch (IllegalArgumentException ignored) {}
-        }
-
-        // 2. Fetch tenant entity
-        Tenant tenantEntity = tenantRepository.findBySlug(tenant).orElse(null);
-        UUID tenantId = tenantEntity != null ? tenantEntity.getId() : null;
-
-        // 3. Check role and determine onboarded users if standard manager (ADMIN)
-        boolean isStandardAdmin = false;
-        List<UUID> onboardedUserIds = new ArrayList<>();
-        if (authUserId != null && tenantId != null) {
-            TenantUser authTenantUser = tenantUserRepository.findByUserIdAndTenantId(authUserId, tenantId).orElse(null);
-            if (authTenantUser != null && "ADMIN".equals(authTenantUser.getRole())) {
-                isStandardAdmin = true;
-                List<UUID> foundUserIds = tenantUserRepository.findUserIdsByTenantIdAndCreatedBy(tenantId, authUserId);
-                if (foundUserIds != null) {
-                    onboardedUserIds.addAll(foundUserIds);
-                }
-            }
-        }
-
-        final boolean standardAdminFlag = isStandardAdmin;
-        final UUID finalAuthUserId = authUserId;
-        final List<UUID> finalOnboardedUserIds = onboardedUserIds;
+        // Resolve admin scope — standard admins may only see logs for themselves and
+        // the learners they onboarded.
+        AdminScopeHelper.AdminScope scope = adminScopeHelper.resolveForCurrentUser();
+        final String tenant = TenantContext.getTenant();
 
         Specification<AuditLog> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -121,10 +95,10 @@ public class AuditService {
             }
 
             // If standard manager, restrict logs to themselves or users they onboarded
-            if (standardAdminFlag && finalAuthUserId != null) {
+            if (scope.isStandardAdmin() && scope.getAdminUserId() != null) {
                 List<UUID> scopedUserIds = new ArrayList<>();
-                scopedUserIds.add(finalAuthUserId);
-                scopedUserIds.addAll(finalOnboardedUserIds);
+                scopedUserIds.add(scope.getAdminUserId());
+                scopedUserIds.addAll(scope.getOnboardedUserIds());
 
                 List<String> scopedUserIdStrings = scopedUserIds.stream().map(UUID::toString).toList();
 

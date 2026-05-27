@@ -1,6 +1,7 @@
 package com.icentric.Icentric.content.service;
 
 import com.icentric.Icentric.audit.constants.AuditAction;
+import com.icentric.Icentric.common.security.SecurityUtils;
 import com.icentric.Icentric.audit.service.AuditMetadataService;
 import com.icentric.Icentric.content.dto.*;
 import com.icentric.Icentric.content.entity.Answer;
@@ -238,13 +239,8 @@ public class TrackService {
         Track saved = repository.save(track);
 
         // Audit
-        Object userIdRaw = org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication() != null
-                ? org.springframework.security.core.context.SecurityContextHolder
-                        .getContext().getAuthentication().getDetails()
-                : null;
-        if (userIdRaw != null) {
-            UUID adminId = UUID.fromString(userIdRaw.toString());
+        UUID adminId = SecurityUtils.currentUserIdOrNull();
+        if (adminId != null) {
             auditService.log(adminId, AuditAction.UPDATE_TRACK, "TRACK", trackId.toString(),
                     auditMetadataService.describeUser(adminId)
                             + " updated " + auditMetadataService.describeTrack(trackId));
@@ -508,15 +504,10 @@ public class TrackService {
     }
 
     private void logAdminTrackAction(AuditAction action, UUID trackId, String verb) {
-        Object userIdRaw = org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication() != null
-                ? org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication().getDetails()
-                : null;
-        if (userIdRaw == null) {
+        UUID adminId = SecurityUtils.currentUserIdOrNull();
+        if (adminId == null) {
             return;
         }
-        UUID adminId = UUID.fromString(userIdRaw.toString());
         auditService.log(
                 adminId,
                 action,

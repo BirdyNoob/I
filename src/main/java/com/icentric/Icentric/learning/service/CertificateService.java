@@ -18,10 +18,7 @@ import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.audit.service.AuditService;
-import com.icentric.Icentric.identity.repository.TenantUserRepository;
-import com.icentric.Icentric.identity.entity.TenantUser;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.Authentication;
+import com.icentric.Icentric.common.security.AdminScopeHelper;
 import org.springframework.security.access.AccessDeniedException;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
@@ -53,9 +50,9 @@ public class CertificateService {
     private final CertificateUrlService certificateUrlService;
     private final CertificateIssuanceAsyncService certificateIssuanceAsyncService;
     private final TenantSchemaService tenantSchemaService;
-    private final TenantRepository tenantRepository;
     private final TenantAccessGuard tenantAccessGuard;
-    private final TenantUserRepository tenantUserRepository;
+    private final TenantRepository tenantRepository;
+    private final AdminScopeHelper adminScopeHelper;
 
     public CertificateService(
             CertificateRepository certificateRepository,
@@ -70,9 +67,9 @@ public class CertificateService {
             CertificateUrlService certificateUrlService,
             CertificateIssuanceAsyncService certificateIssuanceAsyncService,
             TenantSchemaService tenantSchemaService,
-            TenantRepository tenantRepository,
             TenantAccessGuard tenantAccessGuard,
-            TenantUserRepository tenantUserRepository
+            TenantRepository tenantRepository,
+            AdminScopeHelper adminScopeHelper
     ) {
         this.certificateRepository = certificateRepository;
         this.issuedRepository = issuedRepository;
@@ -86,9 +83,9 @@ public class CertificateService {
         this.certificateUrlService = certificateUrlService;
         this.certificateIssuanceAsyncService = certificateIssuanceAsyncService;
         this.tenantSchemaService = tenantSchemaService;
-        this.tenantRepository = tenantRepository;
         this.tenantAccessGuard = tenantAccessGuard;
-        this.tenantUserRepository = tenantUserRepository;
+        this.tenantRepository = tenantRepository;
+        this.adminScopeHelper = adminScopeHelper;
     }
 
     @Transactional
@@ -331,39 +328,10 @@ public class CertificateService {
         combined.addAll(pending);
         combined.addAll(failed);
 
-        // Scoping Check
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        UUID authUserId = null;
-        if (auth != null && auth.getDetails() != null) {
-            try {
-                authUserId = UUID.fromString(auth.getDetails().toString());
-            } catch (IllegalArgumentException ignored) {}
-        }
-
-        String tenant = TenantContext.getTenant();
-        Tenant tenantEntity = tenantRepository.findBySlug(tenant).orElse(null);
-        UUID tenantId = tenantEntity != null ? tenantEntity.getId() : null;
-
-        boolean isStandardAdmin = false;
-        List<UUID> onboardedUserIds = new java.util.ArrayList<>();
-        if (authUserId != null && tenantId != null) {
-            TenantUser authTenantUser = tenantUserRepository.findByUserIdAndTenantId(authUserId, tenantId).orElse(null);
-            if (authTenantUser != null && "ADMIN".equals(authTenantUser.getRole())) {
-                isStandardAdmin = true;
-                List<UUID> foundUserIds = tenantUserRepository.findUserIdsByTenantIdAndCreatedBy(tenantId, authUserId);
-                if (foundUserIds != null) {
-                    onboardedUserIds.addAll(foundUserIds);
-                }
-            }
-        }
-
-        if (isStandardAdmin) {
-            final UUID finalAuthUserId = authUserId;
-            final List<UUID> finalOnboardedUserIds = onboardedUserIds;
-            combined.removeIf(issued -> {
-                UUID userId = issued.getUserId();
-                return !userId.equals(finalAuthUserId) && !finalOnboardedUserIds.contains(userId);
-            });
+        // Scoping Check: standard admins can only see their own users' certificates
+        AdminScopeHelper.AdminScope scope = adminScopeHelper.resolveForCurrentUser();
+        if (scope.isStandardAdmin()) {
+            combined.removeIf(issued -> !scope.isInScope(issued.getUserId()));
         }
 
         return combined;
@@ -391,37 +359,11 @@ public class CertificateService {
                     "Certificate " + issuedCertificateId + " is already READY — no regeneration needed.");
         }
 
-        // Scoping Check
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        UUID authUserId = null;
-        if (auth != null && auth.getDetails() != null) {
-            try {
-                authUserId = UUID.fromString(auth.getDetails().toString());
-            } catch (IllegalArgumentException ignored) {}
-        }
-
-        String tenant = TenantContext.getTenant();
-        Tenant tenantEntity = tenantRepository.findBySlug(tenant).orElse(null);
-        UUID tenantId = tenantEntity != null ? tenantEntity.getId() : null;
-
-        boolean isStandardAdmin = false;
-        List<UUID> onboardedUserIds = new java.util.ArrayList<>();
-        if (authUserId != null && tenantId != null) {
-            TenantUser authTenantUser = tenantUserRepository.findByUserIdAndTenantId(authUserId, tenantId).orElse(null);
-            if (authTenantUser != null && "ADMIN".equals(authTenantUser.getRole())) {
-                isStandardAdmin = true;
-                List<UUID> foundUserIds = tenantUserRepository.findUserIdsByTenantIdAndCreatedBy(tenantId, authUserId);
-                if (foundUserIds != null) {
-                    onboardedUserIds.addAll(foundUserIds);
-                }
-            }
-        }
-
-        if (isStandardAdmin) {
-            UUID userId = issued.getUserId();
-            if (!userId.equals(authUserId) && !onboardedUserIds.contains(userId)) {
-                throw new AccessDeniedException("Access denied: You are not authorized to regenerate certificates for this user.");
-            }
+        // Scoping Check: standard admins can only regenerate certificates for their own users
+        AdminScopeHelper.AdminScope scope = adminScopeHelper.resolveForCurrentUser();
+        if (scope.isStandardAdmin() && !scope.isInScope(issued.getUserId())) {
+            throw new AccessDeniedException(
+                    "Access denied: You are not authorized to regenerate certificates for this user.");
         }
 
         // Reset to PENDING so the async job can pick it up cleanly
