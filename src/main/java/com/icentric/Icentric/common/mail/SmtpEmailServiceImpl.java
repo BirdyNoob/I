@@ -79,4 +79,39 @@ public class SmtpEmailServiceImpl implements EmailService {
 
         return sendHtmlEmail(to, subject, htmlBody);
     }
+
+    @Override
+    @Async("mailTaskExecutor")
+    @Retryable(
+            value = {MailException.class, MessagingException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 2000, multiplier = 2)
+    )
+    public CompletableFuture<Void> sendEmailWithAttachment(String to, String subject, String htmlBody, byte[] attachmentBytes, String attachmentFilename) {
+        log.info("Preparing to send email with attachment to {}, subject: '{}', file: {}", to, subject, attachmentFilename);
+
+        try {
+            MimeMessage message = javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(defaultFromAddress);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(htmlBody, true);
+
+            helper.addAttachment(
+                    attachmentFilename, 
+                    new org.springframework.core.io.ByteArrayResource(attachmentBytes), 
+                    "application/pdf"
+            );
+
+            javaMailSender.send(message);
+            log.info("Email with attachment successfully sent to {}", to);
+            return CompletableFuture.completedFuture(null);
+
+        } catch (MessagingException e) {
+            log.error("Failed to construct email with attachment for {}: {}", to, e.getMessage());
+            throw new RuntimeException("Failed to send email with attachment to " + to, e);
+        }
+    }
 }

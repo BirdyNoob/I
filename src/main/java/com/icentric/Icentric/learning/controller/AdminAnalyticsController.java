@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+import com.icentric.Icentric.learning.service.LearningAuditAsyncService;
+
 @RestController
 @RequestMapping("/api/v1/admin/analytics")
 @Tag(name = "Analytics (Admin)", description = "APIs for administrative analytics and dashboard metrics")
@@ -22,10 +24,16 @@ public class AdminAnalyticsController {
 
     private final AdminAnalyticsService service;
     private final AssignmentService assignmentService;
+    private final LearningAuditAsyncService learningAuditAsyncService;
 
-    public AdminAnalyticsController(AdminAnalyticsService service, AssignmentService assignmentService) {
+    public AdminAnalyticsController(
+            AdminAnalyticsService service,
+            AssignmentService assignmentService,
+            LearningAuditAsyncService learningAuditAsyncService
+    ) {
         this.service = service;
         this.assignmentService = assignmentService;
+        this.learningAuditAsyncService = learningAuditAsyncService;
     }
 
     @Operation(summary = "Get overall overview", description = "Retrieves high-level analytics overview metrics for the admin dashboard.")
@@ -71,6 +79,61 @@ public class AdminAnalyticsController {
     @GetMapping("/department-leaderboard")
     public DepartmentLeaderboardResponse departmentLeaderboard() {
         return service.getDepartmentLeaderboard();
+    }
+
+    @Operation(summary = "Get learning audit and talent excellence report", description = "Retrieves compliance audits and gamified learning scorecards for all employees.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successfully retrieved learning audit report")
+    })
+    @GetMapping("/learning-audit-report")
+    public LearningAuditReportResponse getLearningAuditReport(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String category
+    ) {
+        return service.getLearningAuditReport(page, size, search, department, category);
+    }
+
+    @Operation(summary = "Download learning audit and talent excellence PDF report", description = "Generates and downloads a high-fidelity A4 landscape PDF audit report.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "PDF generated and downloaded successfully")
+    })
+    @GetMapping("/learning-audit-report/pdf")
+    public ResponseEntity<byte[]> getLearningAuditReportPdf(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String category
+    ) {
+        byte[] pdf = service.getLearningAuditReportPdf(search, department, category);
+        String filename = "Learning_Audit_Report_" + java.time.LocalDate.now() + ".pdf";
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .body(pdf);
+    }
+
+    @Operation(
+            summary = "Trigger asynchronous learning audit report email",
+            description = "Triggers background PDF compilation and emails the compiled landscape report directly to the logged-in administrator."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "202", description = "Report generation successfully queued")
+    })
+    @PostMapping("/learning-audit-report/email")
+    public ResponseEntity<LearningAuditEmailResponse> queueLearningAuditReportEmail(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String category
+    ) {
+        String recipientEmail = service.currentActorUserEmail();
+        String tenantSlug = com.icentric.Icentric.tenant.TenantContext.getTenant();
+        
+        learningAuditAsyncService.compileAndEmailReport(recipientEmail, search, department, category, tenantSlug, false);
+        
+        String message = "Your Corporate Learning Audit & Talent Excellence Report generation has been queued. You will receive the compiled PDF at " + recipientEmail + " shortly.";
+        return ResponseEntity.accepted().body(new LearningAuditEmailResponse(true, message, recipientEmail));
     }
 
     @Operation(summary = "Get admin dashboard data", description = "Retrieves aggregated data to populate the main admin analytics dashboard.")

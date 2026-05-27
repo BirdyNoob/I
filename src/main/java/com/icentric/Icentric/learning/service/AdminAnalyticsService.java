@@ -68,6 +68,7 @@ public class AdminAnalyticsService {
     private final AssessmentConfigRepository assessmentConfigRepository;
     private final AuditService auditService;
     private final AssessmentResetLogRepository assessmentResetLogRepository;
+    private final PlaywrightPdfService playwrightPdfService;
 
     public AdminAnalyticsService(
             UserRepository userRepository,
@@ -84,7 +85,8 @@ public class AdminAnalyticsService {
             AuditLogRepository auditLogRepository,
             AssessmentConfigRepository assessmentConfigRepository,
             AuditService auditService,
-            AssessmentResetLogRepository assessmentResetLogRepository
+            AssessmentResetLogRepository assessmentResetLogRepository,
+            PlaywrightPdfService playwrightPdfService
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
@@ -101,6 +103,7 @@ public class AdminAnalyticsService {
         this.assessmentConfigRepository = assessmentConfigRepository;
         this.auditService = auditService;
         this.assessmentResetLogRepository = assessmentResetLogRepository;
+        this.playwrightPdfService = playwrightPdfService;
     }
 
     @Transactional(readOnly = true)
@@ -947,6 +950,16 @@ public class AdminAnalyticsService {
         return UUID.fromString(authentication.getDetails().toString());
     }
 
+    public String currentActorUserEmail() {
+        UUID actorId = currentActorUserId();
+        if (actorId == null) {
+            return "system@icentric.com"; // System fallback
+        }
+        return userRepository.findById(actorId)
+                .map(User::getEmail)
+                .orElse("system@icentric.com");
+    }
+
     private Tenant currentTenant() {
         String slug = TenantContext.getTenant();
         return tenantRepository.findBySlug(slug)
@@ -1515,4 +1528,494 @@ public class AdminAnalyticsService {
 
         return result;
     }
+
+    @Transactional(readOnly = true)
+    public LearningAuditReportResponse getLearningAuditReport(
+            int page,
+            int size,
+            String search,
+            String departmentFilter,
+            String categoryFilter
+    ) {
+        tenantSchemaService.applyCurrentTenantSearchPath();
+
+        Tenant tenant = currentTenant();
+        UUID actorId = currentActorUserId();
+        TenantUser actorMembership = null;
+        if (actorId != null) {
+            actorMembership = tenantUserRepository.findByUserIdAndTenantId(actorId, tenant.getId()).orElse(null);
+        }
+
+        List<TenantUser> memberships = tenantUserRepository.findByTenantId(tenant.getId())
+                .stream()
+                .filter(m -> "LEARNER".equals(m.getRole()))
+                .toList();
+
+        if (actorMembership != null && "ADMIN".equals(actorMembership.getRole())) {
+            UUID finalActorId = actorId;
+            memberships = memberships.stream()
+                    .filter(m -> finalActorId.equals(m.getCreatedBy()))
+                    .toList();
+        }
+
+        List<UUID> learnerUserIds = memberships.stream().map(TenantUser::getUserId).toList();
+        if (learnerUserIds.isEmpty()) {
+            return new LearningAuditReportResponse(List.of(), 0, 1);
+        }
+
+        Map<UUID, User> usersById = userRepository.findByIdIn(learnerUserIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+
+        List<TenantUser> filteredMemberships = new ArrayList<>();
+        for (TenantUser m : memberships) {
+            User user = usersById.get(m.getUserId());
+            if (user == null) {
+                continue;
+            }
+
+            if (departmentFilter != null && !departmentFilter.isBlank()) {
+                if (m.getDepartment() == null ||
+                        (!m.getDepartment().name().equalsIgnoreCase(departmentFilter) &&
+                         !m.getDepartment().getDisplayName().equalsIgnoreCase(departmentFilter))) {
+                    continue;
+                }
+            }
+
+            if (search != null && !search.isBlank()) {
+                String term = search.toLowerCase();
+                String name = user.getName() == null ? "" : user.getName().toLowerCase();
+                String email = user.getEmail() == null ? "" : user.getEmail().toLowerCase();
+                if (!name.contains(term) && !email.contains(term)) {
+                    continue;
+                }
+            }
+
+            filteredMemberships.add(m);
+        }
+
+        List<UUID> filteredUserIds = filteredMemberships.stream().map(TenantUser::getUserId).toList();
+        if (filteredUserIds.isEmpty()) {
+            return new LearningAuditReportResponse(List.of(), 0, 1);
+        }
+
+        List<UserAssignment> allAssignments = assignmentRepository.findByUserIdIn(filteredUserIds);
+        Map<UUID, List<UserAssignment>> assignmentsByUser = allAssignments.stream()
+                .collect(Collectors.groupingBy(UserAssignment::getUserId));
+
+        List<AssessmentAttempt> allAttempts = assessmentAttemptRepository.findByUserIdIn(filteredUserIds);
+        Map<UUID, List<AssessmentAttempt>> attemptsByUser = allAttempts.stream()
+                .collect(Collectors.groupingBy(AssessmentAttempt::getUserId));
+
+        List<IssuedCertificate> allCertificates = issuedCertificateRepository.findByUserIdIn(filteredUserIds);
+        Map<UUID, List<IssuedCertificate>> certificatesByUser = allCertificates.stream()
+                .collect(Collectors.groupingBy(IssuedCertificate::getUserId));
+
+        List<Track> allTracks = trackRepository.findAll();
+        Map<UUID, String> trackTitles = allTracks.stream()
+                .collect(Collectors.toMap(Track::getId, Track::getTitle, (a, b) -> a));
+
+        List<LearningAuditReportResponse.EmployeeAuditRow> allRows = new ArrayList<>();
+        Instant now = Instant.now();
+
+        for (TenantUser member : filteredMemberships) {
+            UUID userId = member.getUserId();
+            User user = usersById.get(userId);
+
+            List<UserAssignment> userAssignments = assignmentsByUser.getOrDefault(userId, List.of());
+            List<AssessmentAttempt> userAttempts = attemptsByUser.getOrDefault(userId, List.of());
+            List<IssuedCertificate> userCertificates = certificatesByUser.getOrDefault(userId, List.of());
+
+            // 1. Compliance Status
+            long totalAssigned = userAssignments.size();
+            long completed = userAssignments.stream()
+                    .filter(a -> a.getStatus() == AssignmentStatus.COMPLETED)
+                    .count();
+            long overdue = userAssignments.stream()
+                    .filter(a -> a.getStatus() == AssignmentStatus.OVERDUE ||
+                            (a.getDueDate() != null && a.getDueDate().isBefore(now) && a.getStatus() != AssignmentStatus.COMPLETED))
+                    .count();
+            double progressPercent = totalAssigned == 0 ? 0.0 : (completed * 100.0) / totalAssigned;
+
+            var complianceStatus = new LearningAuditReportResponse.ComplianceStatus(
+                    totalAssigned,
+                    completed,
+                    overdue,
+                    Math.round(progressPercent * 10.0) / 10.0
+            );
+
+            // 2. Quiz Performance (Average Quiz Score)
+            double averageQuizScorePercent = userAttempts.stream()
+                    .filter(a -> a.getScore() != null)
+                    .mapToInt(AssessmentAttempt::getScore)
+                    .average()
+                    .orElse(0.0);
+
+            // 3. First-Time Pass Rate
+            Map<String, List<AssessmentAttempt>> attemptsByConfig = userAttempts.stream()
+                    .collect(Collectors.groupingBy(AssessmentAttempt::getAssessmentConfigId));
+
+            long totalAttemptedQuizzes = attemptsByConfig.size();
+            long passedOnFirstAttempt = 0;
+
+            for (var entry : attemptsByConfig.entrySet()) {
+                List<AssessmentAttempt> configAttempts = entry.getValue();
+                AssessmentAttempt firstAttempt = configAttempts.stream()
+                        .min((a, b) -> {
+                            if (a.getAttemptNumber() != null && b.getAttemptNumber() != null) {
+                                int cmp = a.getAttemptNumber().compareTo(b.getAttemptNumber());
+                                if (cmp != 0) return cmp;
+                            }
+                            Instant ta = a.getDateCompleted() != null ? a.getDateCompleted() : (a.getStartedAt() != null ? a.getStartedAt() : Instant.MIN);
+                            Instant tb = b.getDateCompleted() != null ? b.getDateCompleted() : (b.getStartedAt() != null ? b.getStartedAt() : Instant.MIN);
+                            return ta.compareTo(tb);
+                        })
+                        .orElse(null);
+
+                if (firstAttempt != null && "PASSED".equalsIgnoreCase(firstAttempt.getStatus())) {
+                    passedOnFirstAttempt++;
+                }
+            }
+
+            double firstTimePassRatePercent = totalAttemptedQuizzes == 0 ? 0.0 : (passedOnFirstAttempt * 100.0) / totalAttemptedQuizzes;
+
+            // 4. Average Days to Complete
+            List<UserAssignment> completedAssignments = userAssignments.stream()
+                    .filter(a -> a.getStatus() == AssignmentStatus.COMPLETED && a.getCompletedAt() != null && a.getAssignedAt() != null)
+                    .toList();
+
+            double averageDaysToComplete = 0.0;
+            if (!completedAssignments.isEmpty()) {
+                double totalDays = 0.0;
+                for (UserAssignment a : completedAssignments) {
+                    double diffSeconds = Math.max(0.0, a.getCompletedAt().getEpochSecond() - a.getAssignedAt().getEpochSecond());
+                    totalDays += (diffSeconds / 86400.0);
+                }
+                averageDaysToComplete = totalDays / completedAssignments.size();
+            }
+
+            // 5. On-Time Completion Rate
+            long punctualityDenominator = userAssignments.stream()
+                    .filter(a -> a.getDueDate() != null && (a.getStatus() == AssignmentStatus.COMPLETED || a.getStatus() == AssignmentStatus.OVERDUE || a.getDueDate().isBefore(now)))
+                    .count();
+
+            long completedOnTime = userAssignments.stream()
+                    .filter(a -> a.getDueDate() != null && a.getStatus() == AssignmentStatus.COMPLETED && a.getCompletedAt() != null && !a.getCompletedAt().isAfter(a.getDueDate()))
+                    .count();
+
+            double onTimeCompletionRatePercent = punctualityDenominator == 0 ? (totalAssigned > 0 ? 100.0 : 0.0) : (completedOnTime * 100.0) / punctualityDenominator;
+
+            // 6. Composite Score & Talent Category
+            double learningScore = (averageQuizScorePercent * 0.5) + (firstTimePassRatePercent * 0.3) + (onTimeCompletionRatePercent * 0.2);
+
+            String talentCategory;
+            if (learningScore >= 90.0) {
+                talentCategory = "STAR_LEARNER";
+            } else if (learningScore >= 75.0) {
+                talentCategory = "DILIGENT_LEARNER";
+            } else if (learningScore >= 60.0) {
+                talentCategory = "HANDS_ON_LEARNER";
+            } else {
+                talentCategory = "STALLED_LEARNER";
+            }
+
+            var excellenceMetrics = new LearningAuditReportResponse.ExcellenceMetrics(
+                    Math.round(learningScore * 10.0) / 10.0,
+                    Math.round(averageQuizScorePercent * 10.0) / 10.0,
+                    Math.round(firstTimePassRatePercent * 10.0) / 10.0,
+                    Math.round(averageDaysToComplete * 10.0) / 10.0,
+                    talentCategory
+            );
+
+            // Certificates list
+            List<LearningAuditReportResponse.CertificateSummary> certificatesEarned = userCertificates.stream()
+                    .map(c -> new LearningAuditReportResponse.CertificateSummary(
+                            c.getId(),
+                            trackTitles.getOrDefault(c.getTrackId(), "Unknown Course"),
+                            c.getIssuedAt()
+                    ))
+                    .sorted((a, b) -> b.issuedAt().compareTo(a.issuedAt()))
+                    .toList();
+
+            String deptName = member.getDepartment() == null ? "UNKNOWN" : member.getDepartment().getDisplayName();
+
+            allRows.add(new LearningAuditReportResponse.EmployeeAuditRow(
+                    userId,
+                    user.getName() != null && !user.getName().isBlank() ? user.getName() : user.getEmail(),
+                    user.getEmail(),
+                    deptName,
+                    complianceStatus,
+                    excellenceMetrics,
+                    certificatesEarned
+            ));
+        }
+
+        // Apply Category Filter in memory
+        if (categoryFilter != null && !categoryFilter.isBlank()) {
+            allRows = allRows.stream()
+                    .filter(row -> {
+                        String cat = row.excellenceMetrics().talentCategory();
+                        return cat.equalsIgnoreCase(categoryFilter) ||
+                                cat.replace("_LEARNER", "").equalsIgnoreCase(categoryFilter);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        // Default sort: highest score first, then name alphabetically
+        allRows.sort((a, b) -> {
+            int cmp = Double.compare(b.excellenceMetrics().learningScore(), a.excellenceMetrics().learningScore());
+            if (cmp != 0) return cmp;
+            return a.name().compareToIgnoreCase(b.name());
+        });
+
+        // Pagination clamping
+        int clPage = Math.max(0, page);
+        int clSize = size <= 0 ? 10 : size;
+
+        int totalElements = allRows.size();
+        int totalPages = (int) Math.ceil((double) totalElements / clSize);
+        if (totalPages == 0) totalPages = 1;
+
+        int fromIndex = Math.min(clPage * clSize, totalElements);
+        int toIndex = Math.min(fromIndex + clSize, totalElements);
+
+        List<LearningAuditReportResponse.EmployeeAuditRow> pagedEmployees = allRows.subList(fromIndex, toIndex);
+
+        return new LearningAuditReportResponse(pagedEmployees, totalElements, totalPages);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] getLearningAuditReportPdf(String search, String departmentFilter, String categoryFilter) {
+        // Reuse our existing implementation for fetching and constructing report metrics
+        // Since we want the entire report for PDF, we pass large size (e.g. 10000)
+        LearningAuditReportResponse report = getLearningAuditReport(0, 10000, search, departmentFilter, categoryFilter);
+
+        double totalComplianceRate = 0.0;
+        double totalLearningScore = 0.0;
+        long starLearnersCount = 0;
+        int employeeCount = report.employees().size();
+
+        for (var emp : report.employees()) {
+            totalComplianceRate += emp.complianceStatus().progressPercent();
+            totalLearningScore += emp.excellenceMetrics().learningScore();
+            if ("STAR_LEARNER".equals(emp.excellenceMetrics().talentCategory())) {
+                starLearnersCount++;
+            }
+        }
+
+        double avgComplianceRate = employeeCount == 0 ? 0.0 : totalComplianceRate / employeeCount;
+        double avgLearningScore = employeeCount == 0 ? 0.0 : totalLearningScore / employeeCount;
+
+        StringBuilder html = new StringBuilder();
+        html.append("<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<style>\n")
+            .append("  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');\n")
+            .append("  body {\n")
+            .append("    font-family: 'Inter', sans-serif;\n")
+            .append("    background-color: #ffffff;\n")
+            .append("    color: #1f2937;\n")
+            .append("    margin: 0;\n")
+            .append("    padding: 30px;\n")
+            .append("    -webkit-print-color-adjust: exact;\n")
+            .append("  }\n")
+            .append("  .header {\n")
+            .append("    margin-bottom: 25px;\n")
+            .append("    border-bottom: 2px solid rgba(79, 70, 229, 0.15);\n")
+            .append("    padding-bottom: 15px;\n")
+            .append("    display: flex;\n")
+            .append("    justify-content: space-between;\n")
+            .append("    align-items: flex-end;\n")
+            .append("  }\n")
+            .append("  .title {\n")
+            .append("    font-family: 'Outfit', sans-serif;\n")
+            .append("    font-size: 24px;\n")
+            .append("    font-weight: 700;\n")
+            .append("    color: #4f46e5;\n")
+            .append("    margin: 0 0 5px 0;\n")
+            .append("  }\n")
+            .append("  .subtitle {\n")
+            .append("    font-size: 13px;\n")
+            .append("    color: #4b5563;\n")
+            .append("    margin: 0;\n")
+            .append("  }\n")
+            .append("  .stats-grid {\n")
+            .append("    display: flex;\n")
+            .append("    gap: 15px;\n")
+            .append("    margin-bottom: 25px;\n")
+            .append("  }\n")
+            .append("  .stat-card {\n")
+            .append("    flex: 1;\n")
+            .append("    background: #f9fafb;\n")
+            .append("    border: 1px solid #e5e7eb;\n")
+            .append("    padding: 15px;\n")
+            .append("    border-radius: 8px;\n")
+            .append("    text-align: center;\n")
+            .append("  }\n")
+            .append("  .stat-val {\n")
+            .append("    font-family: 'Outfit', sans-serif;\n")
+            .append("    font-size: 22px;\n")
+            .append("    font-weight: 700;\n")
+            .append("    color: #4f46e5;\n")
+            .append("  }\n")
+            .append("  .stat-lbl {\n")
+            .append("    font-size: 11px;\n")
+            .append("    color: #6b7280;\n")
+            .append("    margin-top: 3px;\n")
+            .append("  }\n")
+            .append("  table {\n")
+            .append("    width: 100%;\n")
+            .append("    border-collapse: collapse;\n")
+            .append("    margin-bottom: 25px;\n")
+            .append("    background: #ffffff;\n")
+            .append("    border-radius: 8px;\n")
+            .append("    overflow: hidden;\n")
+            .append("    border: 1px solid #e5e7eb;\n")
+            .append("  }\n")
+            .append("  th, td {\n")
+            .append("    padding: 10px 12px;\n")
+            .append("    text-align: left;\n")
+            .append("    font-size: 11px;\n")
+            .append("    border-bottom: 1px solid #e5e7eb;\n")
+            .append("  }\n")
+            .append("  th {\n")
+            .append("    background-color: rgba(79, 70, 229, 0.05);\n")
+            .append("    font-family: 'Outfit', sans-serif;\n")
+            .append("    color: #4f46e5;\n")
+            .append("    font-weight: 600;\n")
+            .append("  }\n")
+            .append("  .progress-bg {\n")
+            .append("    background: #e5e7eb;\n")
+            .append("    border-radius: 4px;\n")
+            .append("    height: 6px;\n")
+            .append("    width: 70px;\n")
+            .append("    display: inline-block;\n")
+            .append("    vertical-align: middle;\n")
+            .append("    margin-right: 5px;\n")
+            .append("  }\n")
+            .append("  .progress-fg {\n")
+            .append("    height: 100%;\n")
+            .append("    border-radius: 4px;\n")
+            .append("    background: linear-gradient(to right, #4f46e5, #7c3aed);\n")
+            .append("  }\n")
+            .append("  .badge {\n")
+            .append("    padding: 2px 6px;\n")
+            .append("    border-radius: 4px;\n")
+            .append("    font-size: 9px;\n")
+            .append("    font-weight: 600;\n")
+            .append("    display: inline-block;\n")
+            .append("  }\n")
+            .append("  .badge-star { background: #fef3c7; color: #d97706; border: 1px solid #fcd34d; }\n")
+            .append("  .badge-diligent { background: #ecfeff; color: #0891b2; border: 1px solid #c5f6fa; }\n")
+            .append("  .badge-hands { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }\n")
+            .append("  .badge-stalled { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }\n")
+            .append("  .cert-pill {\n")
+            .append("    background: #f3f4f6;\n")
+            .append("    color: #4b5563;\n")
+            .append("    border: 1px solid #e5e7eb;\n")
+            .append("    padding: 1px 4px;\n")
+            .append("    border-radius: 4px;\n")
+            .append("    font-size: 8px;\n")
+            .append("    margin-right: 3px;\n")
+            .append("    margin-bottom: 3px;\n")
+            .append("    display: inline-block;\n")
+            .append("  }\n")
+            .append("</style>\n</head>\n<body>\n")
+            .append("  <div class=\"header\">\n")
+            .append("    <div class=\"header-left\">\n")
+            .append("      <h1 class=\"title\">Corporate Learning Audit & Talent Excellence Report</h1>\n")
+            .append("      <p class=\"subtitle\">Headless Playwright PDF Export | Tenant: ").append(escapeHtml(currentTenant().getCompanyName())).append("</p>\n")
+            .append("    </div>\n")
+            .append("    <div class=\"header-right\">\n")
+            .append("      Date Compiled: ").append(java.time.LocalDate.now().toString()).append("<br>\n")
+            .append("      Organization Scope: Active Employees\n")
+            .append("    </div>\n")
+            .append("  </div>\n")
+            .append("  <div class=\"stats-grid\">\n")
+            .append("    <div class=\"stat-card\">\n")
+            .append("      <div class=\"stat-val\">").append(employeeCount).append("</div>\n")
+            .append("      <div class=\"stat-lbl\">TOTAL EMPLOYEES</div>\n")
+            .append("    </div>\n")
+            .append("    <div class=\"stat-card\">\n")
+            .append("      <div class=\"stat-val\">").append(Math.round(avgComplianceRate * 10.0) / 10.0).append("%</div>\n")
+            .append("      <div class=\"stat-lbl\">AVG COMPLIANCE RATE</div>\n")
+            .append("    </div>\n")
+            .append("    <div class=\"stat-card\">\n")
+            .append("      <div class=\"stat-val\">").append(Math.round(avgLearningScore * 10.0) / 10.0).append("</div>\n")
+            .append("      <div class=\"stat-lbl\">AVG EXCELLENCE SCORE</div>\n")
+            .append("    </div>\n")
+            .append("    <div class=\"stat-card\">\n")
+            .append("      <div class=\"stat-val\">").append(starLearnersCount).append("</div>\n")
+            .append("      <div class=\"stat-lbl\">STAR LEARNERS</div>\n")
+            .append("    </div>\n")
+            .append("  </div>\n")
+            .append("  <table>\n")
+            .append("    <thead>\n")
+            .append("      <tr>\n")
+            .append("        <th>Employee</th>\n")
+            .append("        <th>Department</th>\n")
+            .append("        <th>Compliance Status</th>\n")
+            .append("        <th>Progress</th>\n")
+            .append("        <th>Completion Speed</th>\n")
+            .append("        <th>Dynamic Score</th>\n")
+            .append("        <th>Avg Quiz Score</th>\n")
+            .append("        <th>First-Time Pass</th>\n")
+            .append("        <th>Credentials Earned</th>\n")
+            .append("        <th>Talent Category</th>\n")
+            .append("      </tr>\n")
+            .append("    </thead>\n")
+            .append("    <tbody>\n");
+
+        for (var emp : report.employees()) {
+            String badgeClass = switch (emp.excellenceMetrics().talentCategory()) {
+                case "STAR_LEARNER" -> "badge-star";
+                case "DILIGENT_LEARNER" -> "badge-diligent";
+                case "HANDS_ON_LEARNER" -> "badge-hands";
+                default -> "badge-stalled";
+            };
+
+            String formattedCategory = emp.excellenceMetrics().talentCategory().replace("_", " ");
+
+            String formattedSpeed = emp.excellenceMetrics().averageDaysToComplete() > 0 
+                ? emp.excellenceMetrics().averageDaysToComplete() + " days"
+                : "N/A";
+
+            String complianceDetail = emp.complianceStatus().completed() + "/" + emp.complianceStatus().totalAssigned() + " tracks";
+            if (emp.complianceStatus().overdue() > 0) {
+                complianceDetail += "<br><span style=\"color:#dc2626;font-weight:600;font-size:9px;\">⚠️ overdue: " + emp.complianceStatus().overdue() + "</span>";
+            }
+
+            StringBuilder certsHtml = new StringBuilder();
+            if (emp.certificatesEarned().isEmpty()) {
+                certsHtml.append("<span style=\"color:#9ca3af;font-size:9px;\">None</span>");
+            } else {
+                for (var cert : emp.certificatesEarned()) {
+                    certsHtml.append("<span class=\"cert-pill\">🎓 ").append(escapeHtml(cert.trackTitle())).append("</span> ");
+                }
+            }
+
+            html.append("      <tr>\n")
+                .append("        <td><strong>").append(escapeHtml(emp.name())).append("</strong><br><span style=\"color:#9ca3af;font-size:9px;\">").append(escapeHtml(emp.email())).append("</span></td>\n")
+                .append("        <td>").append(escapeHtml(emp.department())).append("</td>\n")
+                .append("        <td>").append(complianceDetail).append("</td>\n")
+                .append("        <td><div class=\"progress-bg\"><div class=\"progress-fg\" style=\"width:").append(emp.complianceStatus().progressPercent()).append("%;\"></div></div> ").append(emp.complianceStatus().progressPercent()).append("%</td>\n")
+                .append("        <td>").append(formattedSpeed).append("</td>\n")
+                .append("        <td><strong>").append(emp.excellenceMetrics().learningScore()).append("</strong></td>\n")
+                .append("        <td>").append(emp.excellenceMetrics().averageQuizScorePercent()).append("%</td>\n")
+                .append("        <td>").append(emp.excellenceMetrics().firstTimePassRatePercent()).append("%</td>\n")
+                .append("        <td>").append(certsHtml.toString()).append("</td>\n")
+                .append("        <td><span class=\"badge ").append(badgeClass).append("\">").append(formattedCategory).append("</span></td>\n")
+                .append("      </tr>\n");
+        }
+
+        if (report.employees().isEmpty()) {
+            html.append("      <tr><td colspan=\"10\" style=\"text-align:center;color:#9ca3af;\">No records found matching filters.</td></tr>\n");
+        }
+
+        html.append("    </tbody>\n  </table>\n</body>\n</html>");
+
+        return playwrightPdfService.render(html.toString(), true); // landscape A4 format
+    }
+
+    private String escapeHtml(String input) {
+        return org.springframework.web.util.HtmlUtils.htmlEscape(input == null ? "" : input);
+    }
 }
+

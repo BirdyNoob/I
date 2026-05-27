@@ -19,4 +19,9 @@ public interface EmailService {
      * @param variables    Key-value pairs to inject into the template
      */
     CompletableFuture<Void> sendTemplateEmail(String to, String subject, String templateName, Map<String, Object> variables);
+
+    /**
+     * Sends an HTML email with a binary attachment (like a compiled PDF).
+     */
+    CompletableFuture<Void> sendEmailWithAttachment(String to, String subject, String htmlBody, byte[] attachmentBytes, String attachmentFilename);
 }

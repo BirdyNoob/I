@@ -16,6 +16,10 @@ import com.icentric.Icentric.learning.dto.DepartmentLeaderboardResponse;
 import com.icentric.Icentric.learning.constants.AssignmentStatus;
 import com.icentric.Icentric.learning.entity.AssessmentAttempt;
 import com.icentric.Icentric.learning.entity.AssessmentConfig;
+import com.icentric.Icentric.learning.entity.UserAssignment;
+import com.icentric.Icentric.learning.entity.IssuedCertificate;
+import com.icentric.Icentric.learning.dto.LearningAuditReportResponse;
+import com.icentric.Icentric.learning.service.LearningAuditAsyncService;
 import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
 import com.icentric.Icentric.learning.repository.LessonProgressRepository;
 import com.icentric.Icentric.learning.repository.AssessmentAttemptRepository;
@@ -68,6 +72,8 @@ class AssessmentKPIAndInterventionTest {
     @Mock AssessmentConfigRepository assessmentConfigRepository;
     @Mock AuditService auditService;
     @Mock com.icentric.Icentric.learning.repository.AssessmentResetLogRepository assessmentResetLogRepository;
+    @Mock PlaywrightPdfService playwrightPdfService;
+    @Mock LearningAuditAsyncService learningAuditAsyncService;
 
     @InjectMocks
     AdminAnalyticsService adminAnalyticsService;
@@ -476,5 +482,176 @@ class AssessmentKPIAndInterventionTest {
         assertThat(rank2.completionRatePercent()).isEqualTo(40.0);
         assertThat(rank2.averageQuizScorePercent()).isEqualTo(60.0);
         assertThat(rank2.activeStatus()).isEqualTo("FALLING_BEHIND"); // Under 50% completion
+    }
+
+    @Test
+    @DisplayName("getLearningAuditReport correctly calculates compliance status, excellence metrics, and paginates in-memory")
+    void getLearningAuditReport_calculatesComplianceAndExcellenceInMemory() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
+
+        TenantUser adminMembership = createMembership(adminId, "SUPER_ADMIN", null);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenantId))
+                .thenReturn(Optional.of(adminMembership));
+
+        UUID learnerId = UUID.randomUUID();
+        TenantUser tu = createMembership(learnerId, "LEARNER", UUID.randomUUID());
+        tu.setDepartment(Department.ENGINEERING);
+
+        when(tenantUserRepository.findByTenantId(tenantId))
+                .thenReturn(List.of(adminMembership, tu));
+
+        User user = createUser(learnerId, "Alice Learner", "alice@icentric.com");
+        when(userRepository.findByIdIn(List.of(learnerId))).thenReturn(List.of(user));
+
+        // Mock assignment
+        UUID trackId = UUID.randomUUID();
+        UserAssignment assignment = new UserAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setUserId(learnerId);
+        assignment.setTrackId(trackId);
+        assignment.setStatus(AssignmentStatus.COMPLETED);
+        assignment.setAssignedAt(Instant.now().minusSeconds(5L * 24 * 60 * 60)); // 5 days ago
+        assignment.setDueDate(Instant.now().plusSeconds(5L * 24 * 60 * 60)); // due in 5 days
+        assignment.setCompletedAt(Instant.now().minusSeconds(2L * 24 * 60 * 60)); // completed 2 days ago (on time, took 3 days)
+        when(assignmentRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of(assignment));
+
+        // Mock quiz attempt
+        String configId = "config-123";
+        AssessmentAttempt attempt = createAttempt(learnerId, configId, "PASSED", 90, 1);
+        when(assessmentAttemptRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of(attempt));
+
+        // Mock certificate
+        IssuedCertificate cert = new IssuedCertificate();
+        cert.setId(UUID.randomUUID());
+        cert.setUserId(learnerId);
+        cert.setTrackId(trackId);
+        cert.setIssuedAt(Instant.now());
+        when(issuedCertificateRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of(cert));
+
+        // Mock tracks
+        com.icentric.Icentric.content.entity.Track track = new com.icentric.Icentric.content.entity.Track();
+        track.setId(trackId);
+        track.setTitle("Cybersecurity Basics");
+        when(trackRepository.findAll()).thenReturn(List.of(track));
+
+        var report = adminAnalyticsService.getLearningAuditReport(0, 10, null, null, null);
+
+        assertThat(report.totalElements()).isEqualTo(1);
+        assertThat(report.totalPages()).isEqualTo(1);
+        assertThat(report.employees()).hasSize(1);
+
+        var row = report.employees().get(0);
+        assertThat(row.userId()).isEqualTo(learnerId);
+        assertThat(row.name()).isEqualTo("Alice Learner");
+        assertThat(row.email()).isEqualTo("alice@icentric.com");
+        assertThat(row.department()).isEqualTo("Engineering");
+
+        // Compliance status validation
+        assertThat(row.complianceStatus().totalAssigned()).isEqualTo(1);
+        assertThat(row.complianceStatus().completed()).isEqualTo(1);
+        assertThat(row.complianceStatus().overdue()).isEqualTo(0);
+        assertThat(row.complianceStatus().progressPercent()).isEqualTo(100.0);
+
+        // Excellence metrics validation
+        assertThat(row.excellenceMetrics().averageQuizScorePercent()).isEqualTo(90.0);
+        assertThat(row.excellenceMetrics().firstTimePassRatePercent()).isEqualTo(100.0);
+        assertThat(row.excellenceMetrics().averageDaysToComplete()).isEqualTo(3.0);
+        // learningScore = (90.0 * 0.5) + (100.0 * 0.3) + (100.0 * 0.2) = 45.0 + 30.0 + 20.0 = 95.0
+        assertThat(row.excellenceMetrics().learningScore()).isEqualTo(95.0);
+        assertThat(row.excellenceMetrics().talentCategory()).isEqualTo("STAR_LEARNER");
+
+        // Certificates earned validation
+        assertThat(row.certificatesEarned()).hasSize(1);
+        assertThat(row.certificatesEarned().get(0).trackTitle()).isEqualTo("Cybersecurity Basics");
+    }
+
+    @Test
+    @DisplayName("getLearningAuditReportPdf compiles HTML with correct stats and invokes PlaywrightPdfService")
+    void getLearningAuditReportPdf_generatesLandscapePdfUsingPlaywright() {
+        UUID adminId = UUID.randomUUID();
+        setupMockSecurityContext(adminId);
+
+        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
+
+        TenantUser adminMembership = createMembership(adminId, "SUPER_ADMIN", null);
+        when(tenantUserRepository.findByUserIdAndTenantId(adminId, tenantId))
+                .thenReturn(Optional.of(adminMembership));
+
+        UUID learnerId = UUID.randomUUID();
+        TenantUser tu = createMembership(learnerId, "LEARNER", UUID.randomUUID());
+        tu.setDepartment(Department.ENGINEERING);
+
+        when(tenantUserRepository.findByTenantId(tenantId))
+                .thenReturn(List.of(adminMembership, tu));
+
+        User user = createUser(learnerId, "Alice Learner", "alice@icentric.com");
+        when(userRepository.findByIdIn(List.of(learnerId))).thenReturn(List.of(user));
+
+        // Mock empty maps/lists for standard report fetch inside PDF logic
+        when(assignmentRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of());
+        when(assessmentAttemptRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of());
+        when(issuedCertificateRepository.findByUserIdIn(List.of(learnerId))).thenReturn(List.of());
+        when(trackRepository.findAll()).thenReturn(List.of());
+
+        byte[] expectedPdf = new byte[]{0x25, 0x50, 0x44, 0x46}; // PDF header bytes
+        when(playwrightPdfService.render(anyString(), eq(true))).thenReturn(expectedPdf);
+
+        byte[] result = adminAnalyticsService.getLearningAuditReportPdf(null, null, null);
+
+        assertThat(result).isEqualTo(expectedPdf);
+        verify(playwrightPdfService).render(argThat(html -> 
+            html.contains("Corporate Learning Audit & Talent Excellence Report") &&
+            html.contains("TOTAL EMPLOYEES") &&
+            html.contains("AVG COMPLIANCE RATE") &&
+            html.contains("AVG EXCELLENCE SCORE") &&
+            html.contains("STAR LEARNERS")
+        ), eq(true));
+    }
+
+    @Test
+    @DisplayName("runWeeklyCorporateAudits scans tenants, finds Super Admins, and queues compileAndEmailReport")
+    void runWeeklyCorporateAudits_scansAndQueuesReport() {
+        com.icentric.Icentric.learning.scheduler.LearningAuditScheduler scheduler =
+            new com.icentric.Icentric.learning.scheduler.LearningAuditScheduler(
+                tenantRepository,
+                tenantUserRepository,
+                userRepository,
+                learningAuditAsyncService,
+                tenantSchemaService
+            );
+
+        Tenant t = new Tenant();
+        t.setId(tenantId);
+        t.setSlug("test-tenant");
+
+        when(tenantRepository.findAll()).thenReturn(List.of(t));
+
+        TenantUser sa = new TenantUser();
+        UUID saUserId = UUID.randomUUID();
+        sa.setUserId(saUserId);
+        sa.setTenantId(tenantId);
+        sa.setRole("SUPER_ADMIN");
+
+        when(tenantUserRepository.findByTenantId(tenantId)).thenReturn(List.of(sa));
+
+        User saUser = new User();
+        saUser.setId(saUserId);
+        saUser.setEmail("owner@icentric.com");
+
+        when(userRepository.findById(saUserId)).thenReturn(Optional.of(saUser));
+
+        scheduler.runWeeklyCorporateAudits();
+
+        verify(learningAuditAsyncService).compileAndEmailReport(
+            eq("owner@icentric.com"),
+            isNull(),
+            isNull(),
+            isNull(),
+            eq("test-tenant"),
+            eq(true)
+        );
     }
 }
