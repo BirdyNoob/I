@@ -5,6 +5,7 @@ import com.icentric.Icentric.audit.entity.AuditLog;
 import com.icentric.Icentric.audit.repository.AuditLogRepository;
 import com.icentric.Icentric.content.repository.TrackRepository;
 import com.icentric.Icentric.identity.entity.TenantUser;
+import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.learning.repository.CertificateRepository;
@@ -176,5 +177,49 @@ class AuditServiceScopingTest {
 
         verify(cb).or(inUserIdsPredicate, targetAndPredicate);
         verify(cb).equal(tenantSlugPath, "test-tenant");
+    }
+
+    @Test
+    @DisplayName("getAuditLogsCsv page-fetches all matching logs and returns standard UTF-8 BOM CSV format")
+    void getAuditLogsCsv_compilesCorrectCsvString() {
+        AdminScopeHelper.AdminScope scope = mock(AdminScopeHelper.AdminScope.class);
+        when(scope.isStandardAdmin()).thenReturn(false);
+        when(adminScopeHelper.resolveForCurrentUser()).thenReturn(scope);
+
+        AuditLog logItem = new AuditLog();
+        logItem.setId(UUID.randomUUID());
+        logItem.setUserId(managerId);
+        logItem.setTenantSlug("test-tenant");
+        logItem.setAction(AuditAction.LOGIN);
+        logItem.setEntityType("USER");
+        logItem.setEntityId(managerId.toString());
+        logItem.setDetails("User logged in successfully");
+
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(logItem)));
+
+        String csv = auditService.getAuditLogsCsv(null, null, null, null, null);
+        assertThat(csv)
+                .startsWith("\uFEFF") // UTF-8 BOM
+                .contains("Timestamp (UTC)")
+                .contains("Login")
+                .contains("User logged in successfully");
+    }
+
+    @Test
+    @DisplayName("currentActorUserEmail resolves email of authenticated user using repository lookup")
+    void currentActorUserEmail_resolvesAuthenticatedUser() {
+        Authentication auth = mock(Authentication.class);
+        when(auth.getDetails()).thenReturn(managerId.toString());
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        User user = new User();
+        user.setId(managerId);
+        user.setEmail("admin@acme.com");
+
+        when(userRepository.findById(managerId)).thenReturn(Optional.of(user));
+
+        String email = auditService.currentActorUserEmail();
+        assertThat(email).isEqualTo("admin@acme.com");
     }
 }

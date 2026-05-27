@@ -19,6 +19,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import com.icentric.Icentric.common.security.AdminScopeHelper;
+import com.icentric.Icentric.learning.service.PlaywrightPdfService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -40,6 +43,7 @@ public class AuditService {
     private final TrackRepository trackRepository;
     private final CertificateRepository certificateRepository;
     private final AdminScopeHelper adminScopeHelper;
+    private final PlaywrightPdfService playwrightPdfService;
 
     public AuditService(
             AuditLogRepository repository,
@@ -48,7 +52,8 @@ public class AuditService {
             TenantRepository tenantRepository,
             TrackRepository trackRepository,
             CertificateRepository certificateRepository,
-            AdminScopeHelper adminScopeHelper
+            AdminScopeHelper adminScopeHelper,
+            PlaywrightPdfService playwrightPdfService
     ) {
         this.repository = repository;
         this.userRepository = userRepository;
@@ -57,6 +62,7 @@ public class AuditService {
         this.trackRepository = trackRepository;
         this.certificateRepository = certificateRepository;
         this.adminScopeHelper = adminScopeHelper;
+        this.playwrightPdfService = playwrightPdfService;
     }
 
     public Page<AuditLogResponse> getLogs(
@@ -334,5 +340,265 @@ public class AuditService {
 
     private String entityKey(String entityType, String entityId) {
         return (entityType == null ? "" : entityType.toUpperCase(Locale.ROOT)) + ":" + entityId;
+    }
+
+    /**
+     * Compiles a memory-safe, Excel-friendly UTF-8 BOM CSV containing all audit logs matching the filters.
+     */
+    public String getAuditLogsCsv(AuditAction action, String entityType, UUID userId, Instant createdFrom, Instant createdTo) {
+        StringBuilder csv = new StringBuilder();
+        csv.append("\uFEFF"); // UTF-8 BOM for Microsoft Excel
+        csv.append("Timestamp (UTC),Action Type,Target Entity,Actor Name,Actor Email,Department,Role,Tenant Slug,Details\n");
+
+        int page = 0;
+        int size = 500;
+        boolean hasMore = true;
+
+        while (hasMore) {
+            Page<AuditLogResponse> logsPage = getLogs(
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")),
+                action, entityType, userId, createdFrom, createdTo
+            );
+
+            for (AuditLogResponse log : logsPage.getContent()) {
+                csv.append(log.createdAt() != null ? log.createdAt().toString() : "").append(",")
+                   .append(escapeCsv(log.actionLabel())).append(",")
+                   .append(escapeCsv(log.entityDisplayName())).append(",")
+                   .append(escapeCsv(log.actorName())).append(",")
+                   .append(escapeCsv(log.actorEmail())).append(",")
+                   .append(escapeCsv(log.actorDepartment())).append(",")
+                   .append(escapeCsv(log.actorRole())).append(",")
+                   .append(escapeCsv(log.tenantSlug())).append(",")
+                   .append(escapeCsv(log.summary())).append("\n");
+            }
+
+            hasMore = logsPage.hasNext();
+            page++;
+        }
+        return csv.toString();
+    }
+
+    /**
+     * Compiles a premium landscape A4 PDF report of audit logs using Playwright.
+     */
+    public byte[] getAuditLogsReportPdf(AuditAction action, String entityType, UUID userId, Instant createdFrom, Instant createdTo) {
+        // Fetch up to 10,000 logs matching the scoped query context
+        Page<AuditLogResponse> logsPage = getLogs(
+            PageRequest.of(0, 10000, Sort.by(Sort.Direction.DESC, "createdAt")),
+            action, entityType, userId, createdFrom, createdTo
+        );
+        List<AuditLogResponse> logs = logsPage.getContent();
+
+        long totalEvents = logs.size();
+        long securityEvents = 0;
+        long milestoneEvents = 0;
+        long alertEvents = 0;
+
+        for (AuditLogResponse log : logs) {
+            AuditAction act = log.action();
+            if (act == null) continue;
+
+            String name = act.name();
+            if (name.contains("LOGIN") || name.contains("USER") || name.contains("GROUP") || name.contains("IMPERSONATION")) {
+                securityEvents++;
+            } else if (name.contains("COMPLETED") || name.contains("PASSED") || name.contains("ISSUED") || name.contains("READY")) {
+                milestoneEvents++;
+            } else if (name.contains("OVERDUE") || name.contains("ESCALATION") || name.contains("LOCKED") || name.contains("FAILED") || name.contains("RATE_LIMITED")) {
+                alertEvents++;
+            }
+        }
+
+        String tenantName = TenantContext.getTenant();
+        Tenant tenantEntity = tenantRepository.findBySlug(tenantName).orElse(null);
+        String companyName = tenantEntity != null ? tenantEntity.getCompanyName() : tenantName;
+
+        StringBuilder html = new StringBuilder();
+        html.append("<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<style>\n")
+            .append("  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');\n")
+            .append("  body {\n")
+            .append("    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n")
+            .append("    background-color: #ffffff;\n")
+            .append("    color: #1f2937;\n")
+            .append("    margin: 0;\n")
+            .append("    padding: 30px;\n")
+            .append("    -webkit-print-color-adjust: exact;\n")
+            .append("  }\n")
+            .append("  .header {\n")
+            .append("    margin-bottom: 25px;\n")
+            .append("    border-bottom: 2px solid rgba(79, 70, 229, 0.15);\n")
+            .append("    padding-bottom: 15px;\n")
+            .append("    display: flex;\n")
+            .append("    justify-content: space-between;\n")
+            .append("    align-items: flex-end;\n")
+            .append("  }\n")
+            .append("  .title {\n")
+            .append("    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n")
+            .append("    font-size: 24px;\n")
+            .append("    font-weight: 700;\n")
+            .append("    color: #4f46e5;\n")
+            .append("    margin: 0 0 5px 0;\n")
+            .append("  }\n")
+            .append("  .subtitle {\n")
+            .append("    font-size: 13px;\n")
+            .append("    color: #4b5563;\n")
+            .append("    margin: 0;\n")
+            .append("  }\n")
+            .append("  .stats-grid {\n")
+            .append("    display: flex;\n")
+            .append("    gap: 15px;\n")
+            .append("    margin-bottom: 25px;\n")
+            .append("  }\n")
+            .append("  .stat-card {\n")
+            .append("    flex: 1;\n")
+            .append("    background: #f9fafb;\n")
+            .append("    border: 1px solid #e5e7eb;\n")
+            .append("    padding: 15px;\n")
+            .append("    border-radius: 8px;\n")
+            .append("    text-align: center;\n")
+            .append("  }\n")
+            .append("  .stat-val {\n")
+            .append("    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n")
+            .append("    font-size: 22px;\n")
+            .append("    font-weight: 700;\n")
+            .append("    color: #4f46e5;\n")
+            .append("  }\n")
+            .append("  .stat-lbl {\n")
+            .append("    font-size: 11px;\n")
+            .append("    color: #6b7280;\n")
+            .append("    margin-top: 3px;\n")
+            .append("  }\n")
+            .append("  table {\n")
+            .append("    width: 100%;\n")
+            .append("    border-collapse: collapse;\n")
+            .append("    margin-bottom: 25px;\n")
+            .append("    background: #ffffff;\n")
+            .append("    border-radius: 8px;\n")
+            .append("    overflow: hidden;\n")
+            .append("    border: 1px solid #e5e7eb;\n")
+            .append("  }\n")
+            .append("  th, td {\n")
+            .append("    padding: 10px 12px;\n")
+            .append("    text-align: left;\n")
+            .append("    font-size: 11px;\n")
+            .append("    border-bottom: 1px solid #e5e7eb;\n")
+            .append("  }\n")
+            .append("  th {\n")
+            .append("    background-color: rgba(79, 70, 229, 0.05);\n")
+            .append("    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;\n")
+            .append("    color: #4f46e5;\n")
+            .append("    font-weight: 600;\n")
+            .append("  }\n")
+            .append("  .badge {\n")
+            .append("    padding: 2px 6px;\n")
+            .append("    border-radius: 4px;\n")
+            .append("    font-size: 9px;\n")
+            .append("    font-weight: 600;\n")
+            .append("    display: inline-block;\n")
+            .append("  }\n")
+            .append("  .badge-security { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }\n")
+            .append("  .badge-milestone { background: #ecfeff; color: #0891b2; border: 1px solid #c5f6fa; }\n")
+            .append("  .badge-alert { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }\n")
+            .append("  .badge-info { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }\n")
+            .append("</style>\n</head>\n<body>\n")
+            .append("  <div class=\"header\">\n")
+            .append("    <div class=\"header-left\">\n")
+            .append("      <h1 class=\"title\">System Audit Logs & Security Activity Report</h1>\n")
+            .append("      <p class=\"subtitle\">Headless Playwright PDF Export | Tenant: ").append(escapeHtml(companyName)).append("</p>\n")
+            .append("    </div>\n")
+            .append("    <div class=\"header-right\">\n")
+            .append("      Date Compiled: ").append(java.time.LocalDate.now().toString()).append("<br>\n")
+            .append("      Security Level: Scoped Tenant Context\n")
+            .append("    </div>\n")
+            .append("  </div>\n")
+            .append("  <div class=\"stats-grid\">\n")
+            .append("    <div class=\"stat-card\">\n")
+            .append("      <div class=\"stat-val\">").append(totalEvents).append("</div>\n")
+            .append("      <div class=\"stat-lbl\">TOTAL EVENTS</div>\n")
+            .append("    </div>\n")
+            .append("    <div class=\"stat-card\">\n")
+            .append("      <div class=\"stat-val\">").append(securityEvents).append("</div>\n")
+            .append("      <div class=\"stat-lbl\">🛡️ SECURITY & ACCESS</div>\n")
+            .append("    </div>\n")
+            .append("    <div class=\"stat-card\">\n")
+            .append("      <div class=\"stat-val\">").append(milestoneEvents).append("</div>\n")
+            .append("      <div class=\"stat-lbl\">🎓 LEARNER MILESTONES</div>\n")
+            .append("    </div>\n")
+            .append("    <div class=\"stat-card\">\n")
+            .append("      <div class=\"stat-val\">").append(alertEvents).append("</div>\n")
+            .append("      <div class=\"stat-lbl\">⚠️ WARNINGS & ALERTS</div>\n")
+            .append("    </div>\n")
+            .append("  </div>\n")
+            .append("  <table>\n")
+            .append("    <thead>\n")
+            .append("      <tr>\n")
+            .append("        <th>Timestamp (UTC)</th>\n")
+            .append("        <th>Action Type</th>\n")
+            .append("        <th>Target Entity</th>\n")
+            .append("        <th>Actor</th>\n")
+            .append("        <th>Details</th>\n")
+            .append("      </tr>\n")
+            .append("    </thead>\n")
+            .append("    <tbody>\n");
+
+        for (AuditLogResponse log : logs) {
+            AuditAction act = log.action();
+            String badgeClass = "badge-info";
+            if (act != null) {
+                String name = act.name();
+                if (name.contains("LOGIN") || name.contains("USER") || name.contains("GROUP") || name.contains("IMPERSONATION")) {
+                    badgeClass = "badge-security";
+                } else if (name.contains("COMPLETED") || name.contains("PASSED") || name.contains("ISSUED") || name.contains("READY")) {
+                    badgeClass = "badge-milestone";
+                } else if (name.contains("OVERDUE") || name.contains("ESCALATION") || name.contains("LOCKED") || name.contains("FAILED") || name.contains("RATE_LIMITED")) {
+                    badgeClass = "badge-alert";
+                }
+            }
+
+            String targetDisplayName = log.entityDisplayName() != null ? log.entityDisplayName() : log.entityId();
+
+            html.append("      <tr>\n")
+                .append("        <td>").append(log.createdAt() != null ? log.createdAt().toString() : "").append("</td>\n")
+                .append("        <td><span class=\"badge ").append(badgeClass).append("\">").append(escapeHtml(log.actionLabel())).append("</span></td>\n")
+                .append("        <td><strong>").append(escapeHtml(log.entityType())).append("</strong><br><span style=\"color:#6b7280;font-size:9px;\">").append(escapeHtml(targetDisplayName)).append("</span></td>\n")
+                .append("        <td><strong>").append(escapeHtml(log.actorName())).append("</strong><br><span style=\"color:#9ca3af;font-size:9px;\">").append(escapeHtml(log.actorEmail())).append("</span></td>\n")
+                .append("        <td>").append(escapeHtml(log.summary())).append("</td>\n")
+                .append("      </tr>\n");
+        }
+
+        if (logs.isEmpty()) {
+            html.append("      <tr><td colspan=\"5\" style=\"text-align:center;color:#9ca3af;\">No audit logs found matching selected parameters.</td></tr>\n");
+        }
+
+        html.append("    </tbody>\n  </table>\n</body>\n</html>");
+
+        return playwrightPdfService.render(html.toString(), true); // landscape A4 format
+    }
+
+    private String escapeCsv(String val) {
+        if (val == null) {
+            return "";
+        }
+        String escaped = val.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\n") || escaped.contains("\r") || escaped.contains("\"")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
+    }
+
+    private String escapeHtml(String val) {
+        return org.springframework.web.util.HtmlUtils.htmlEscape(val == null ? "" : val);
+    }
+
+    /**
+     * Resolves the email address of the currently authenticated actor.
+     */
+    public String currentActorUserEmail() {
+        UUID actorId = com.icentric.Icentric.common.security.SecurityUtils.currentUserIdOrNull();
+        if (actorId == null) {
+            return "system@icentric.com";
+        }
+        return userRepository.findById(actorId)
+                .map(User::getEmail)
+                .orElse("system@icentric.com");
     }
 }
