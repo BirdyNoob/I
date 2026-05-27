@@ -15,6 +15,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Service
 @Slf4j
@@ -26,9 +27,13 @@ public class LearningAuditAsyncService {
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
     private final TemplateEngine templateEngine;
+    private final com.icentric.Icentric.audit.service.AuditService auditService;
 
     // Track active background report compilations to prevent duplicate execution spam
     private final java.util.Map<String, Boolean> activeCompilations = new java.util.concurrent.ConcurrentHashMap<>();
+
+    // Track the last successful email timestamps per administrator email for rate limiting
+    final java.util.Map<String, java.time.Instant> lastEmailedTimes = new java.util.concurrent.ConcurrentHashMap<>();
 
     public LearningAuditAsyncService(
             AdminAnalyticsService adminAnalyticsService,
@@ -36,7 +41,8 @@ public class LearningAuditAsyncService {
             TenantSchemaService tenantSchemaService,
             UserRepository userRepository,
             TenantRepository tenantRepository,
-            TemplateEngine templateEngine
+            TemplateEngine templateEngine,
+            com.icentric.Icentric.audit.service.AuditService auditService
     ) {
         this.adminAnalyticsService = adminAnalyticsService;
         this.emailService = emailService;
@@ -44,6 +50,7 @@ public class LearningAuditAsyncService {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
         this.templateEngine = templateEngine;
+        this.auditService = auditService;
     }
 
     /**
@@ -51,6 +58,25 @@ public class LearningAuditAsyncService {
      */
     public boolean isCompiling(String email, String tenantSlug) {
         return activeCompilations.containsKey(tenantSlug + ":" + email);
+    }
+
+    /**
+     * Returns the remaining rate limit lock duration in seconds, or 0 if free to request.
+     */
+    public long getRateLimitRemainingSeconds(String email, String tenantSlug) {
+        String jobKey = tenantSlug + ":" + email;
+        java.time.Instant lastSent = lastEmailedTimes.get(jobKey);
+        if (lastSent == null) {
+            return 0L;
+        }
+
+        long secondsElapsed = java.time.Duration.between(lastSent, java.time.Instant.now()).toSeconds();
+        long sixHoursInSeconds = 6 * 60 * 60; // 21600 seconds
+
+        if (secondsElapsed < sixHoursInSeconds) {
+            return sixHoursInSeconds - secondsElapsed;
+        }
+        return 0L;
     }
 
     @Async("playwrightTaskExecutor")
@@ -68,13 +94,14 @@ public class LearningAuditAsyncService {
         activeCompilations.put(jobKey, Boolean.TRUE);
 
         TenantContext.setTenant(tenantSlug);
+        java.util.Optional<User> adminUserOpt = java.util.Optional.empty();
         try {
             tenantSchemaService.applyCurrentTenantSearchPath();
 
-            // 1. Resolve administrator name and tenant company name dynamically
-            String adminName = userRepository.findByEmail(recipientEmail)
-                    .map(User::getName)
-                    .orElse("Administrator");
+            // 1. Resolve administrator name, ID, and tenant company name dynamically
+            adminUserOpt = userRepository.findByEmail(recipientEmail);
+            String adminName = adminUserOpt.map(User::getName).orElse("Administrator");
+            UUID adminUserId = adminUserOpt.map(User::getId).orElse(null);
 
             String tenantName = tenantRepository.findBySlug(tenantSlug)
                     .map(Tenant::getCompanyName)
@@ -119,8 +146,37 @@ public class LearningAuditAsyncService {
             emailService.sendEmailWithAttachment(recipientEmail, subject, htmlBody, attachmentBytes, filename).join();
             log.info("Asynchronous report successfully sent to {}", recipientEmail);
 
+            // Rate-limit lock for 6 hours
+            lastEmailedTimes.put(jobKey, java.time.Instant.now());
+
+            // Log successful email dispatch
+            if (adminUserId != null) {
+                String renderMode = pdfGenerationFailed ? "CSV Backup format due to Playwright rendering timeout/error" : "High-fidelity Landscape A4 PDF format";
+                auditService.logForTenant(
+                    adminUserId,
+                    com.icentric.Icentric.audit.constants.AuditAction.AUDIT_REPORT_EMAIL_SENT,
+                    "USER",
+                    adminUserId.toString(),
+                    "Corporate Learning Audit successfully compiled and emailed. Render format: " + renderMode,
+                    tenantSlug
+                );
+            }
+
         } catch (Exception e) {
             log.error("Failed to generate and email report to {}", recipientEmail, e);
+            try {
+                UUID adminUserId = adminUserOpt.map(User::getId).orElse(null);
+                if (adminUserId != null) {
+                    auditService.logForTenant(
+                        adminUserId,
+                        com.icentric.Icentric.audit.constants.AuditAction.AUDIT_REPORT_EMAIL_FAILED,
+                        "USER",
+                        adminUserId.toString(),
+                        "Corporate Learning Audit compilation or delivery failed: " + e.getMessage(),
+                        tenantSlug
+                    );
+                }
+            } catch (Exception ignored) {}
         } finally {
             activeCompilations.remove(jobKey);
             TenantContext.clear();

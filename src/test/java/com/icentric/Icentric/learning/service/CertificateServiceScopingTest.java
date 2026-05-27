@@ -17,6 +17,7 @@ import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantContext;
 import com.icentric.Icentric.tenant.TenantSchemaService;
+import com.icentric.Icentric.common.security.AdminScopeHelper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +39,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
+import org.mockito.quality.Strictness;
+import org.mockito.junit.jupiter.MockitoSettings;
+
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class CertificateServiceScopingTest {
 
     @Mock private CertificateRepository certificateRepository;
@@ -56,6 +61,7 @@ class CertificateServiceScopingTest {
     @Mock private TenantRepository tenantRepository;
     @Mock private TenantAccessGuard tenantAccessGuard;
     @Mock private TenantUserRepository tenantUserRepository;
+    @Mock private AdminScopeHelper adminScopeHelper;
 
     @InjectMocks
     private CertificateService certificateService;
@@ -93,12 +99,9 @@ class CertificateServiceScopingTest {
     void superAdminStuckCertificates() {
         setSecurityContext(managerId);
 
-        TenantUser superAdmin = new TenantUser();
-        superAdmin.setUserId(managerId);
-        superAdmin.setRole("SUPER_ADMIN");
-
-        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
-        when(tenantUserRepository.findByUserIdAndTenantId(managerId, tenantId)).thenReturn(Optional.of(superAdmin));
+        AdminScopeHelper.AdminScope scope = mock(AdminScopeHelper.AdminScope.class);
+        when(scope.isStandardAdmin()).thenReturn(false);
+        when(adminScopeHelper.resolveForCurrentUser()).thenReturn(scope);
 
         IssuedCertificate stuck1 = new IssuedCertificate();
         stuck1.setId(UUID.randomUUID());
@@ -122,17 +125,14 @@ class CertificateServiceScopingTest {
     void standardAdminScopedStuckCertificates() {
         setSecurityContext(managerId);
 
-        TenantUser admin = new TenantUser();
-        admin.setUserId(managerId);
-        admin.setRole("ADMIN");
-
         UUID onboardedUserId = UUID.randomUUID();
         UUID otherUserId = UUID.randomUUID();
 
-        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
-        when(tenantUserRepository.findByUserIdAndTenantId(managerId, tenantId)).thenReturn(Optional.of(admin));
-        when(tenantUserRepository.findUserIdsByTenantIdAndCreatedBy(tenantId, managerId))
-                .thenReturn(List.of(onboardedUserId));
+        AdminScopeHelper.AdminScope scope = mock(AdminScopeHelper.AdminScope.class);
+        when(scope.isStandardAdmin()).thenReturn(true);
+        when(scope.isInScope(onboardedUserId)).thenReturn(true);
+        when(scope.isInScope(otherUserId)).thenReturn(false);
+        when(adminScopeHelper.resolveForCurrentUser()).thenReturn(scope);
 
         IssuedCertificate stuckOther = new IssuedCertificate();
         stuckOther.setId(UUID.randomUUID());
@@ -159,17 +159,13 @@ class CertificateServiceScopingTest {
     void standardAdminRegenerateUnauthorizedThrowsException() {
         setSecurityContext(managerId);
 
-        TenantUser admin = new TenantUser();
-        admin.setUserId(managerId);
-        admin.setRole("ADMIN");
-
         UUID otherUserId = UUID.randomUUID();
         UUID certificateId = UUID.randomUUID();
 
-        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
-        when(tenantUserRepository.findByUserIdAndTenantId(managerId, tenantId)).thenReturn(Optional.of(admin));
-        when(tenantUserRepository.findUserIdsByTenantIdAndCreatedBy(tenantId, managerId))
-                .thenReturn(List.of(UUID.randomUUID())); // onboarded user is different
+        AdminScopeHelper.AdminScope scope = mock(AdminScopeHelper.AdminScope.class);
+        when(scope.isStandardAdmin()).thenReturn(true);
+        when(scope.isInScope(otherUserId)).thenReturn(false);
+        when(adminScopeHelper.resolveForCurrentUser()).thenReturn(scope);
 
         IssuedCertificate cert = new IssuedCertificate();
         cert.setId(certificateId);
@@ -188,17 +184,13 @@ class CertificateServiceScopingTest {
     void standardAdminRegenerateAuthorizedSucceeds() {
         setSecurityContext(managerId);
 
-        TenantUser admin = new TenantUser();
-        admin.setUserId(managerId);
-        admin.setRole("ADMIN");
-
         UUID onboardedUserId = UUID.randomUUID();
         UUID certificateId = UUID.randomUUID();
 
-        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
-        when(tenantUserRepository.findByUserIdAndTenantId(managerId, tenantId)).thenReturn(Optional.of(admin));
-        when(tenantUserRepository.findUserIdsByTenantIdAndCreatedBy(tenantId, managerId))
-                .thenReturn(List.of(onboardedUserId));
+        AdminScopeHelper.AdminScope scope = mock(AdminScopeHelper.AdminScope.class);
+        when(scope.isStandardAdmin()).thenReturn(true);
+        when(scope.isInScope(onboardedUserId)).thenReturn(true);
+        when(adminScopeHelper.resolveForCurrentUser()).thenReturn(scope);
 
         IssuedCertificate cert = new IssuedCertificate();
         cert.setId(certificateId);

@@ -25,15 +25,18 @@ public class AdminAnalyticsController {
     private final AdminAnalyticsService service;
     private final AssignmentService assignmentService;
     private final LearningAuditAsyncService learningAuditAsyncService;
+    private final com.icentric.Icentric.audit.service.AuditService auditService;
 
     public AdminAnalyticsController(
             AdminAnalyticsService service,
             AssignmentService assignmentService,
-            LearningAuditAsyncService learningAuditAsyncService
+            LearningAuditAsyncService learningAuditAsyncService,
+            com.icentric.Icentric.audit.service.AuditService auditService
     ) {
         this.service = service;
         this.assignmentService = assignmentService;
         this.learningAuditAsyncService = learningAuditAsyncService;
+        this.auditService = auditService;
     }
 
     @Operation(summary = "Get overall overview", description = "Retrieves high-level analytics overview metrics for the admin dashboard.")
@@ -129,11 +132,50 @@ public class AdminAnalyticsController {
     ) {
         String recipientEmail = service.currentActorUserEmail();
         String tenantSlug = com.icentric.Icentric.tenant.TenantContext.getTenant();
+        UUID actorUserId = com.icentric.Icentric.common.security.SecurityUtils.currentUserIdOrNull();
 
+        // 1. Enforce active compilation debouncing
         if (learningAuditAsyncService.isCompiling(recipientEmail, tenantSlug)) {
             String busyMessage = "A Corporate Learning Audit report compilation is already in progress for your account. Please check your inbox shortly.";
             return ResponseEntity.status(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS)
                     .body(new LearningAuditEmailResponse(false, busyMessage, recipientEmail));
+        }
+
+        // 2. Enforce 6-hour request rate-limiting
+        long remainingSeconds = learningAuditAsyncService.getRateLimitRemainingSeconds(recipientEmail, tenantSlug);
+        if (remainingSeconds > 0) {
+            long hours = remainingSeconds / 3600;
+            long minutes = (remainingSeconds % 3600) / 60;
+            String limitMessage = String.format(
+                "To prevent system spam, you can only request this report once every 6 hours. " +
+                "You can request another report in %d hours and %d minutes.", 
+                hours, minutes
+            );
+
+            // Log Rate-Limited Audit Event
+            if (actorUserId != null) {
+                auditService.log(
+                    actorUserId,
+                    com.icentric.Icentric.audit.constants.AuditAction.AUDIT_REPORT_EMAIL_RATE_LIMITED,
+                    "USER",
+                    actorUserId.toString(),
+                    "Report request rate-limited. Time remaining: " + hours + "h " + minutes + "m."
+                );
+            }
+
+            return ResponseEntity.status(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new LearningAuditEmailResponse(false, limitMessage, recipientEmail));
+        }
+
+        // 3. Log Queued Audit Event
+        if (actorUserId != null) {
+            auditService.log(
+                actorUserId,
+                com.icentric.Icentric.audit.constants.AuditAction.AUDIT_REPORT_EMAIL_QUEUED,
+                "USER",
+                actorUserId.toString(),
+                "Corporate Learning Audit compilation triggered and queued."
+            );
         }
 
         learningAuditAsyncService.compileAndEmailReport(recipientEmail, search, department, category, tenantSlug, false);

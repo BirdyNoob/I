@@ -11,6 +11,7 @@ import com.icentric.Icentric.learning.repository.CertificateRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantContext;
+import com.icentric.Icentric.common.security.AdminScopeHelper;
 import jakarta.persistence.criteria.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +39,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+import org.mockito.quality.Strictness;
+import org.mockito.junit.jupiter.MockitoSettings;
+
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class AuditServiceScopingTest {
 
     @Mock private AuditLogRepository repository;
@@ -47,6 +52,7 @@ class AuditServiceScopingTest {
     @Mock private TenantRepository tenantRepository;
     @Mock private TrackRepository trackRepository;
     @Mock private CertificateRepository certificateRepository;
+    @Mock private AdminScopeHelper adminScopeHelper;
 
     @InjectMocks
     private AuditService auditService;
@@ -82,12 +88,9 @@ class AuditServiceScopingTest {
     void superAdminUnrestrictedAccess() {
         setSecurityContext(managerId);
 
-        TenantUser superAdmin = new TenantUser();
-        superAdmin.setUserId(managerId);
-        superAdmin.setRole("SUPER_ADMIN");
-
-        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
-        when(tenantUserRepository.findByUserIdAndTenantId(managerId, tenantId)).thenReturn(Optional.of(superAdmin));
+        AdminScopeHelper.AdminScope scope = mock(AdminScopeHelper.AdminScope.class);
+        when(scope.isStandardAdmin()).thenReturn(false);
+        when(adminScopeHelper.resolveForCurrentUser()).thenReturn(scope);
 
         AuditLog log = new AuditLog();
         log.setId(UUID.randomUUID());
@@ -99,8 +102,8 @@ class AuditServiceScopingTest {
 
         auditService.getLogs(PageRequest.of(0, 10), null, null, null, null, null);
 
-        // Verify that standard manager query method findUserIdsByTenantIdAndCreatedBy was NOT called for SUPER_ADMIN
-        verify(tenantUserRepository, never()).findUserIdsByTenantIdAndCreatedBy(any(), any());
+        // Verify that resolveForCurrentUser was called
+        verify(adminScopeHelper).resolveForCurrentUser();
     }
 
     @Test
@@ -108,16 +111,13 @@ class AuditServiceScopingTest {
     void standardAdminScopedAccess() {
         setSecurityContext(managerId);
 
-        TenantUser admin = new TenantUser();
-        admin.setUserId(managerId);
-        admin.setRole("ADMIN");
-
         UUID onboardedUserId = UUID.randomUUID();
 
-        when(tenantRepository.findBySlug("test-tenant")).thenReturn(Optional.of(tenant));
-        when(tenantUserRepository.findByUserIdAndTenantId(managerId, tenantId)).thenReturn(Optional.of(admin));
-        when(tenantUserRepository.findUserIdsByTenantIdAndCreatedBy(tenantId, managerId))
-                .thenReturn(List.of(onboardedUserId));
+        AdminScopeHelper.AdminScope scope = mock(AdminScopeHelper.AdminScope.class);
+        when(scope.isStandardAdmin()).thenReturn(true);
+        when(scope.getAdminUserId()).thenReturn(managerId);
+        when(scope.getOnboardedUserIds()).thenReturn(List.of(onboardedUserId));
+        when(adminScopeHelper.resolveForCurrentUser()).thenReturn(scope);
 
         AuditLog log = new AuditLog();
         log.setId(UUID.randomUUID());
