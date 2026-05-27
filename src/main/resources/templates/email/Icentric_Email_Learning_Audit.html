@@ -105,8 +105,11 @@
                     <p style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#334155;margin:0 0 10px 0;">
                       Hello <strong th:text="${adminName}">Administrator</strong>,
                     </p>
-                    <p style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
-                      Your B2B SaaS learning analytics compiler has compiled a detailed compliance ledger and excellence score index. Please find the high-fidelity landscape A4 PDF report attached to this email.
+                    <p th:if="${isScheduled}" style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
+                      Your weekly Corporate Learning Audit &amp; Talent Excellence Report for <strong th:text="${tenantName}">Acme Corp</strong> is ready. Please find the complete PDF report attached to this email.
+                    </p>
+                    <p th:if="${!isScheduled}" style="font-family:'Inter',sans-serif;font-size:15px;line-height:1.65;color:#475569;margin:0 0 20px 0;">
+                      The Corporate Learning Audit &amp; Talent Excellence Report you requested for <strong th:text="${tenantName}">Acme Corp</strong> has been successfully compiled. Please find the complete PDF report attached to this email.
                     </p>
 
                   </td>
