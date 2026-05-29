@@ -5,6 +5,7 @@ import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantSchemaService;
+import com.icentric.Icentric.common.ratelimit.DatabaseRateLimiterService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ class AuditLogsAsyncServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private TenantRepository tenantRepository;
     @Mock private TemplateEngine templateEngine;
+    @Mock private DatabaseRateLimiterService databaseRateLimiterService;
 
     @InjectMocks
     private AuditLogsAsyncService asyncService;
@@ -52,7 +54,7 @@ class AuditLogsAsyncServiceTest {
         assertThat(asyncService.isCompiling(email, tenantSlug)).isFalse();
 
         // Simulate active compilation key entry manually since maps are package-private / internal
-        String jobKey = tenantSlug + ":" + email;
+        when(databaseRateLimiterService.acquireLock(eq("AUDIT_LOGS_EMAIL:" + email), any())).thenReturn(true);
         asyncService.compileAndEmailLogs(
                 email, null, null, null, null, null, tenantSlug
         );
@@ -63,35 +65,22 @@ class AuditLogsAsyncServiceTest {
     @Test
     @DisplayName("getRateLimitRemainingSeconds returns 0 when no previous emails have been successfully dispatched")
     void getRateLimitRemainingSeconds_defaultsToZero() {
+        when(databaseRateLimiterService.getRemainingSeconds("AUDIT_LOGS_EMAIL:" + email)).thenReturn(0L);
         assertThat(asyncService.getRateLimitRemainingSeconds(email, tenantSlug)).isEqualTo(0L);
     }
 
     @Test
     @DisplayName("getRateLimitRemainingSeconds returns correct remaining cooldown when requested within the 6-hour window")
     void getRateLimitRemainingSeconds_calculatesRemainingCooldown() {
-        String jobKey = tenantSlug + ":" + email;
-        
-        // Record email dispatch exactly 2 hours ago
-        Instant twoHoursAgo = Instant.now().minus(java.time.Duration.ofHours(2));
-        asyncService.lastEmailedTimes.put(jobKey, twoHoursAgo);
-
+        when(databaseRateLimiterService.getRemainingSeconds("AUDIT_LOGS_EMAIL:" + email)).thenReturn(14400L);
         long remaining = asyncService.getRateLimitRemainingSeconds(email, tenantSlug);
-        
-        // Cooldown is 6 hours (21600 seconds). After 2 hours, remaining should be around 4 hours (14400 seconds)
-        assertThat(remaining)
-                .isGreaterThan(14300L)
-                .isLessThanOrEqualTo(14400L);
+        assertThat(remaining).isEqualTo(14400L);
     }
 
     @Test
     @DisplayName("getRateLimitRemainingSeconds returns 0 when the 6-hour rate-limiting lock has expired")
     void getRateLimitRemainingSeconds_returnsZeroAfterExpiration() {
-        String jobKey = tenantSlug + ":" + email;
-        
-        // Record email dispatch exactly 7 hours ago (lock is expired)
-        Instant sevenHoursAgo = Instant.now().minus(java.time.Duration.ofHours(7));
-        asyncService.lastEmailedTimes.put(jobKey, sevenHoursAgo);
-
+        when(databaseRateLimiterService.getRemainingSeconds("AUDIT_LOGS_EMAIL:" + email)).thenReturn(0L);
         long remaining = asyncService.getRateLimitRemainingSeconds(email, tenantSlug);
         assertThat(remaining).isEqualTo(0L);
     }

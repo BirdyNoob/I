@@ -170,6 +170,7 @@ class ModuleProgressTrackingTest {
         com.icentric.Icentric.platform.tenant.service.TenantProvisioningService tenantProvisioningService = mock(com.icentric.Icentric.platform.tenant.service.TenantProvisioningService.class);
         com.icentric.Icentric.audit.service.AuditService auditService = mock(com.icentric.Icentric.audit.service.AuditService.class);
         com.icentric.Icentric.audit.service.AuditMetadataService auditMetadataService = mock(com.icentric.Icentric.audit.service.AuditMetadataService.class);
+        XpService xpService = mock(XpService.class);
         EntityManager entityManager = mock(EntityManager.class);
         jakarta.persistence.Query nativeQuery = mock(jakarta.persistence.Query.class);
         when(entityManager.createNativeQuery(anyString())).thenReturn(nativeQuery);
@@ -184,7 +185,8 @@ class ModuleProgressTrackingTest {
                 moduleRepository,
                 auditService,
                 auditMetadataService,
-                moduleProgressRepository
+                moduleProgressRepository,
+                xpService
         );
 
         com.icentric.Icentric.tenant.TenantContext.setTenant("acme");

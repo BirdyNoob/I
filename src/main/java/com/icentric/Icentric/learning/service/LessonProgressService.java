@@ -38,6 +38,7 @@ public class LessonProgressService {
     private final AuditService auditService;
     private final AuditMetadataService auditMetadataService;
     private final ModuleProgressRepository moduleProgressRepository;
+    private final XpService xpService;
 
     public LessonProgressService(
             LessonProgressRepository repository,
@@ -49,7 +50,8 @@ public class LessonProgressService {
             ModuleRepository moduleRepository,
             AuditService auditService,
             AuditMetadataService auditMetadataService,
-            ModuleProgressRepository moduleProgressRepository
+            ModuleProgressRepository moduleProgressRepository,
+            XpService xpService
     ) {
         this.repository = repository;
         this.entityManager = entityManager;
@@ -61,6 +63,7 @@ public class LessonProgressService {
         this.auditService = auditService;
         this.auditMetadataService = auditMetadataService;
         this.moduleProgressRepository = moduleProgressRepository;
+        this.xpService = xpService;
     }
 
     @Transactional
@@ -143,6 +146,11 @@ public class LessonProgressService {
                     userId, AuditAction.LESSON_COMPLETED, "LESSON", lessonId.toString(),
                     auditMetadataService.describeUserInCurrentTenant(userId) + " completed lesson " + lessonId
             );
+            try {
+                xpService.triggerXpEvent(userId, "LESSON_COMPLETED", "LESSON", lessonId, 0, false);
+            } catch (Exception e) {
+                // Log and continue to not block completion
+            }
             checkAndCompleteTrack(userId, trackId);
         }
 
@@ -207,6 +215,11 @@ public class LessonProgressService {
                             + " completed lesson " + request.lessonId()
                             + " in " + auditMetadataService.describeTrack(trackId)
             );
+            try {
+                xpService.triggerXpEvent(userId, "LESSON_COMPLETED", "LESSON", request.lessonId(), 0, false);
+            } catch (Exception e) {
+                // Log and continue
+            }
         } else {
             auditService.log(
                     userId,
@@ -306,6 +319,11 @@ public class LessonProgressService {
                             + " completed " + auditMetadataService.describeTrack(trackId)
                             + " after finishing " + completedLessons + " lessons"
             );
+            try {
+                xpService.triggerXpEvent(userId, "COURSE_COMPLETED", "COURSE", trackId, 0, false);
+            } catch (Exception e) {
+                // Log and continue
+            }
         }
     }
 

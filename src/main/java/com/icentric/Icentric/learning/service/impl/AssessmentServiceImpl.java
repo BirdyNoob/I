@@ -32,6 +32,8 @@ import java.util.stream.Collectors;
 import jakarta.persistence.EntityManager;
 import org.springframework.security.access.AccessDeniedException;
 
+import com.icentric.Icentric.learning.service.XpService;
+
 @Service
 @RequiredArgsConstructor
 @lombok.extern.slf4j.Slf4j
@@ -53,6 +55,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     private final TenantSchemaService tenantSchemaService;
     private final EntityManager entityManager;
     private final AuditService auditService;
+    private final XpService xpService;
 
     // No cooldown: manager reset is the only way to unblock a user who exhausted retakes.
 
@@ -724,6 +727,15 @@ public class AssessmentServiceImpl implements AssessmentService {
                 "Submitted final assessment: " + assessmentTitle + " - Score: " + score + "%, Status: " + status + " (Attempt #" + attempt.getAttemptNumber() + ")"
         );
         log.info("Assessment submitted: userId={}, assessmentId={}, attemptNumber={}, score={}%, status={}", userId, assessmentId, attempt.getAttemptNumber(), score, status);
+
+        if ("PASSED".equals(status)) {
+            boolean isFirstAttempt = (attempt.getAttemptNumber() == null || attempt.getAttemptNumber() == 1);
+            try {
+                xpService.triggerXpEvent(userId, "QUIZ_PASSED", "ASSESSMENT", UUID.fromString(assessmentId), score, isFirstAttempt);
+            } catch (Exception e) {
+                log.error("Failed to trigger XP event for quiz passed, userId: {}", userId, e);
+            }
+        }
 
         // ── Certificate: trigger real issuance via CertificateService ──────────
         CertificateResultDto certDto = null;

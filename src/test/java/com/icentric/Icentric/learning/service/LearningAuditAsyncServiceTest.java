@@ -5,17 +5,22 @@ import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantSchemaService;
 import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.common.ratelimit.DatabaseRateLimiterService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.quality.Strictness;
+import org.mockito.junit.jupiter.MockitoSettings;
 import org.thymeleaf.TemplateEngine;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class LearningAuditAsyncServiceTest {
 
     @Mock private AdminAnalyticsService adminAnalyticsService;
@@ -25,11 +30,16 @@ class LearningAuditAsyncServiceTest {
     @Mock private TenantRepository tenantRepository;
     @Mock private TemplateEngine templateEngine;
     @Mock private AuditService auditService;
+    @Mock private DatabaseRateLimiterService databaseRateLimiterService;
 
     private LearningAuditAsyncService service;
+    private String email;
+    private String tenantSlug;
 
     @BeforeEach
     void setUp() {
+        email = "admin@test.com";
+        tenantSlug = "my-tenant";
         service = new LearningAuditAsyncService(
                 adminAnalyticsService,
                 emailService,
@@ -37,44 +47,37 @@ class LearningAuditAsyncServiceTest {
                 userRepository,
                 tenantRepository,
                 templateEngine,
-                auditService
+                auditService,
+                databaseRateLimiterService
         );
     }
 
     @Test
     @DisplayName("isCompiling returns false initially for untracked requests")
     void isCompiling_returnsFalseInitially() {
-        assertThat(service.isCompiling("admin@test.com", "my-tenant")).isFalse();
+        assertThat(service.isCompiling(email, tenantSlug)).isFalse();
     }
 
     @Test
     @DisplayName("getRateLimitRemainingSeconds returns 0 initially for untracked requests")
     void getRateLimitRemainingSeconds_returnsZeroInitially() {
-        assertThat(service.getRateLimitRemainingSeconds("admin@test.com", "my-tenant")).isEqualTo(0L);
+        when(databaseRateLimiterService.getRemainingSeconds("LEARNING_AUDIT_EMAIL:" + email)).thenReturn(0L);
+        assertThat(service.getRateLimitRemainingSeconds(email, tenantSlug)).isEqualTo(0L);
     }
 
     @Test
     @DisplayName("getRateLimitRemainingSeconds calculates remaining seconds when locked under 6 hours")
     void getRateLimitRemainingSeconds_returnsCorrectSecondsRemaining() {
-        String jobKey = "my-tenant:admin@test.com";
-        // Lock 1 hour ago
-        java.time.Instant oneHourAgo = java.time.Instant.now().minusSeconds(3600);
-        service.lastEmailedTimes.put(jobKey, oneHourAgo);
-
-        long remaining = service.getRateLimitRemainingSeconds("admin@test.com", "my-tenant");
-        // Expecting around 5 hours (18000 seconds), allow 10 seconds boundary buffer
-        assertThat(remaining).isBetween(17900L, 18000L);
+        when(databaseRateLimiterService.getRemainingSeconds("LEARNING_AUDIT_EMAIL:" + email)).thenReturn(18000L);
+        long remaining = service.getRateLimitRemainingSeconds(email, tenantSlug);
+        assertThat(remaining).isEqualTo(18000L);
     }
 
     @Test
     @DisplayName("getRateLimitRemainingSeconds returns 0 once the 6 hours expire")
     void getRateLimitRemainingSeconds_returnsZeroAfterExpiry() {
-        String jobKey = "my-tenant:admin@test.com";
-        // Lock 7 hours ago
-        java.time.Instant sevenHoursAgo = java.time.Instant.now().minusSeconds(7 * 3600);
-        service.lastEmailedTimes.put(jobKey, sevenHoursAgo);
-
-        long remaining = service.getRateLimitRemainingSeconds("admin@test.com", "my-tenant");
+        when(databaseRateLimiterService.getRemainingSeconds("LEARNING_AUDIT_EMAIL:" + email)).thenReturn(0L);
+        long remaining = service.getRateLimitRemainingSeconds(email, tenantSlug);
         assertThat(remaining).isEqualTo(0L);
     }
 }

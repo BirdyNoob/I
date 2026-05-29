@@ -7,6 +7,7 @@ import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.tenant.TenantContext;
 import com.icentric.Icentric.tenant.TenantSchemaService;
+import com.icentric.Icentric.common.ratelimit.DatabaseRateLimiterService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -28,12 +29,10 @@ public class LearningAuditAsyncService {
     private final TenantRepository tenantRepository;
     private final TemplateEngine templateEngine;
     private final com.icentric.Icentric.audit.service.AuditService auditService;
+    private final DatabaseRateLimiterService databaseRateLimiterService;
 
     // Track active background report compilations to prevent duplicate execution spam
     private final java.util.Map<String, Boolean> activeCompilations = new java.util.concurrent.ConcurrentHashMap<>();
-
-    // Track the last successful email timestamps per administrator email for rate limiting
-    final java.util.Map<String, java.time.Instant> lastEmailedTimes = new java.util.concurrent.ConcurrentHashMap<>();
 
     public LearningAuditAsyncService(
             AdminAnalyticsService adminAnalyticsService,
@@ -42,7 +41,8 @@ public class LearningAuditAsyncService {
             UserRepository userRepository,
             TenantRepository tenantRepository,
             TemplateEngine templateEngine,
-            com.icentric.Icentric.audit.service.AuditService auditService
+            com.icentric.Icentric.audit.service.AuditService auditService,
+            DatabaseRateLimiterService databaseRateLimiterService
     ) {
         this.adminAnalyticsService = adminAnalyticsService;
         this.emailService = emailService;
@@ -51,6 +51,7 @@ public class LearningAuditAsyncService {
         this.tenantRepository = tenantRepository;
         this.templateEngine = templateEngine;
         this.auditService = auditService;
+        this.databaseRateLimiterService = databaseRateLimiterService;
     }
 
     /**
@@ -63,20 +64,10 @@ public class LearningAuditAsyncService {
     /**
      * Returns the remaining rate limit lock duration in seconds, or 0 if free to request.
      */
+    @Transactional(readOnly = true)
     public long getRateLimitRemainingSeconds(String email, String tenantSlug) {
-        String jobKey = tenantSlug + ":" + email;
-        java.time.Instant lastSent = lastEmailedTimes.get(jobKey);
-        if (lastSent == null) {
-            return 0L;
-        }
-
-        long secondsElapsed = java.time.Duration.between(lastSent, java.time.Instant.now()).toSeconds();
-        long sixHoursInSeconds = 6 * 60 * 60; // 21600 seconds
-
-        if (secondsElapsed < sixHoursInSeconds) {
-            return sixHoursInSeconds - secondsElapsed;
-        }
-        return 0L;
+        tenantSchemaService.applyCurrentTenantSearchPath();
+        return databaseRateLimiterService.getRemainingSeconds("LEARNING_AUDIT_EMAIL:" + email);
     }
 
     @Async("playwrightTaskExecutor")
@@ -147,7 +138,7 @@ public class LearningAuditAsyncService {
             log.info("Asynchronous report successfully sent to {}", recipientEmail);
 
             // Rate-limit lock for 6 hours
-            lastEmailedTimes.put(jobKey, java.time.Instant.now());
+            databaseRateLimiterService.acquireLock("LEARNING_AUDIT_EMAIL:" + recipientEmail, java.time.Duration.ofHours(6));
 
             // Log successful email dispatch
             if (adminUserId != null) {
