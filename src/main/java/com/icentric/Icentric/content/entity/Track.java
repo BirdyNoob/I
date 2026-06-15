@@ -25,7 +25,9 @@ public class Track {
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     private com.icentric.Icentric.common.enums.Department department;
 
-    private String trackType;
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @jakarta.persistence.Column(name = "course_type")
+    private com.icentric.Icentric.content.constants.CourseType courseType;
 
     private Integer estimatedMins;
 

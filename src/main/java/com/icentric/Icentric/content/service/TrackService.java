@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -54,6 +55,7 @@ public class TrackService {
     private final com.icentric.Icentric.identity.repository.UserRepository userRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final AssessmentConfigRepository assessmentConfigRepository;
+    private final com.icentric.Icentric.common.mail.EmailService emailService;
 
     public TrackService(
             TrackRepository repository,
@@ -72,7 +74,8 @@ public class TrackService {
             com.icentric.Icentric.learning.service.AssignmentService assignmentService,
             com.icentric.Icentric.identity.repository.UserRepository userRepository,
             com.fasterxml.jackson.databind.ObjectMapper objectMapper,
-            AssessmentConfigRepository assessmentConfigRepository
+            AssessmentConfigRepository assessmentConfigRepository,
+            com.icentric.Icentric.common.mail.EmailService emailService
     ) {
         this.repository = repository;
         this.moduleRepository = moduleRepository;
@@ -91,23 +94,25 @@ public class TrackService {
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
         this.assessmentConfigRepository = assessmentConfigRepository;
+        this.emailService = emailService;
     }
 
     // ── Admin: create track ────────────────────────────────────────────────────
 
     @Transactional
     public Track createTrack(CreateTrackRequest request) {
-        if (!repository.findBySlugOrderByVersionDesc(request.slug()).isEmpty()) {
-            throw new IllegalStateException("Track slug already exists: " + request.slug());
+        String slug = generateSlug(request.title());
+        if (!repository.findBySlugOrderByVersionDesc(slug).isEmpty()) {
+            slug = slug + "-" + UUID.randomUUID().toString().substring(0, 6);
         }
 
         Track track = new Track();
         track.setId(UUID.randomUUID());
-        track.setSlug(request.slug());
+        track.setSlug(slug);
         track.setTitle(request.title());
         track.setDescription(request.description());
         track.setDepartment(request.department());
-        track.setTrackType(request.trackType());
+        track.setCourseType(request.courseType());
         track.setEstimatedMins(request.estimatedMins());
         track.setIsMandatory(request.isMandatory());
         track.setVersion(1);
@@ -187,7 +192,6 @@ public class TrackService {
                                         l.getTitle(),
                                         l.getEstimatedMins(),
                                         l.getSortOrder(),
-                                        l.getIsPublished(),
                                         stepResponses
                                 );
                             })
@@ -208,7 +212,7 @@ public class TrackService {
                 track.getTitle(),
                 track.getDescription(),
                 track.getDepartment() != null ? track.getDepartment().name() : null,
-                track.getTrackType(),
+                track.getCourseType() != null ? track.getCourseType().name() : null,
                 track.getEstimatedMins(),
                 track.getIsPublished(),
                 track.getIsMandatory(),
@@ -350,7 +354,7 @@ public class TrackService {
         cloned.setTitle(source.getTitle());
         cloned.setDescription(source.getDescription());
         cloned.setDepartment(source.getDepartment());
-        cloned.setTrackType(source.getTrackType());
+        cloned.setCourseType(source.getCourseType());
         cloned.setEstimatedMins(source.getEstimatedMins());
         cloned.setIsMandatory(source.getIsMandatory());
         cloned.setVersion(version);
@@ -382,7 +386,6 @@ public class TrackService {
                 clonedLesson.setModuleId(savedModule.getId());
                 clonedLesson.setTitle(lesson.getTitle());
                 clonedLesson.setSortOrder(lesson.getSortOrder());
-                clonedLesson.setIsPublished(lesson.getIsPublished());
                 clonedLesson.setEstimatedMins(lesson.getEstimatedMins());
                 clonedLesson.setCreatedAt(Instant.now());
                 Lesson savedLesson = lessonRepository.save(clonedLesson);
@@ -465,7 +468,7 @@ public class TrackService {
             List<Tenant> tenants = tenantRepository.findAll();
             for (Tenant tenant : tenants) {
                 TenantContext.setTenant(tenant.getSlug());
-                entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + tenant.getSlug()).executeUpdate();
+                entityManager.createNativeQuery("SET LOCAL search_path TO \"tenant_" + tenant.getSlug() + "\"").executeUpdate();
 
                 List<UserAssignment> assignments = assignmentRepository.findByTrackIdIn(priorTrackIds);
                 for (UserAssignment assignment : assignments) {
@@ -480,7 +483,7 @@ public class TrackService {
         } finally {
             if (originalTenant != null && !originalTenant.isBlank()) {
                 TenantContext.setTenant(originalTenant);
-                entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + originalTenant).executeUpdate();
+                entityManager.createNativeQuery("SET LOCAL search_path TO \"tenant_" + originalTenant + "\"").executeUpdate();
             } else {
                 TenantContext.clear();
                 entityManager.createNativeQuery("SET LOCAL search_path TO public").executeUpdate();
@@ -523,47 +526,52 @@ public class TrackService {
             List<Tenant> tenants = tenantRepository.findAll();
             for (Tenant tenant : tenants) {
                 TenantContext.setTenant(tenant.getSlug());
-                entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + tenant.getSlug()).executeUpdate();
+                entityManager.createNativeQuery("SET LOCAL search_path TO \"tenant_" + tenant.getSlug() + "\"").executeUpdate();
 
-                List<com.icentric.Icentric.identity.entity.TenantUser> memberships =
+                // Find tenant admins to notify about new content
+                List<com.icentric.Icentric.identity.entity.TenantUser> admins =
                         tenantUserRepository.findByTenantId(tenant.getId())
                                 .stream()
-                                .filter(m -> track.getDepartment().equals(m.getDepartment()))
-                                .filter(m -> "LEARNER".equals(m.getRole()))
+                                .filter(m -> "SUPER_ADMIN".equals(m.getRole()) || "ADMIN".equals(m.getRole()))
                                 .toList();
 
-                if (memberships.isEmpty()) continue;
+                if (admins.isEmpty()) continue;
 
-                List<UUID> userIds = memberships.stream().map(com.icentric.Icentric.identity.entity.TenantUser::getUserId).toList();
-                List<com.icentric.Icentric.identity.entity.User> users = userRepository.findByIdIn(userIds);
+                List<UUID> adminUserIds = admins.stream().map(com.icentric.Icentric.identity.entity.TenantUser::getUserId).toList();
+                List<com.icentric.Icentric.identity.entity.User> adminUsers = userRepository.findByIdIn(adminUserIds);
 
-                for (com.icentric.Icentric.identity.entity.User user : users) {
-                    if (Boolean.TRUE.equals(user.getIsActive())) {
-                        boolean alreadyAssigned = assignmentRepository.findByUserIdAndTrackId(user.getId(), track.getId()).isPresent();
-                        if (!alreadyAssigned) {
-                            UserAssignment assignment = new UserAssignment();
-                            assignment.setId(UUID.randomUUID());
-                            assignment.setUserId(user.getId());
-                            assignment.setTrackId(track.getId());
-                            assignment.setContentVersionAtAssignment(track.getVersion());
-                            assignment.setStatus(com.icentric.Icentric.learning.constants.AssignmentStatus.ASSIGNED);
-                            assignment.setAssignedAt(Instant.now());
-                            assignment.setDueDate(Instant.now().plus(7, ChronoUnit.DAYS));
-                            
-                            assignmentRepository.save(assignment);
-                            assignmentService.sendTrackAssignedNotification(user, track.getTitle(), tenant.getCompanyName(), tenant.getSlug(), null);
-                        }
+                for (com.icentric.Icentric.identity.entity.User admin : adminUsers) {
+                    if (Boolean.TRUE.equals(admin.getIsActive())) {
+                        emailService.sendTemplateEmail(
+                                admin.getEmail(),
+                                "New Content Published — " + track.getTitle(),
+                                "AISafe_Email_NewContent_Published",
+                                Map.of(
+                                        "adminName", admin.getName() != null ? admin.getName() : admin.getEmail(),
+                                        "trackTitle", track.getTitle(),
+                                        "department", track.getDepartment().name(),
+                                        "companyName", tenant.getCompanyName(),
+                                        "assignUrl", "http://localhost:3000/admin/assignments?tenant=" + tenant.getSlug()
+                                )
+                        );
                     }
                 }
             }
         } finally {
             if (originalTenant != null && !originalTenant.isBlank()) {
                 TenantContext.setTenant(originalTenant);
-                entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + originalTenant).executeUpdate();
+                entityManager.createNativeQuery("SET LOCAL search_path TO \"tenant_" + originalTenant + "\"").executeUpdate();
             } else {
                 TenantContext.clear();
                 entityManager.createNativeQuery("SET LOCAL search_path TO public").executeUpdate();
             }
         }
+    }
+
+    private String generateSlug(String title) {
+        return title.toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-|-$", "")
+                .replaceAll("-{2,}", "-");
     }
 }

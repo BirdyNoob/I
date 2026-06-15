@@ -34,7 +34,7 @@ public class PlatformAuthController {
         this.mfaService = mfaService;
     }
 
-    @Operation(summary = "Platform admin login", description = "Authenticates a platform admin and returns a JWT token.")
+    @Operation(summary = "Platform admin login", description = "Authenticates a platform admin and returns access + refresh tokens.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successfully logged in"),
             @ApiResponse(responseCode = "400", description = "Invalid login credentials or request payload"),
@@ -43,6 +43,33 @@ public class PlatformAuthController {
     @PostMapping("/login")
     public PlatformLoginResponse login(@Valid @RequestBody PlatformLoginRequest request) { // Fix #5: @Valid
         return authService.login(request);
+    }
+
+    @Operation(summary = "Refresh access token", description = "Exchanges a valid refresh token for a new access + refresh token pair.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "New token pair issued"),
+            @ApiResponse(responseCode = "401", description = "Invalid or expired refresh token")
+    })
+    @PostMapping("/refresh")
+    public PlatformLoginResponse refresh(@RequestBody java.util.Map<String, String> body) {
+        String refreshToken = body.get("refreshToken");
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new IllegalArgumentException("refreshToken is required");
+        }
+        return authService.refresh(refreshToken);
+    }
+
+    @Operation(summary = "Logout", description = "Revokes the refresh token to prevent further use.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Successfully logged out")
+    })
+    @PostMapping("/logout")
+    public org.springframework.http.ResponseEntity<Void> logout(@RequestBody java.util.Map<String, String> body) {
+        String refreshToken = body.get("refreshToken");
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            authService.logout(refreshToken);
+        }
+        return org.springframework.http.ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Enroll in MFA", description = "Generates an MFA secret and returns a QR code image for a platform admin.")

@@ -407,7 +407,7 @@ public class PlatformDashboardService {
         if (slug == null || slug.isBlank() || !slug.matches("[a-zA-Z0-9_-]+")) {
             throw new IllegalArgumentException("Invalid tenant slug: " + slug);
         }
-        entityManager.createNativeQuery("SET search_path TO tenant_" + slug).executeUpdate();
+        entityManager.createNativeQuery("SET search_path TO \"tenant_" + slug + "\"").executeUpdate();
     }
 
     private String percentTrend(long delta, long baseline) {

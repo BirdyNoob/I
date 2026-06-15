@@ -8,6 +8,8 @@ import com.icentric.Icentric.platform.admin.entity.PlatformAdmin;
 import com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository;
 import com.icentric.Icentric.security.JwtService;
 import com.icentric.Icentric.security.MfaService;
+import com.icentric.Icentric.security.RefreshToken;
+import com.icentric.Icentric.security.RefreshTokenService;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,18 +22,21 @@ public class PlatformAuthService {
     private final JwtService jwtService;
     private final MfaService mfaService;
     private final AuditService auditService;
+    private final RefreshTokenService refreshTokenService;
 
     public PlatformAuthService(
             PlatformAdminRepository repository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             MfaService mfaService,
-            AuditService auditService) {
+            AuditService auditService,
+            RefreshTokenService refreshTokenService) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.mfaService = mfaService;
         this.auditService = auditService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     public PlatformLoginResponse login(PlatformLoginRequest request) {
@@ -54,9 +59,15 @@ public class PlatformAuthService {
             }
         }
 
-        String token = jwtService.generateToken(
+        String accessToken = jwtService.generateToken(
                 admin.getEmail(),
                 admin.getId(),
+                "ROLE_PLATFORM_ADMIN",
+                "system");
+
+        String refreshToken = refreshTokenService.create(
+                admin.getId(),
+                admin.getEmail(),
                 "ROLE_PLATFORM_ADMIN",
                 "system");
 
@@ -70,6 +81,31 @@ public class PlatformAuthService {
                 "system"
         );
 
-        return new PlatformLoginResponse(token);
+        return new PlatformLoginResponse(accessToken, refreshToken);
+    }
+
+    public PlatformLoginResponse refresh(String refreshToken) {
+        RefreshToken stored = refreshTokenService.validate(refreshToken);
+
+        // Rotate: revoke old, issue new pair
+        refreshTokenService.revoke(refreshToken);
+
+        String newAccessToken = jwtService.generateToken(
+                stored.getEmail(),
+                stored.getUserId(),
+                stored.getRole(),
+                stored.getTenantSlug());
+
+        String newRefreshToken = refreshTokenService.create(
+                stored.getUserId(),
+                stored.getEmail(),
+                stored.getRole(),
+                stored.getTenantSlug());
+
+        return new PlatformLoginResponse(newAccessToken, newRefreshToken);
+    }
+
+    public void logout(String refreshToken) {
+        refreshTokenService.revoke(refreshToken);
     }
 }

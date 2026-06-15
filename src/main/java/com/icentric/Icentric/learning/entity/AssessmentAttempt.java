@@ -55,4 +55,8 @@ public class AssessmentAttempt {
 
     @Column(name = "started_at")
     private Instant startedAt;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "selected_question_ids", columnDefinition = "jsonb")
+    private java.util.List<String> selectedQuestionIds;
 }

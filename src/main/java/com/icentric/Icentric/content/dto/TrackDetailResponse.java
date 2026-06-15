@@ -10,7 +10,7 @@ public record TrackDetailResponse(
         String title,
         String description,
         String department,
-        String trackType,
+        String courseType,
         Integer estimatedMins,
         Boolean isPublished,
         Boolean isMandatory,

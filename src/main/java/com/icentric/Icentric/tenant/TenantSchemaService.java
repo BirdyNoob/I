@@ -52,11 +52,11 @@ public class TenantSchemaService {
             if (!suffix.matches("[a-zA-Z0-9_-]+")) {
                 throw new IllegalArgumentException("Invalid tenant schema: " + tenant);
             }
-            return tenant;
+            return "\"" + tenant + "\"";
         }
         if (!tenant.matches("[a-zA-Z0-9_-]+")) {
             throw new IllegalArgumentException("Invalid tenant slug: " + tenant);
         }
-        return "tenant_" + tenant;
+        return "\"tenant_" + tenant + "\"";
     }
 }

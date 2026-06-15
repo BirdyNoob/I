@@ -439,12 +439,14 @@ public class AssessmentServiceImpl implements AssessmentService {
         String currentStatus = "NEW";
         Integer timeRemaining = null;
         List<AnswerSubmissionDto> savedAnswers = null;
+        List<String> selectedQuestionIds = null;
 
         if (inProgressAttempt != null) {
             resumeAttemptId = inProgressAttempt.getId().toString();
             currentStatus = "IN_PROGRESS";
             timeRemaining = inProgressAttempt.getTimeRemainingSeconds();
             savedAnswers = inProgressAttempt.getSavedAnswers();
+            selectedQuestionIds = inProgressAttempt.getSelectedQuestionIds();
             // Do not increment attempt number if we are resuming
             attemptNumber = inProgressAttempt.getAttemptNumber() != null ? inProgressAttempt.getAttemptNumber() : attemptNumber;
         } else {
@@ -458,6 +460,17 @@ public class AssessmentServiceImpl implements AssessmentService {
             newAttempt.setQuestionsAnswered(0);
             newAttempt.setScore(0);
             newAttempt.setStartedAt(Instant.now());
+
+            // Shuffle and select 50 questions from the question bank
+            List<JsonNode> allQuestionNodes = extractAllQuestionNodes(configData);
+            List<String> allIds = allQuestionNodes.stream()
+                    .map(q -> q.path("questionId").asText())
+                    .collect(Collectors.toList());
+            Collections.shuffle(allIds);
+            int selectCount = Math.min(50, allIds.size());
+            selectedQuestionIds = allIds.subList(0, selectCount);
+            newAttempt.setSelectedQuestionIds(new ArrayList<>(selectedQuestionIds));
+
             assessmentAttemptRepository.save(newAttempt);
 
             String assessmentTitle = configData.path("title").asText("Assessment");
@@ -468,11 +481,9 @@ public class AssessmentServiceImpl implements AssessmentService {
                     assessmentId,
                     "Started final assessment: " + assessmentTitle + " (Attempt #" + attemptNumber + ")"
             );
-            log.info("Assessment started: userId={}, assessmentId={}, attemptNumber={}", userId, assessmentId, attemptNumber);
+            log.info("Assessment started: userId={}, assessmentId={}, attemptNumber={}, questionsSelected={}", userId, assessmentId, attemptNumber, selectCount);
 
             resumeAttemptId = newAttempt.getId().toString();
-            // Keep currentStatus as "NEW" so the frontend knows it's a fresh start, 
-            // even though the attempt is stored as IN_PROGRESS in the database.
             currentStatus = "NEW";
         }
 
@@ -480,7 +491,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                 .id(config.getId())
                 .title(configData.path("title").asText("Assessment"))
                 .trackName(configData.path("trackName").asText(config.getTrackId()))
-                .totalQuestions(configObj.path("totalQuestions").asInt())
+                .totalQuestions(selectedQuestionIds != null ? selectedQuestionIds.size() : configObj.path("totalQuestions").asInt())
                 .timeLimitMinutes(configObj.path("timeLimitSeconds").asInt(3600) / 60)
                 .passingScorePercent(configObj.path("passingScore").asInt())
                 .retakesAllowed(configObj.path("retakePolicy").asText("UNLIMITED"))
@@ -495,8 +506,13 @@ public class AssessmentServiceImpl implements AssessmentService {
 
         List<AssessmentRenderQuestionDto> questions = new ArrayList<>();
         List<JsonNode> questionNodes = extractAllQuestionNodes(configData);
+
+        // Filter to only the selected 50 questions for this attempt
+        Set<String> selectedSet = selectedQuestionIds != null ? new HashSet<>(selectedQuestionIds) : Collections.emptySet();
         
         for (JsonNode qNode : questionNodes) {
+            String qId = qNode.path("questionId").asText();
+            if (!selectedSet.isEmpty() && !selectedSet.contains(qId)) continue;
             List<AssessmentRenderOptionDto> options = new ArrayList<>();
             JsonNode optionsNode = qNode.path("options");
             if (optionsNode.isArray()) {
@@ -621,14 +637,39 @@ public class AssessmentServiceImpl implements AssessmentService {
                 
         boolean alreadyPassed = priorAttempts.stream()
                 .anyMatch(a -> "PASSED".equalsIgnoreCase(a.getStatus()));
-        // Grading using correctOptionId
+        // Grading using correctOptionId — only grade selected questions
         int correctCount = 0;
         List<JsonNode> questionNodes = extractAllQuestionNodes(cfgData);
+
+        // Resolve the attempt early to get selectedQuestionIds for grading
+        AssessmentAttempt attempt = null;
+        if (request.getAttemptId() != null && !request.getAttemptId().isBlank()) {
+            try {
+                UUID attemptId = UUID.fromString(request.getAttemptId());
+                attempt = assessmentAttemptRepository.findById(attemptId).orElse(null);
+            } catch (IllegalArgumentException ignored) {}
+        }
+        if (attempt == null) {
+            attempt = priorAttempts.stream()
+                    .filter(a -> "IN_PROGRESS".equals(a.getStatus()))
+                    .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
+                    .orElse(null);
+        }
+
+        // Filter questions to only the selected set for this attempt
+        Set<String> selectedSet = (attempt != null && attempt.getSelectedQuestionIds() != null)
+                ? new HashSet<>(attempt.getSelectedQuestionIds()) : Collections.emptySet();
         
+        // Use selected count as totalQuestions for scoring
+        int gradedTotal = selectedSet.isEmpty() ? totalQuestions : selectedSet.size();
+
         if (request.getAnswers() != null) {
             for (com.icentric.Icentric.learning.dto.assessment.AnswerSubmissionDto answer : request.getAnswers()) {
                 String questionId = answer.getQuestionId();
                 String selectedOptionId = answer.getSelectedOptionId();
+                
+                // Only grade if this question is in the selected set (or no selection exists for backward compat)
+                if (!selectedSet.isEmpty() && !selectedSet.contains(questionId)) continue;
                 
                 for (JsonNode qNode : questionNodes) {
                     if (qNode.path("questionId").asText().equals(questionId)) {
@@ -642,11 +683,11 @@ public class AssessmentServiceImpl implements AssessmentService {
             }
         }
         
-        int score        = totalQuestions > 0 ? (int) ((correctCount * 100.0) / totalQuestions) : 0;
+        int score        = gradedTotal > 0 ? (int) ((correctCount * 100.0) / gradedTotal) : 0;
         int passingScore = configObj.path("passingScore").asInt(80);
         String status    = score >= passingScore ? "PASSED" : "FAILED";
 
-        List<AssessmentAttempt> existing = assessmentAttemptRepository.findByUserIdAndAssessmentConfigId(userId, assessmentId);
+        List<AssessmentAttempt> existing = priorAttempts;
         int attemptNumber = existing.size() + 1;
 
         AssessmentAttempt previousAttempt = existing.stream()
@@ -663,21 +704,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         }
 
         // ── Persist attempt ──────────────────────────────────────────────────────
-        AssessmentAttempt attempt = null;
-        if (request.getAttemptId() != null && !request.getAttemptId().isBlank()) {
-            try {
-                UUID attemptId = UUID.fromString(request.getAttemptId());
-                attempt = assessmentAttemptRepository.findById(attemptId).orElse(null);
-            } catch (IllegalArgumentException ignored) {}
-        }
-        
-        // If not explicitly provided, see if there is an IN_PROGRESS attempt we should finalize
-        if (attempt == null) {
-            attempt = existing.stream()
-                    .filter(a -> "IN_PROGRESS".equals(a.getStatus()))
-                    .max(Comparator.comparing(AssessmentAttempt::getAttemptNumber, Comparator.nullsFirst(Comparator.naturalOrder())))
-                    .orElse(null);
-        }
+        // attempt already resolved above for grading
 
         // Strict Immutability Guard: finalized attempts cannot be tampered with or resubmitted
         if (attempt != null && !"IN_PROGRESS".equals(attempt.getStatus())) {
@@ -704,7 +731,7 @@ public class AssessmentServiceImpl implements AssessmentService {
         attempt.setScore(score);
         attempt.setDateCompleted(Instant.now());
         attempt.setQuestionsAnswered(request.getAnswers() != null ? request.getAnswers().size() : 0);
-        attempt.setTotalQuestions(totalQuestions);
+        attempt.setTotalQuestions(gradedTotal);
         attempt.setSavedAnswers(request.getAnswers());
 
         
@@ -826,9 +853,14 @@ public class AssessmentServiceImpl implements AssessmentService {
 
         List<com.icentric.Icentric.learning.dto.assessment.AssessmentQuestionReviewDto> reviewQuestions = new ArrayList<>();
         List<JsonNode> questionNodes = extractAllQuestionNodes(cfgData);
+
+        // Filter to only the selected questions for this attempt
+        Set<String> selectedSet = (bestAttempt.getSelectedQuestionIds() != null)
+                ? new HashSet<>(bestAttempt.getSelectedQuestionIds()) : Collections.emptySet();
         
         for (JsonNode qNode : questionNodes) {
             String qId = qNode.path("questionId").asText();
+            if (!selectedSet.isEmpty() && !selectedSet.contains(qId)) continue;
             String correctOptionId = qNode.path("correctOptionId").asText();
             String selectedOptionId = answerMap.get(qId);
             boolean isCorrect = correctOptionId.equals(selectedOptionId);
@@ -1036,6 +1068,6 @@ public class AssessmentServiceImpl implements AssessmentService {
             throw new IllegalArgumentException("Invalid tenant slug: " + tenantSlug);
         }
         String schema = "tenant_" + tenantSlug;
-        entityManager.createNativeQuery("SET search_path TO " + schema).executeUpdate();
+        entityManager.createNativeQuery("SET search_path TO \"" + schema + "\"").executeUpdate();
     }
 }

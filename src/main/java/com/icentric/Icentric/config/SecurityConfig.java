@@ -53,6 +53,8 @@ public class SecurityConfig {
                 .requestMatchers(
                         "/api/v1/platform/auth/login",
                         "/api/v1/platform/auth/mfa/enroll",
+                        "/api/v1/platform/auth/refresh",
+                        "/api/v1/platform/auth/logout",
                         "/api/v1/auth/login",
                         "/api/v1/auth/refresh",
                         "/api/v1/auth/logout",

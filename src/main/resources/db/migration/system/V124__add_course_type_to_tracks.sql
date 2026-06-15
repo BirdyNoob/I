@@ -1,0 +1,1 @@
+ALTER TABLE system.tracks ADD COLUMN IF NOT EXISTS course_type VARCHAR(20) DEFAULT 'CORE';

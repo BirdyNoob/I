@@ -1,6 +1,7 @@
 package com.icentric.Icentric.learning.entity;
 
 import com.icentric.Icentric.learning.constants.CertificateStatus;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -30,4 +31,12 @@ public class IssuedCertificate {
     private Instant issuedAt;
     private Instant generatedAt;
     private String generationError;
+
+    /**
+     * Tracks how many times the automated {@code CertificateRetryScheduler} has attempted
+     * to regenerate this certificate. Capped at {@code 3} — records beyond this limit are
+     * left in FAILED state and must be resolved by an admin manually.
+     */
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount = 0;
 }

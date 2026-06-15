@@ -68,7 +68,7 @@ public class AssignmentScheduler {
         TenantContext.setTenant(tenantSlug);
 
         entityManager.createNativeQuery(
-                "SET LOCAL search_path TO tenant_" + tenantSlug
+                "SET LOCAL search_path TO \"tenant_" + tenantSlug + "\""
         ).executeUpdate();
 
         try {

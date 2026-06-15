@@ -31,14 +31,6 @@ public class LessonProgress {
     @Column(name = "completed_step_ids", columnDefinition = "jsonb")
     private java.util.List<UUID> completedStepIds = new java.util.ArrayList<>();
 
-    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
-    @Column(name = "simulation_scores", columnDefinition = "jsonb")
-    private java.util.Map<String, Integer> simulationScores = new java.util.HashMap<>();
-
-    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
-    @Column(name = "decision_history", columnDefinition = "jsonb")
-    private java.util.Map<String, Object> decisionHistory = new java.util.HashMap<>();
-
     public LessonProgress() {}
 
     // getters setters

@@ -82,7 +82,6 @@ public class TenantService {
     }
 
     public Tenant createTenant(
-            String slug,
             String companyName,
             String plan,
             Integer maxSeats,
@@ -90,8 +89,11 @@ public class TenantService {
             String adminPassword
     ) {
 
+        String slug = generateSlug(companyName);
+
         if (tenantRepository.findBySlug(slug).isPresent()) {
-            throw new IllegalStateException("Tenant slug already exists: " + slug);
+            // Append random suffix if slug already taken
+            slug = slug + "-" + UUID.randomUUID().toString().substring(0, 6);
         }
 
         Tenant tenant = new Tenant(slug, companyName);
@@ -435,7 +437,7 @@ public class TenantService {
         if (slug == null || slug.isBlank() || !slug.matches("[a-zA-Z0-9_-]+")) {
             throw new IllegalArgumentException("Invalid tenant slug: " + slug);
         }
-        entityManager.createNativeQuery("SET search_path TO tenant_" + slug).executeUpdate();
+        entityManager.createNativeQuery("SET search_path TO \"tenant_" + slug + "\"").executeUpdate();
     }
 
     private String logoFor(String companyName, String slug) {
@@ -476,5 +478,12 @@ public class TenantService {
 
     private UUID currentActorUserId() {
         return SecurityUtils.currentUserIdOrNull();
+    }
+
+    private String generateSlug(String companyName) {
+        return companyName.toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-|-$", "")
+                .replaceAll("-{2,}", "-");
     }
 }

@@ -21,7 +21,7 @@ public class TenantProvisioningService {
 
         String schemaName = "tenant_" + slug;
 
-        jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
+        jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS \"" + schemaName + "\"");
 
         Flyway.configure()
                 .dataSource(dataSource)

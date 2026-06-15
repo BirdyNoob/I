@@ -516,7 +516,22 @@ public class UserService {
                 "John Smith,john.smith@example.com,ADMIN,Sales\n";
     }
 
+    private volatile byte[] cachedBulkUploadInstructionsPdf;
+
     public byte[] getBulkUploadInstructionsPdf() {
+        if (cachedBulkUploadInstructionsPdf != null) {
+            return cachedBulkUploadInstructionsPdf;
+        }
+        synchronized (this) {
+            if (cachedBulkUploadInstructionsPdf != null) {
+                return cachedBulkUploadInstructionsPdf;
+            }
+            cachedBulkUploadInstructionsPdf = generateBulkUploadInstructionsPdf();
+            return cachedBulkUploadInstructionsPdf;
+        }
+    }
+
+    private byte[] generateBulkUploadInstructionsPdf() {
         StringBuilder deptsHtml = new StringBuilder();
         for (Department dept : Department.values()) {
             deptsHtml.append("            <div class=\"chip\">")

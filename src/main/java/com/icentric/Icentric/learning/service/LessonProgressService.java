@@ -254,7 +254,7 @@ public class LessonProgressService {
                 throw new IllegalArgumentException("Invalid tenant slug: " + tenant);
             }
             tenantProvisioningService.provisionTenantSchema(tenant);
-            entityManager.createNativeQuery("SET LOCAL search_path TO tenant_" + tenant).executeUpdate();
+            entityManager.createNativeQuery("SET LOCAL search_path TO \"tenant_" + tenant + "\"").executeUpdate();
         }
     }
 

@@ -26,6 +26,7 @@ public class CheatSheetService {
     private final TenantSchemaService tenantSchemaService;
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository lessonProgressRepository;
+    private final com.icentric.Icentric.content.repository.ModuleRepository moduleRepository;
 
     public CheatSheetService(
             CheatSheetRepository repository,
@@ -33,7 +34,8 @@ public class CheatSheetService {
             UserAssignmentRepository assignmentRepository,
             TenantSchemaService tenantSchemaService,
             LessonRepository lessonRepository,
-            LessonProgressRepository lessonProgressRepository
+            LessonProgressRepository lessonProgressRepository,
+            com.icentric.Icentric.content.repository.ModuleRepository moduleRepository
     ) {
         this.repository = repository;
         this.objectMapper = objectMapper;
@@ -41,6 +43,7 @@ public class CheatSheetService {
         this.tenantSchemaService = tenantSchemaService;
         this.lessonRepository = lessonRepository;
         this.lessonProgressRepository = lessonProgressRepository;
+        this.moduleRepository = moduleRepository;
     }
 
     // ── ADMIN ─────────────────────────────────────────────────────────────────
@@ -200,6 +203,8 @@ public class CheatSheetService {
 
         if (cs.getModuleId() != null) {
             response.put("moduleId", cs.getModuleId());
+            moduleRepository.findById(cs.getModuleId())
+                    .ifPresent(m -> response.put("moduleName", m.getTitle()));
         }
         if (cs.getDescription() != null) {
             response.put("description", cs.getDescription());

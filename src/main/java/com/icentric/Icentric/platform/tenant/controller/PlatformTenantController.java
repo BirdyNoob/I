@@ -45,7 +45,6 @@ public class PlatformTenantController {
     @PreAuthorize("hasAuthority('ROLE_PLATFORM_ADMIN')")
     public Tenant createTenant(@Valid @RequestBody CreateTenantRequest request) { // Fix #5: @Valid
         return tenantService.createTenant(
-                request.slug(),
                 request.companyName(),
                 request.plan(),
                 request.maxSeats(),

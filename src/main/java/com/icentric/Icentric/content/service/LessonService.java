@@ -75,7 +75,6 @@ public class LessonService {
         lesson.setTitle(request.title());
         lesson.setEstimatedMins(request.estimatedMins());
         lesson.setSortOrder(request.sortOrder());
-        lesson.setIsPublished(false);
         lesson.setCreatedAt(Instant.now());
 
         Lesson saved = repository.save(lesson);
@@ -150,19 +149,6 @@ public class LessonService {
     }
 
     /**
-     * Soft-publishes a lesson (makes it visible to learners).
-     */
-    @Transactional
-    public LessonDetailResponse publishLesson(UUID lessonId) {
-        Lesson lesson = repository.findById(lessonId)
-                .orElseThrow(() -> new NoSuchElementException("Lesson not found: " + lessonId));
-        assertTrackEditableByLesson(lesson);
-        lesson.setIsPublished(true);
-        Lesson saved = repository.save(lesson);
-        logLessonAction(AuditAction.PUBLISH_LESSON, saved, "published lesson");
-        return toDetailResponse(saved, null); // admin publish — no learner context
-    }
-
     /**
      * Fetches a specific step within a lesson.
      *

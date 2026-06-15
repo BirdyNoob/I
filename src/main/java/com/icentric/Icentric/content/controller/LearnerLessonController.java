@@ -98,22 +98,6 @@ public class LearnerLessonController {
         return service.updateLesson(lessonId, request);
     }
 
-    // ── PATCH publish lesson (platform admin) ─────────────────────────────────
-
-    @Operation(summary = "Publish a lesson", description = "Marks a lesson as published so learners can see it.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Lesson published"),
-            @ApiResponse(responseCode = "403", description = "Forbidden"),
-            @ApiResponse(responseCode = "404", description = "Lesson not found")
-    })
-    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
-    @PatchMapping("/{lessonId}/publish")
-    public LessonDetailResponse publishLesson(
-            @Parameter(description = "UUID of the lesson") @PathVariable UUID lessonId
-    ) {
-        return service.publishLesson(lessonId);
-    }
-
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private UUID extractUserId(Authentication authentication) {

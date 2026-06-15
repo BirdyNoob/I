@@ -19,6 +19,14 @@ public interface IssuedCertificateRepository
     List<IssuedCertificate> findByUserIdIn(List<UUID> userIds);
     List<IssuedCertificate> findByStatus(com.icentric.Icentric.learning.constants.CertificateStatus status);
     long countByIssuedAtAfter(java.time.Instant issuedAt);
+
+    /**
+     * Finds PENDING certificates whose {@code issuedAt} timestamp is older than
+     * {@code threshold}. These are certificates where the async generation task
+     * silently died (no FAILED transition) and need to be re-queued by the retry scheduler.
+     */
+    @Query("SELECT ic FROM IssuedCertificate ic WHERE ic.status = 'PENDING' AND ic.issuedAt < :threshold")
+    List<IssuedCertificate> findPendingOlderThan(java.time.Instant threshold);
     @Query("SELECT COUNT(ic) FROM IssuedCertificate ic WHERE ic.userId IN :userIds AND ic.issuedAt > :issuedAt")
     long countByUserIdInAndIssuedAtAfter(List<UUID> userIds, java.time.Instant issuedAt);
     boolean existsByUserIdAndTrackId(UUID userId, UUID trackId);

@@ -22,8 +22,6 @@ public class Lesson {
 
     private Integer sortOrder;
 
-    private Boolean isPublished;
-
     private Instant createdAt;
 
     public Lesson() {}

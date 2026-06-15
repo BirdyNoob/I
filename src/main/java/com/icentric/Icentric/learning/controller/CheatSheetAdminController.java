@@ -68,10 +68,40 @@ public class CheatSheetAdminController {
     }
 
     /**
+     * Create or update a cheat sheet for a specific module (moduleId from path).
+     * No need to include moduleId in the body.
+     */
+    @Operation(summary = "Create or update a cheat sheet for a module",
+               description = "moduleId is taken from the path — no need to include it in the body")
+    @PostMapping("/module/{moduleId}")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public ResponseEntity<Map<String, Object>> createForModule(
+            @PathVariable UUID moduleId,
+            @RequestBody Map<String, Object> payload) {
+        payload.put("moduleId", moduleId.toString());
+        return ResponseEntity.ok(service.createOrUpdateCheatSheet(payload));
+    }
+
+    /**
+     * Bulk create cheat sheets for a specific module (moduleId from path).
+     * No need to include moduleId in each payload.
+     */
+    @Operation(summary = "Bulk create cheat sheets for a module",
+               description = "moduleId is applied to all sheets from the path")
+    @PostMapping("/module/{moduleId}/bulk")
+    @PreAuthorize("hasRole('PLATFORM_ADMIN')")
+    public ResponseEntity<List<Map<String, Object>>> createBulkForModule(
+            @PathVariable UUID moduleId,
+            @RequestBody List<Map<String, Object>> payloads) {
+        payloads.forEach(p -> p.put("moduleId", moduleId.toString()));
+        return ResponseEntity.ok(service.createOrUpdateCheatSheets(payloads));
+    }
+
+    /**
      * Get cheat sheets for a specific module.
      */
     @Operation(summary = "Get cheat sheets for a specific module")
-    @GetMapping("/by-module/{moduleId}")
+    @GetMapping("/module/{moduleId}")
     @PreAuthorize("hasRole('PLATFORM_ADMIN')")
     public ResponseEntity<List<Map<String, Object>>> getByModule(@PathVariable UUID moduleId) {
         return ResponseEntity.ok(service.getCheatSheetsByModule(moduleId));

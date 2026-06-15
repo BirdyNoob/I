@@ -8,6 +8,5 @@ public record LessonResponse(
         String title,
         Integer estimatedMins,
         Integer sortOrder,
-        Boolean isPublished,
         List<LessonStepResponse> steps
 ) {}
