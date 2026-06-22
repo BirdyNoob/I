@@ -32,7 +32,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -98,14 +97,7 @@ public class PlatformDashboardService {
                 .collect(Collectors.toSet());
 
         long newTenants = tenantRepository.countByCreatedAtAfter(Instant.now().minus(30, ChronoUnit.DAYS));
-        int avgPassRate = clamp(completionRate + 7);
-
-        List<Integer> completionTrend = buildCompletionTrend(completionRate);
-        List<List<Integer>> tenantBenchmarks = tenantAggregates.stream()
-                .sorted((a, b) -> Integer.compare(b.completion(), a.completion()))
-                .limit(2)
-                .map(aggregate -> buildCompletionTrend(aggregate.completion()))
-                .toList();
+        int avgPassRate = totalAssignments > 0 ? percentage(completedAssignments, totalAssignments) : 0;
 
         List<CrossTenantAnalyticsResponse.TrackPerformanceItem> trackPerformance = buildTrackPerformance(tenantAggregates);
         CrossTenantAnalyticsResponse.AssessmentScatter assessmentScatter = buildAssessmentScatter(tenantAggregates);
@@ -124,8 +116,8 @@ public class PlatformDashboardService {
                         ),
                         new CrossTenantAnalyticsResponse.KpiMetric(
                                 completionRate,
-                                ppTrendLabel(completionRate -  Math.max(0, completionRate - 3)),
-                                "up"
+                                completionRate + "%",
+                                completionRate >= 60 ? "up" : "neutral"
                         ),
                         new CrossTenantAnalyticsResponse.KpiMetric(
                                 certsIssued,
@@ -149,11 +141,6 @@ public class PlatformDashboardService {
                         )
                 ),
                 new CrossTenantAnalyticsResponse.Charts(
-                        new CrossTenantAnalyticsResponse.CompletionTrend(
-                                Arrays.asList("W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12"),
-                                completionTrend,
-                                tenantBenchmarks
-                        ),
                         trackPerformance,
                         assessmentScatter
                 ),
@@ -467,58 +454,73 @@ public class PlatformDashboardService {
     }
 
     private Map<String, Integer> buildDepartmentCompletionMap() {
-        return userAssignmentRepository.findAll().stream()
-                .collect(Collectors.groupingBy(
-                        ua -> "Core",
-                        Collectors.collectingAndThen(Collectors.toList(), list -> percentage(
-                                list.stream().filter(ua -> ua.getStatus() == AssignmentStatus.COMPLETED).count(),
-                                list.size()
-                        ))
-                ));
-    }
+        // Real data: group assignments by user's department via TenantUser
+        List<com.icentric.Icentric.learning.entity.UserAssignment> assignments = userAssignmentRepository.findAll();
+        if (assignments.isEmpty()) return Map.of();
 
-    private List<Integer> buildCompletionTrend(int finalValue) {
-        List<Integer> values = new ArrayList<>();
-        int start = Math.max(20, finalValue - 30);
-        for (int i = 0; i < 12; i++) {
-            double progress = i / 11.0;
-            int value = (int) Math.round(start + ((finalValue - start) * progress));
-            values.add(clamp(value));
+        // Get user→department mapping for current schema
+        Map<java.util.UUID, String> userDeptMap = tenantUserRepository.findAll().stream()
+                .filter(tu -> tu.getDepartment() != null)
+                .collect(Collectors.toMap(
+                        com.icentric.Icentric.identity.entity.TenantUser::getUserId,
+                        tu -> tu.getDepartment().getDisplayName(),
+                        (a, b) -> a
+                ));
+
+        Map<String, List<com.icentric.Icentric.learning.entity.UserAssignment>> byDept = assignments.stream()
+                .filter(ua -> userDeptMap.containsKey(ua.getUserId()))
+                .collect(Collectors.groupingBy(ua -> userDeptMap.get(ua.getUserId())));
+
+        Map<String, Integer> result = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, List<com.icentric.Icentric.learning.entity.UserAssignment>> entry : byDept.entrySet()) {
+            long completed = entry.getValue().stream()
+                    .filter(ua -> ua.getStatus() == AssignmentStatus.COMPLETED).count();
+            result.put(entry.getKey(), percentage(completed, entry.getValue().size()));
         }
-        return values;
+        return result;
     }
 
     private List<CrossTenantAnalyticsResponse.TrackPerformanceItem> buildTrackPerformance(List<TenantAggregate> aggregates) {
-        int completion = percentage(
-                aggregates.stream().mapToLong(TenantAggregate::completedAssignments).sum(),
-                aggregates.stream().mapToLong(TenantAggregate::totalAssignments).sum()
-        );
-        return List.of(
-                new CrossTenantAnalyticsResponse.TrackPerformanceItem("Core", clamp(completion + 14)),
-                new CrossTenantAnalyticsResponse.TrackPerformanceItem("HR", clamp(completion + 9)),
-                new CrossTenantAnalyticsResponse.TrackPerformanceItem("Finance", clamp(completion + 6)),
-                new CrossTenantAnalyticsResponse.TrackPerformanceItem("Engineering", clamp(completion + 1)),
-                new CrossTenantAnalyticsResponse.TrackPerformanceItem("Support", clamp(completion - 4)),
-                new CrossTenantAnalyticsResponse.TrackPerformanceItem("Sales", clamp(completion - 10)),
-                new CrossTenantAnalyticsResponse.TrackPerformanceItem("Executive", clamp(completion - 18))
-        );
+        // Real data: use actual department completion from all tenants
+        Map<String, List<Integer>> deptCompletions = new java.util.LinkedHashMap<>();
+        for (TenantAggregate agg : aggregates) {
+            for (Map.Entry<String, Integer> entry : agg.deptCompletion().entrySet()) {
+                deptCompletions.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+            }
+        }
+        if (deptCompletions.isEmpty()) {
+            // Fallback: use published track count as single item
+            long published = trackRepository.countByIsPublishedTrue();
+            return List.of(new CrossTenantAnalyticsResponse.TrackPerformanceItem("All Tracks",
+                    percentage(aggregates.stream().mapToLong(TenantAggregate::completedAssignments).sum(),
+                               aggregates.stream().mapToLong(TenantAggregate::totalAssignments).sum())));
+        }
+        return deptCompletions.entrySet().stream()
+                .map(e -> new CrossTenantAnalyticsResponse.TrackPerformanceItem(
+                        e.getKey(),
+                        (int) Math.round(e.getValue().stream().mapToInt(Integer::intValue).average().orElse(0))
+                ))
+                .sorted((a, b) -> Integer.compare(b.percentage(), a.percentage()))
+                .limit(8)
+                .toList();
     }
 
     private CrossTenantAnalyticsResponse.AssessmentScatter buildAssessmentScatter(List<TenantAggregate> aggregates) {
-        List<CrossTenantAnalyticsResponse.ScatterPoint> standard = aggregates.stream()
-                .limit(6)
-                .map(a -> new CrossTenantAnalyticsResponse.ScatterPoint(
-                        round1(Math.max(1.0, 4.5 - (a.completion() / 25.0))),
-                        clamp(a.completion() + 8)
-                ))
-                .toList();
-        List<CrossTenantAnalyticsResponse.ScatterPoint> needsReview = aggregates.stream()
-                .limit(4)
-                .map(a -> new CrossTenantAnalyticsResponse.ScatterPoint(
-                        round1(Math.min(5.0, 2.8 + (a.overdueAssignments() / 10.0))),
-                        clamp(a.completion() - 25)
-                ))
-                .toList();
+        // Real data: standard = tenants with pass rate >= 60, needsReview = tenants with pass rate < 60
+        List<CrossTenantAnalyticsResponse.ScatterPoint> standard = new ArrayList<>();
+        List<CrossTenantAnalyticsResponse.ScatterPoint> needsReview = new ArrayList<>();
+        for (TenantAggregate a : aggregates) {
+            if (a.totalAssignments() == 0) continue;
+            double passRate = 100.0 * a.completedAssignments() / a.totalAssignments();
+            double overdueRate = a.totalAssignments() > 0 ? 100.0 * a.overdueAssignments() / a.totalAssignments() : 0;
+            CrossTenantAnalyticsResponse.ScatterPoint point = new CrossTenantAnalyticsResponse.ScatterPoint(
+                    round1(overdueRate), (int) Math.round(passRate));
+            if (passRate >= 60) {
+                standard.add(point);
+            } else {
+                needsReview.add(point);
+            }
+        }
         return new CrossTenantAnalyticsResponse.AssessmentScatter(standard, needsReview);
     }
 
@@ -537,74 +539,86 @@ public class PlatformDashboardService {
                     aggregate.tenant().getPlan(),
                     aggregate.users(),
                     aggregate.completion(),
-                    clamp(aggregate.completion() + 9),
+                    aggregate.completion(),
                     riskScore,
                     riskScore <= 30 ? "Low" : (riskScore <= 60 ? "Medium" : "High"),
-                    aggregate.certsIssued(),
-                    buildSparkline(aggregate.completion())
+                    aggregate.certsIssued()
             ));
         }
         return comparison;
     }
 
     private List<CrossTenantAnalyticsResponse.RiskHeatmapItem> buildRiskHeatmap(List<TenantAggregate> aggregates) {
-        int base = percentage(
-                aggregates.stream().mapToLong(TenantAggregate::completedAssignments).sum(),
-                aggregates.stream().mapToLong(TenantAggregate::totalAssignments).sum()
-        );
-        return List.of(
-                new CrossTenantAnalyticsResponse.RiskHeatmapItem("Core", clamp(base + 12), clamp(base + 18), clamp(base + 14)),
-                new CrossTenantAnalyticsResponse.RiskHeatmapItem("Engineering", clamp(base + 3), clamp(base - 12), clamp(base + 7))
-        );
+        // Real data: aggregate department completion across all tenants
+        Map<String, List<Integer>> deptScores = new java.util.LinkedHashMap<>();
+        for (TenantAggregate agg : aggregates) {
+            for (Map.Entry<String, Integer> entry : agg.deptCompletion().entrySet()) {
+                deptScores.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+            }
+        }
+        return deptScores.entrySet().stream()
+                .map(e -> {
+                    int avg = (int) Math.round(e.getValue().stream().mapToInt(Integer::intValue).average().orElse(0));
+                    // Use the same real completion as proxy for all three dimensions
+                    // (until separate topic-level tracking is implemented)
+                    return new CrossTenantAnalyticsResponse.RiskHeatmapItem(
+                            e.getKey(), clamp(avg), clamp(avg), clamp(avg));
+                })
+                .toList();
     }
 
     private List<CrossTenantAnalyticsResponse.FailingScenario> buildFailingScenarios(List<TenantAggregate> aggregates) {
-        int failRate = 100 - percentage(
-                aggregates.stream().mapToLong(TenantAggregate::completedAssignments).sum(),
-                aggregates.stream().mapToLong(TenantAggregate::totalAssignments).sum()
-        );
-        return List.of(
-                new CrossTenantAnalyticsResponse.FailingScenario(
-                        "Pasting AWS Credentials to Copilot",
-                        "Engineering",
-                        "Mod 2: Safe Patterns",
+        // Real data: find departments with highest overdue/failure rates
+        List<CrossTenantAnalyticsResponse.FailingScenario> scenarios = new ArrayList<>();
+        Map<String, List<Integer>> deptCompletions = new java.util.LinkedHashMap<>();
+        for (TenantAggregate agg : aggregates) {
+            for (Map.Entry<String, Integer> entry : agg.deptCompletion().entrySet()) {
+                deptCompletions.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(entry.getValue());
+            }
+        }
+        for (Map.Entry<String, List<Integer>> entry : deptCompletions.entrySet()) {
+            int avg = (int) Math.round(entry.getValue().stream().mapToInt(Integer::intValue).average().orElse(0));
+            int failRate = 100 - avg;
+            if (failRate > 30) {
+                scenarios.add(new CrossTenantAnalyticsResponse.FailingScenario(
+                        entry.getKey() + " — Incomplete Training",
+                        entry.getKey(),
+                        "Assigned Tracks",
                         clamp(failRate)
-                )
-        );
+                ));
+            }
+        }
+        return scenarios.stream()
+                .sorted((a, b) -> Integer.compare(b.failRate(), a.failRate()))
+                .limit(5)
+                .toList();
     }
 
     private CrossTenantAnalyticsResponse.ContentImpact buildContentImpact(List<TenantAggregate> aggregates) {
-        int base = percentage(
+        // Real data: fetch recent content publish events from audit logs
+        Instant threeMonthsAgo = Instant.now().minus(90, ChronoUnit.DAYS);
+        List<AuditLog> publishEvents = auditLogRepository.findByAction(AuditAction.PUBLISH_TRACK);
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd", Locale.ENGLISH);
+        int currentCompletion = percentage(
                 aggregates.stream().mapToLong(TenantAggregate::completedAssignments).sum(),
                 aggregates.stream().mapToLong(TenantAggregate::totalAssignments).sum()
         );
-        List<Integer> trend = List.of(
-                clamp(base - 18), clamp(base - 16), clamp(base - 17),
-                clamp(base - 8), clamp(base - 6), clamp(base - 4),
-                clamp(base - 2), clamp(base + 8), clamp(base + 10)
-        );
 
-        LocalDate contentDate = LocalDate.now(ZoneId.systemDefault()).minusMonths(2).withDayOfMonth(12);
-        LocalDate chartPointDate = contentDate.plusDays(3);
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd", Locale.ENGLISH);
-        return new CrossTenantAnalyticsResponse.ContentImpact(
-                trend,
-                List.of(new CrossTenantAnalyticsResponse.ContentEvent(
-                        formatter.format(contentDate),
-                        "Module 3: Advanced Prompting published",
-                        "+2.3pp",
-                        new CrossTenantAnalyticsResponse.ChartPoint(formatter.format(chartPointDate), trend.get(trend.size() - 2))
-                ))
-        );
-    }
+        List<CrossTenantAnalyticsResponse.ContentEvent> events = publishEvents.stream()
+                .filter(e -> e.getCreatedAt() != null && e.getCreatedAt().isAfter(threeMonthsAgo))
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .limit(5)
+                .map(log -> {
+                    String date = formatter.format(log.getCreatedAt().atZone(ZoneId.systemDefault()));
+                    String detail = log.getDetails() != null ? log.getDetails() : "Track published";
+                    return new CrossTenantAnalyticsResponse.ContentEvent(
+                            date, detail, "content update",
+                            new CrossTenantAnalyticsResponse.ChartPoint(date, currentCompletion));
+                })
+                .toList();
 
-    private List<Integer> buildSparkline(int completion) {
-        return List.of(
-                clamp(completion - 22),
-                clamp(completion - 14),
-                clamp(completion - 7),
-                clamp(completion)
-        );
+        return new CrossTenantAnalyticsResponse.ContentImpact(events);
     }
 
     private int percentage(long numerator, long denominator) {
@@ -629,13 +643,6 @@ public class PlatformDashboardService {
         long pct = Math.round((delta * 100.0) / Math.max(1, baseline));
         String label = (pct > 0 ? "▲ " : "▼ ") + Math.abs(pct) + "%";
         return suffix == null ? label : label + " " + suffix;
-    }
-
-    private String ppTrendLabel(long delta) {
-        if (delta == 0) {
-            return "stable";
-        }
-        return (delta > 0 ? "▲ " : "▼ ") + Math.abs(delta) + "pp";
     }
 
     private String displayStatus(String status) {

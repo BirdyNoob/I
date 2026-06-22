@@ -1,9 +1,15 @@
 package com.icentric.Icentric.platform.tenant.service;
 
+import com.icentric.Icentric.audit.repository.AuditLogRepository;
+import com.icentric.Icentric.audit.service.AuditService;
+import com.icentric.Icentric.common.mail.EmailService;
+import com.icentric.Icentric.content.repository.TrackRepository;
+import com.icentric.Icentric.identity.repository.TenantUserRepository;
+import com.icentric.Icentric.learning.repository.IssuedCertificateRepository;
+import com.icentric.Icentric.learning.repository.UserAssignmentRepository;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
-import com.icentric.Icentric.common.mail.EmailService;
-import com.icentric.Icentric.audit.service.AuditService;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,28 +26,27 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class TenantServiceTest {
 
-    @Mock
-    TenantRepository tenantRepository;
-    @Mock
-    TenantProvisioningService provisioningService;
-    @Mock
-    TenantUserBootstrapService bootstrapService;
-    @Mock
-    EmailService emailService;
-    @Mock
-    AuditService auditService;
+    @Mock TenantRepository tenantRepository;
+    @Mock TenantProvisioningService provisioningService;
+    @Mock TenantUserBootstrapService bootstrapService;
+    @Mock EmailService emailService;
+    @Mock AuditService auditService;
+    @Mock TenantUserRepository tenantUserRepository;
+    @Mock UserAssignmentRepository userAssignmentRepository;
+    @Mock IssuedCertificateRepository issuedCertificateRepository;
+    @Mock TrackRepository trackRepository;
+    @Mock AuditLogRepository auditLogRepository;
+    @Mock EntityManager entityManager;
 
-    @InjectMocks
-    TenantService tenantService;
+    @InjectMocks TenantService tenantService;
 
     @Test
     @DisplayName("createTenant succeeds and orchestrates provisioning + bootstrap")
     void createTenant_success() {
-        when(tenantRepository.findBySlug("acme")).thenReturn(Optional.empty());
+        when(tenantRepository.findBySlug(any())).thenReturn(Optional.empty());
         when(tenantRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         Tenant result = tenantService.createTenant(
-                "acme",
                 "Acme Corp",
                 "Pro",
                 150,
@@ -49,34 +54,33 @@ class TenantServiceTest {
                 "SecurePass1!"
         );
 
-        assertThat(result.getSlug()).isEqualTo("acme");
         assertThat(result.getCompanyName()).isEqualTo("Acme Corp");
         assertThat(result.getPlan()).isEqualTo("Pro");
         assertThat(result.getMaxSeats()).isEqualTo(150);
         assertThat(result.getStatus()).isEqualTo("active");
 
-        verify(provisioningService).provisionTenantSchema("acme");
-        verify(bootstrapService).createSuperAdmin("acme", "owner@acme.com", "SecurePass1!");
+        verify(provisioningService).provisionTenantSchema(any());
+        verify(bootstrapService).createSuperAdmin(any(), eq("owner@acme.com"), eq("SecurePass1!"));
     }
 
     @Test
-    @DisplayName("createTenant rejects duplicate slug → 409")
+    @DisplayName("createTenant with duplicate slug appends suffix instead of failing")
     void createTenant_duplicateSlug() {
-        Tenant existing = new Tenant("acme", "Existing Corp");
-        when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(existing));
+        Tenant existing = new Tenant("acme-corp", "Existing Corp");
+        when(tenantRepository.findBySlug("acme-corp")).thenReturn(Optional.of(existing));
+        when(tenantRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        assertThatThrownBy(() -> tenantService.createTenant(
-                "acme",
-                "New Corp",
+        Tenant result = tenantService.createTenant(
+                "Acme Corp",
                 "Starter",
                 25,
                 "owner@new.com",
                 "SomePass1!"
-        ))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("acme");
+        );
 
-        verify(tenantRepository, never()).save(any());
-        verify(provisioningService, never()).provisionTenantSchema(any());
+        // Slug should have a random suffix appended
+        assertThat(result.getSlug()).startsWith("acme-corp-");
+        assertThat(result.getSlug()).isNotEqualTo("acme-corp");
+        verify(provisioningService).provisionTenantSchema(result.getSlug());
     }
 }

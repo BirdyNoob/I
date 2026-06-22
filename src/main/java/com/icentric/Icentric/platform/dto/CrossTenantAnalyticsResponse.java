@@ -26,15 +26,8 @@ public record CrossTenantAnalyticsResponse(
     ) {}
 
     public record Charts(
-            CompletionTrend completionTrend,
             List<TrackPerformanceItem> trackPerformance,
             AssessmentScatter assessmentScatter
-    ) {}
-
-    public record CompletionTrend(
-            List<String> labels,
-            List<Integer> platformAvg,
-            List<List<Integer>> tenantBenchmarks
     ) {}
 
     public record TrackPerformanceItem(
@@ -61,8 +54,7 @@ public record CrossTenantAnalyticsResponse(
             int avgScore,
             int riskScore,
             String riskLevel,
-            long certs,
-            List<Integer> sparkline
+            long certs
     ) {}
 
     public record RiskHeatmapItem(
@@ -80,7 +72,6 @@ public record CrossTenantAnalyticsResponse(
     ) {}
 
     public record ContentImpact(
-            List<Integer> trend,
             List<ContentEvent> events
     ) {}
 

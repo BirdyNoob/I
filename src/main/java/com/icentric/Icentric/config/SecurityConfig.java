@@ -58,6 +58,8 @@ public class SecurityConfig {
                         "/api/v1/auth/login",
                         "/api/v1/auth/refresh",
                         "/api/v1/auth/logout",
+                        "/api/v1/auth/forgot-password",
+                        "/api/v1/auth/reset-password",
                         "/api/v1/public/**",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
@@ -88,6 +90,9 @@ public class SecurityConfig {
                 .hasAuthority("ROLE_LEARNER")
 
                 .requestMatchers("/api/v1/notifications/**")
+                .hasAuthority("ROLE_LEARNER")
+
+                .requestMatchers("/api/v1/simulations/**")
                 .hasAuthority("ROLE_LEARNER")
 
                 // Everything else requires authentication

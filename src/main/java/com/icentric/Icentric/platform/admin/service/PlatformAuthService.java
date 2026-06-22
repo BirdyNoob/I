@@ -41,7 +41,7 @@ public class PlatformAuthService {
 
     public PlatformLoginResponse login(PlatformLoginRequest request) {
 
-        PlatformAdmin admin = repository.findByEmail(request.email())
+        PlatformAdmin admin = repository.findByEmailIgnoreCase(request.email())
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         if (!passwordEncoder.matches(request.password(), admin.getPasswordHash())) {

@@ -9,6 +9,7 @@ import com.icentric.Icentric.identity.entity.TenantUser;
 import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
+import com.icentric.Icentric.identity.service.OtpService;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.security.JwtService;
@@ -45,6 +46,9 @@ class AuthServiceTest {
     @Mock AuditService auditService;
     @Mock AuditMetadataService auditMetadataService;
     @Mock RefreshTokenService refreshTokenService;
+    @Mock com.icentric.Icentric.common.mail.EmailService emailService;
+    @Mock com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository platformAdminRepository;
+    @Mock OtpService otpService;
 
     @InjectMocks AuthService authService;
 
@@ -68,7 +72,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("login succeeds with single tenant → returns access + refresh token")
     void loginSuccess_singleTenant() {
-        when(userRepository.findByEmail("learner@acme.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("learner@acme.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("secret", "hashed-pw")).thenReturn(true);
         when(tenantUserRepository.findByUserId(user.getId())).thenReturn(List.of(tenantUser));
         when(tenantRepository.findById(tenant.getId())).thenReturn(Optional.of(tenant));
@@ -90,7 +94,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("login with wrong password throws BadCredentialsException")
     void loginFails_wrongPassword() {
-        when(userRepository.findByEmail("learner@acme.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("learner@acme.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches(any(), any())).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(
@@ -102,7 +106,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("login with non-existent email throws BadCredentialsException")
     void loginFails_emailNotFound() {
-        when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.login(
                 new LoginRequest("no@one.com", "pw")))
@@ -116,7 +120,7 @@ class AuthServiceTest {
         Tenant tenant2 = new Tenant("beta", "Beta Corp");
         TenantUser tenantUser2 = new TenantUser(user.getId(), tenant2.getId(), "ADMIN");
 
-        when(userRepository.findByEmail("learner@acme.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("learner@acme.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("secret", "hashed-pw")).thenReturn(true);
         when(tenantUserRepository.findByUserId(user.getId()))
                 .thenReturn(List.of(tenantUser, tenantUser2));

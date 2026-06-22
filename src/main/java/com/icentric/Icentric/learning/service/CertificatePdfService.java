@@ -68,6 +68,7 @@ public class CertificatePdfService {
 
         String verificationUrl = certificateUrlService.verificationUrl(data.certificateId(), data.verificationToken());
         placeholders.put("qrCode", generateQRCodeBase64(verificationUrl));
+        placeholders.put("verifyUrl", escape(verificationUrl));
 
         return applyPlaceholders(template, placeholders);
     }

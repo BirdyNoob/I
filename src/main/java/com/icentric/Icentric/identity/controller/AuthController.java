@@ -95,4 +95,41 @@ public class AuthController {
         service.logout(request.refreshToken());
         return Map.of("status", "logged_out");
     }
+
+    @Operation(summary = "Forgot Password",
+               description = "Sends a 6-digit OTP to the user's email. OTP expires in 5 minutes.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "OTP sent if email exists"),
+            @ApiResponse(responseCode = "400", description = "Invalid email format")
+    })
+    @PostMapping("/forgot-password")
+    public Map<String, String> forgotPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("email is required");
+        }
+        service.forgotPassword(email.trim().toLowerCase());
+        return Map.of("message", "If the email exists, an OTP has been sent.");
+    }
+
+    @Operation(summary = "Reset Password",
+               description = "Verifies OTP and sets a new password. OTP is single-use.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Password reset successful"),
+            @ApiResponse(responseCode = "401", description = "Invalid or expired OTP")
+    })
+    @PostMapping("/reset-password")
+    public Map<String, String> resetPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        String otp = body.get("otp");
+        String newPassword = body.get("newPassword");
+        if (email == null || otp == null || newPassword == null) {
+            throw new IllegalArgumentException("email, otp, and newPassword are required");
+        }
+        if (newPassword.length() < 8) {
+            throw new IllegalArgumentException("Password must be at least 8 characters");
+        }
+        service.resetPassword(email.trim().toLowerCase(), otp.trim(), newPassword);
+        return Map.of("message", "Password has been reset successfully.");
+    }
 }

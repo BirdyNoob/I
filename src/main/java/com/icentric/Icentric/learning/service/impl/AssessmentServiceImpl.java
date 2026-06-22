@@ -12,6 +12,9 @@ import com.icentric.Icentric.learning.dto.assessment.*;
 import com.icentric.Icentric.learning.entity.AssessmentAssignment;
 import com.icentric.Icentric.learning.entity.AssessmentAttempt;
 import com.icentric.Icentric.learning.entity.AssessmentConfig;
+import com.icentric.Icentric.learning.entity.Assessment;
+import com.icentric.Icentric.learning.entity.AssessmentQuestion;
+import com.icentric.Icentric.learning.entity.AssessmentSection;
 import com.icentric.Icentric.learning.entity.UserAssignment;
 import com.icentric.Icentric.learning.entity.IssuedCertificate;
 import com.icentric.Icentric.learning.repository.*;
@@ -56,6 +59,8 @@ public class AssessmentServiceImpl implements AssessmentService {
     private final EntityManager entityManager;
     private final AuditService auditService;
     private final XpService xpService;
+    private final AssessmentRepository assessmentRepository;
+    private final AssessmentQuestionRepository assessmentQuestionRepository;
 
     // No cooldown: manager reset is the only way to unblock a user who exhausted retakes.
 
@@ -219,9 +224,7 @@ public class AssessmentServiceImpl implements AssessmentService {
                         .orElse(null);
             }
 
-            // ── Topic breakdown — lesson cards from the assigned track ───────────
-            // Each entry mirrors the lesson card shape the frontend already renders.
-            // Shows every lesson STEP in the track as a "topic".
+            // ── Topic breakdown — module-level progress for the assigned track ──
             List<TopicBreakdownDto> topicBreakdown = new ArrayList<>();
             if (trackId != null) {
                 List<com.icentric.Icentric.content.entity.CourseModule> mods =
@@ -229,52 +232,45 @@ public class AssessmentServiceImpl implements AssessmentService {
                 for (var mod : mods) {
                     List<com.icentric.Icentric.content.entity.Lesson> lessons =
                             lessonRepository.findByModuleIdOrderBySortOrder(mod.getId());
+                    int totalLessons = lessons.size();
+                    int completedLessons = 0;
+                    boolean modHasInProgress = false;
+
                     for (var lesson : lessons) {
                         com.icentric.Icentric.learning.entity.LessonProgress lp = lessonProgressRepository
                                 .findByUserIdAndLessonId(userId, lesson.getId())
                                 .orElse(null);
-
-                        java.util.List<UUID> completedStepIds = (lp != null && lp.getCompletedStepIds() != null)
-                                ? lp.getCompletedStepIds() : Collections.emptyList();
-                        boolean lessonCompleted = lp != null && "COMPLETED".equals(lp.getStatus());
-
-                        List<com.icentric.Icentric.content.entity.LessonStep> steps =
-                                lessonStepRepository.findByLessonIdOrderBySortOrderAsc(lesson.getId());
-
-                        boolean foundInProgress = false;
-
-                        for (var step : steps) {
-                            String stepStatus;
-                            if (lessonCompleted || completedStepIds.contains(step.getId())) {
-                                stepStatus = "COMPLETED";
-                            } else if (!foundInProgress && lp != null && "IN_PROGRESS".equals(lp.getStatus())) {
-                                stepStatus = "IN_PROGRESS";
-                                foundInProgress = true;
-                            } else if (!foundInProgress && lp == null) {
-                                stepStatus = "NOT_STARTED";
-                                // The very first step of a NOT_STARTED lesson stays NOT_STARTED
-                            } else {
-                                stepStatus = "NOT_STARTED";
-                            }
-
-                            String meta;
-                            String actionLabel;
-                            switch (stepStatus) {
-                                case "COMPLETED"   -> { meta = "Done";         actionLabel = "Review";   }
-                                case "IN_PROGRESS" -> { meta = "In Progress";  actionLabel = "Continue"; }
-                                default            -> { meta = "Not Started";  actionLabel = "Start";    }
-                            }
-
-                            topicBreakdown.add(TopicBreakdownDto.builder()
-                                    .stepId(step.getId().toString())
-                                    .lessonId(lesson.getId().toString())
-                                    .title(step.getTitle())
-                                    .status(stepStatus)
-                                    .meta(meta)
-                                    .actionLabel(actionLabel)
-                                    .build());
+                        if (lp != null && "COMPLETED".equals(lp.getStatus())) {
+                            completedLessons++;
+                        } else if (lp != null && "IN_PROGRESS".equals(lp.getStatus())) {
+                            modHasInProgress = true;
                         }
                     }
+
+                    String modStatus;
+                    String meta;
+                    String actionLabel;
+                    if (completedLessons == totalLessons && totalLessons > 0) {
+                        modStatus = "COMPLETED";
+                        meta = completedLessons + "/" + totalLessons + " lessons";
+                        actionLabel = "Review";
+                    } else if (completedLessons > 0 || modHasInProgress) {
+                        modStatus = "IN_PROGRESS";
+                        meta = completedLessons + "/" + totalLessons + " lessons";
+                        actionLabel = "Continue";
+                    } else {
+                        modStatus = "NOT_STARTED";
+                        meta = "Not Started";
+                        actionLabel = "Start";
+                    }
+
+                    topicBreakdown.add(TopicBreakdownDto.builder()
+                            .moduleId(mod.getId().toString())
+                            .title(mod.getTitle())
+                            .status(modStatus)
+                            .meta(meta)
+                            .actionLabel(actionLabel)
+                            .build());
                 }
             }
 
@@ -922,8 +918,7 @@ public class AssessmentServiceImpl implements AssessmentService {
     @Override
     @Transactional
     public void createAssessmentConfig(String trackId, JsonNode request) {
-        // No search_path override needed — @Table(schema = "system") ensures Hibernate
-        // always targets the global system.assessment_config table regardless of caller.
+        // Persist to legacy assessment_config (JSONB) for backward compat
         AssessmentConfig config = new AssessmentConfig();
         config.setId(request.path("assessmentId").asText());
         config.setTrackId(trackId);
@@ -934,6 +929,112 @@ public class AssessmentServiceImpl implements AssessmentService {
         
         config.setConfigData(request);
         assessmentConfigRepository.save(config);
+
+        // Also persist to normalized relational tables
+        importToRelationalTables(request, trackId);
+    }
+
+    private void importToRelationalTables(JsonNode json, String trackId) {
+        String assessmentId = json.path("assessmentId").asText();
+        if (assessmentId == null || assessmentId.isBlank()) return;
+
+        // Delete existing if re-importing
+        assessmentRepository.findById(assessmentId).ifPresent(assessmentRepository::delete);
+
+        Assessment assessment = new Assessment();
+        assessment.setId(assessmentId);
+        assessment.setTrackId(trackId);
+        assessment.setTitle(json.path("title").asText("Assessment"));
+        assessment.setSubtitle(json.path("subtitle").asText(null));
+        assessment.setTrackName(json.path("trackName").asText(null));
+
+        JsonNode configObj = json.path("config");
+        if (!configObj.isMissingNode()) {
+            assessment.setTotalQuestions(configObj.path("totalQuestions").asInt(50));
+            assessment.setTimeLimitSeconds(configObj.path("timeLimitSeconds").asInt(3600));
+            assessment.setPassingScore(configObj.path("passingScore").asInt(80));
+            assessment.setRetakePolicy(configObj.path("retakePolicy").asText("UNLIMITED"));
+        }
+
+        int questionOrder = 0;
+        JsonNode sectionsNode = json.path("sections");
+        if (sectionsNode.isArray()) {
+            int sectionOrder = 0;
+            for (JsonNode sectionNode : sectionsNode) {
+                AssessmentSection section = new AssessmentSection();
+                section.setAssessment(assessment);
+                section.setTitle(sectionNode.path("sectionTitle").asText("Section"));
+                section.setSortOrder(sectionOrder++);
+                assessment.getSections().add(section);
+
+                JsonNode questions = sectionNode.path("questions");
+                if (questions.isArray()) {
+                    for (JsonNode qNode : questions) {
+                        questionOrder = importQuestion(assessment, section, qNode, questionOrder);
+                    }
+                }
+            }
+        }
+
+        // Root-level questions (no section)
+        JsonNode rootQuestions = json.path("questions");
+        if (rootQuestions.isArray()) {
+            for (JsonNode qNode : rootQuestions) {
+                questionOrder = importQuestion(assessment, null, qNode, questionOrder);
+            }
+        }
+
+        assessmentRepository.save(assessment);
+    }
+
+    private int importQuestion(Assessment assessment, AssessmentSection section, JsonNode qNode, int order) {
+        AssessmentQuestion question = new AssessmentQuestion();
+        question.setAssessment(assessment);
+        question.setSection(section);
+        question.setQuestionId(qNode.path("questionId").asText());
+        question.setType(qNode.path("type").asText("MULTIPLE_CHOICE"));
+        question.setTopic(qNode.path("topic").asText(null));
+        question.setDifficulty(qNode.path("difficulty").isMissingNode() ? null : qNode.path("difficulty").asInt());
+        question.setScenarioContext(qNode.path("scenarioContext").isMissingNode() ? null : qNode.path("scenarioContext").asText());
+        question.setText(qNode.path("text").asText());
+        question.setCorrectOptionId(qNode.path("correctOptionId").asText());
+        question.setExplanation(qNode.path("explanation").isMissingNode() ? null : qNode.path("explanation").asText());
+        question.setSortOrder(order++);
+
+        // Options
+        JsonNode optionsNode = qNode.path("options");
+        if (optionsNode.isArray()) {
+            int optOrder = 0;
+            for (JsonNode oNode : optionsNode) {
+                com.icentric.Icentric.learning.entity.AssessmentOption opt = new com.icentric.Icentric.learning.entity.AssessmentOption();
+                opt.setQuestion(question);
+                opt.setOptionId(oNode.path("optionId").asText());
+                opt.setText(oNode.path("text").asText());
+                opt.setExplanation(oNode.path("explanation").isMissingNode() ? null : oNode.path("explanation").asText());
+                opt.setSortOrder(optOrder++);
+                question.getOptions().add(opt);
+            }
+        }
+
+        // Image (store base64 as bytea)
+        JsonNode imageNode = qNode.path("image");
+        if (!imageNode.isMissingNode() && !imageNode.isNull()) {
+            com.icentric.Icentric.learning.entity.AssessmentImage img = new com.icentric.Icentric.learning.entity.AssessmentImage();
+            img.setQuestion(question);
+            img.setFileName(imageNode.path("fileName").asText(null));
+            img.setMimeType(imageNode.path("mimeType").asText(null));
+            img.setAltText(imageNode.path("altText").asText(null));
+            String base64Data = imageNode.path("data").asText(null);
+            if (base64Data != null && !base64Data.isBlank()) {
+                img.setData(java.util.Base64.getDecoder().decode(base64Data));
+            }
+            String imageUrl = imageNode.path("url").asText(null);
+            if (imageUrl != null) img.setImageUrl(imageUrl);
+            question.setImage(img);
+        }
+
+        assessment.getQuestions().add(question);
+        return order;
     }
     
     @Override
@@ -955,15 +1056,23 @@ public class AssessmentServiceImpl implements AssessmentService {
     }
     
     private List<JsonNode> extractAllQuestionNodes(JsonNode configData) {
+        // Try relational tables first
+        String assessmentId = configData.path("assessmentId").asText(null);
+        if (assessmentId != null && assessmentRepository.existsById(assessmentId)) {
+            return loadQuestionsFromRelationalTables(assessmentId);
+        }
+        // Fallback to JSON blob for unmigrated assessments
+        return extractQuestionsFromJson(configData);
+    }
+
+    private List<JsonNode> extractQuestionsFromJson(JsonNode configData) {
         List<JsonNode> allQuestions = new ArrayList<>();
-        // Root level questions
         JsonNode rootQuestions = configData.path("questions");
         if (rootQuestions.isArray()) {
             for (JsonNode qNode : rootQuestions) {
                 allQuestions.add(qNode);
             }
         }
-        // Section level questions
         JsonNode sectionsNode = configData.path("sections");
         if (sectionsNode.isArray()) {
             for (JsonNode section : sectionsNode) {
@@ -976,6 +1085,52 @@ public class AssessmentServiceImpl implements AssessmentService {
             }
         }
         return allQuestions;
+    }
+
+    private List<JsonNode> loadQuestionsFromRelationalTables(String assessmentId) {
+        List<AssessmentQuestion> questions = assessmentQuestionRepository.findByAssessmentIdOrderBySortOrder(assessmentId);
+        List<JsonNode> nodes = new ArrayList<>();
+        for (AssessmentQuestion q : questions) {
+            var obj = objectMapper.createObjectNode();
+            obj.put("questionId", q.getQuestionId());
+            obj.put("type", q.getType());
+            obj.put("topic", q.getTopic());
+            obj.put("text", q.getText());
+            obj.put("correctOptionId", q.getCorrectOptionId());
+            obj.put("orderIndex", q.getSortOrder());
+            if (q.getDifficulty() != null) obj.put("difficulty", q.getDifficulty());
+            if (q.getScenarioContext() != null) obj.put("scenarioContext", q.getScenarioContext());
+            if (q.getExplanation() != null) obj.put("explanation", q.getExplanation());
+
+            var optionsArr = obj.putArray("options");
+            if (q.getOptions() != null) {
+                for (var opt : q.getOptions()) {
+                    var optObj = objectMapper.createObjectNode();
+                    optObj.put("optionId", opt.getOptionId());
+                    optObj.put("text", opt.getText());
+                    if (opt.getExplanation() != null) optObj.put("explanation", opt.getExplanation());
+                    optionsArr.add(optObj);
+                }
+            }
+
+            if (q.getImage() != null) {
+                var imgObj = objectMapper.createObjectNode();
+                var img = q.getImage();
+                imgObj.put("imageId", img.getId().toString());
+                if (img.getFileName() != null) imgObj.put("fileName", img.getFileName());
+                if (img.getMimeType() != null) imgObj.put("mimeType", img.getMimeType());
+                if (img.getAltText() != null) imgObj.put("altText", img.getAltText());
+                if (img.getImageUrl() != null) {
+                    imgObj.put("url", img.getImageUrl());
+                } else if (img.getData() != null) {
+                    imgObj.put("data", java.util.Base64.getEncoder().encodeToString(img.getData()));
+                }
+                obj.set("image", imgObj);
+            }
+
+            nodes.add(obj);
+        }
+        return nodes;
     }
 
     private void assertAssessmentUnlocked(AssessmentConfig config, UUID userId) {

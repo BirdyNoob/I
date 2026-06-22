@@ -34,6 +34,8 @@ class PlatformAuthServiceTest {
     MfaService mfaService;
     @Mock
     com.icentric.Icentric.audit.service.AuditService auditService;
+    @Mock
+    com.icentric.Icentric.security.RefreshTokenService refreshTokenService;
 
     @InjectMocks
     PlatformAuthService authService;
@@ -49,10 +51,12 @@ class PlatformAuthServiceTest {
     @Test
     @DisplayName("login succeeds with correct credentials (no MFA)")
     void loginSuccess_noMfa() {
-        when(repository.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(repository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
         when(passwordEncoder.matches("secret", "hashed-pw")).thenReturn(true);
         when(jwtService.generateToken(any(), any(), eq("ROLE_PLATFORM_ADMIN"), eq("system")))
                 .thenReturn("jwt-token");
+        when(refreshTokenService.create(any(), any(), any(), any()))
+                .thenReturn("refresh-token");
 
         PlatformLoginResponse response = authService.login(
                 new PlatformLoginRequest("admin@example.com", "secret", null));
@@ -64,7 +68,7 @@ class PlatformAuthServiceTest {
     @Test
     @DisplayName("login fails when email not found → 401")
     void loginFails_emailNotFound() {
-        when(repository.findByEmail(any())).thenReturn(Optional.empty());
+        when(repository.findByEmailIgnoreCase(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.login(new PlatformLoginRequest("nope@x.com", "pw", null)))
                 .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class)
@@ -74,7 +78,7 @@ class PlatformAuthServiceTest {
     @Test
     @DisplayName("login fails when password is wrong → 401")
     void loginFails_wrongPassword() {
-        when(repository.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(repository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
         when(passwordEncoder.matches(any(), any())).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(new PlatformLoginRequest("admin@example.com", "bad", null)))
@@ -88,7 +92,7 @@ class PlatformAuthServiceTest {
         admin.setMfaEnabled(true);
         admin.setMfaSecret("totp-secret");
 
-        when(repository.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(repository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
         when(passwordEncoder.matches("secret", "hashed-pw")).thenReturn(true);
         when(mfaService.verifyCode("totp-secret", "000000")).thenReturn(false);
 
@@ -103,10 +107,11 @@ class PlatformAuthServiceTest {
         admin.setMfaEnabled(true);
         admin.setMfaSecret("totp-secret");
 
-        when(repository.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(repository.findByEmailIgnoreCase("admin@example.com")).thenReturn(Optional.of(admin));
         when(passwordEncoder.matches("secret", "hashed-pw")).thenReturn(true);
         when(mfaService.verifyCode("totp-secret", "123456")).thenReturn(true);
         when(jwtService.generateToken(any(), any(), any(), any())).thenReturn("jwt-token");
+        when(refreshTokenService.create(any(), any(), any(), any())).thenReturn("refresh-token");
 
         PlatformLoginResponse response = authService.login(
                 new PlatformLoginRequest("admin@example.com", "secret", "123456"));

@@ -46,6 +46,8 @@ public class CheatSheetServiceTest {
     private LessonRepository lessonRepository;
     @Mock
     private LessonProgressRepository lessonProgressRepository;
+    @Mock
+    private com.icentric.Icentric.content.repository.ModuleRepository moduleRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -59,7 +61,8 @@ public class CheatSheetServiceTest {
                 assignmentRepository,
                 tenantSchemaService,
                 lessonRepository,
-                lessonProgressRepository
+                lessonProgressRepository,
+                moduleRepository
         );
     }
 

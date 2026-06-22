@@ -44,6 +44,9 @@ public class AuthService {
     private final AuditService auditService;
     private final AuditMetadataService auditMetadataService;
     private final RefreshTokenService refreshTokenService;
+    private final com.icentric.Icentric.common.mail.EmailService emailService;
+    private final com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository platformAdminRepository;
+    private final OtpService otpService;
 
     public AuthService(
             UserRepository userRepository,
@@ -53,7 +56,10 @@ public class AuthService {
             JwtService jwtService,
             AuditService auditService,
             AuditMetadataService auditMetadataService,
-            RefreshTokenService refreshTokenService
+            RefreshTokenService refreshTokenService,
+            com.icentric.Icentric.common.mail.EmailService emailService,
+            com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository platformAdminRepository,
+            OtpService otpService
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
@@ -63,6 +69,9 @@ public class AuthService {
         this.auditService = auditService;
         this.auditMetadataService = auditMetadataService;
         this.refreshTokenService = refreshTokenService;
+        this.emailService = emailService;
+        this.platformAdminRepository = platformAdminRepository;
+        this.otpService = otpService;
     }
 
     // ── Phase-1: login ──────────────────────────────────────────────────────
@@ -80,7 +89,7 @@ public class AuthService {
     public LoginResponse login(LoginRequest request) {
 
         // Step 1: global user lookup
-        User user = userRepository.findByEmail(request.email())
+        User user = userRepository.findByEmailIgnoreCase(request.email())
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         if (!Boolean.TRUE.equals(user.getIsActive())) {
@@ -135,7 +144,7 @@ public class AuthService {
     @Transactional
     public LoginResponse selectTenant(String email, SelectTenantRequest request) {
 
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
         TenantUser membership = tenantUserRepository
@@ -251,5 +260,91 @@ public class AuthService {
         return storedRole.startsWith("ROLE_")
                 ? storedRole.substring("ROLE_".length())
                 : storedRole;
+    }
+
+    @Transactional
+    public void forgotPassword(String email) {
+        // Only send OTP if email exists (silent no-op otherwise to prevent enumeration)
+        boolean exists = userRepository.findByEmailIgnoreCase(email).isPresent()
+                || platformAdminRepository.findByEmailIgnoreCase(email).isPresent();
+
+        if (!exists) return;
+
+        String otp = otpService.generateOtp(email);
+        String name = userRepository.findByEmailIgnoreCase(email)
+                .map(User::getName)
+                .orElse(email);
+
+        emailService.sendTemplateEmail(
+                email,
+                "Your password reset OTP — AISafe",
+                "AISafe_Email_OTP",
+                java.util.Map.of(
+                        "userName", name,
+                        "otp", otp,
+                        "expiryMinutes", "5"
+                )
+        );
+        log.info("OTP sent for password reset: {}", email);
+
+        userRepository.findByEmailIgnoreCase(email).ifPresent(u -> auditService.logForTenant(
+                u.getId(), AuditAction.PASSWORD_RESET_OTP_REQUESTED, "USER",
+                u.getId().toString(), "Password reset OTP requested for " + email, "system"));
+    }
+
+    @Transactional
+    public void resetPassword(String email, String otp, String newPassword) {
+        if (!otpService.verify(email, otp)) {
+            throw new BadCredentialsException("Invalid or expired OTP.");
+        }
+
+        boolean handled = false;
+
+        var userOpt = userRepository.findByEmailIgnoreCase(email);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            user.setPasswordHash(passwordEncoder.encode(newPassword));
+            userRepository.save(user);
+            handled = true;
+        }
+
+        var adminOpt = platformAdminRepository.findByEmailIgnoreCase(email);
+        if (adminOpt.isPresent()) {
+            var admin = adminOpt.get();
+            admin.setPasswordHash(passwordEncoder.encode(newPassword));
+            platformAdminRepository.save(admin);
+            handled = true;
+        }
+
+        if (handled) {
+            log.info("Password reset successful for: {}", email);
+            var user = userRepository.findByEmailIgnoreCase(email);
+            user.ifPresent(u -> auditService.logForTenant(
+                    u.getId(), AuditAction.PASSWORD_RESET_COMPLETED, "USER",
+                    u.getId().toString(), "Password reset completed for " + email, "system"));
+        }
+    }
+
+    private void sendPasswordResetEmail(String email, String name, String newPassword) {
+        emailService.sendTemplateEmail(
+                email,
+                "Your password has been reset — AISafe",
+                "AISafe_Email_Password_Reset",
+                java.util.Map.of(
+                        "userName", name != null ? name : email,
+                        "newPassword", newPassword,
+                        "loginUrl", "http://localhost:3000/login"
+                )
+        );
+    }
+
+    private String generateRandomPassword() {
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
+        StringBuilder sb = new StringBuilder(12);
+        for (int i = 0; i < 12; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 }
