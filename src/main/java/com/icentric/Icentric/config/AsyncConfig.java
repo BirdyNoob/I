@@ -22,9 +22,9 @@ public class AsyncConfig {
     @Bean(name = "playwrightTaskExecutor")
     public java.util.concurrent.Executor playwrightTaskExecutor() {
         org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor executor = new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(50);
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(12);
+        executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("PlaywrightTask-");
         executor.initialize();
         return executor;

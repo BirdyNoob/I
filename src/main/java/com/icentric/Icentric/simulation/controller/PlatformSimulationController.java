@@ -40,6 +40,7 @@ public class PlatformSimulationController {
         );
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "simulations", allEntries = true)
     @PostMapping
     public ResponseEntity<Simulation> create(@Valid @RequestBody CreateSimulationRequest request) {
         String simId = generateSimId(request.getTitle());
@@ -62,6 +63,7 @@ public class PlatformSimulationController {
         return "sim_" + slug + "_" + shortId;
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "simulations", allEntries = true)
     @PutMapping("/{simId}")
     public ResponseEntity<Simulation> update(@PathVariable String simId, @Valid @RequestBody UpdateSimulationRequest request) {
         Simulation sim = repository.findBySimId(simId)
@@ -73,6 +75,7 @@ public class PlatformSimulationController {
         return ResponseEntity.ok(repository.save(sim));
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "simulations", allEntries = true)
     @DeleteMapping("/{simId}")
     public ResponseEntity<Void> delete(@PathVariable String simId) {
         Simulation sim = repository.findBySimId(simId)

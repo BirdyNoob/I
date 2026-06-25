@@ -137,7 +137,7 @@ class NotificationServiceTest {
         NotificationEvent event = notification(userId, NotificationType.REMINDER, "Due soon");
         User user = user(userId, "Aryan", "aryan@example.com");
 
-        when(repository.findBySentFalse()).thenReturn(List.of(event));
+        when(repository.findTop50BySentFalseOrderByCreatedAtAsc()).thenReturn(List.of(event));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(emailService.sendTemplateEmail(eq("aryan@example.com"), eq("Training reminder"), eq("AISafe_Email_Notification"), any()))
                 .thenReturn(CompletableFuture.completedFuture(null));
@@ -157,7 +157,7 @@ class NotificationServiceTest {
         NotificationEvent event = notification(userId, NotificationType.OVERDUE, "Training overdue");
         User user = user(userId, "Aryan", "aryan@example.com");
 
-        when(repository.findBySentFalse()).thenReturn(List.of(event));
+        when(repository.findTop50BySentFalseOrderByCreatedAtAsc()).thenReturn(List.of(event));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(emailService.sendTemplateEmail(eq("aryan@example.com"), eq("Training overdue"), eq("AISafe_Email_Notification"), any()))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("SMTP down")));

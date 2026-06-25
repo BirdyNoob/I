@@ -35,7 +35,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -72,17 +71,9 @@ public class PlatformDashboardService {
         List<Tenant> tenants = tenantRepository.findAll(Sort.by(Sort.Direction.ASC, "companyName"));
         List<TenantAggregate> tenantAggregates = collectTenantAggregates(tenants);
 
-        long activeLearners = tenantUserRepository.findAll().stream()
-                .filter(tu -> "LEARNER".equalsIgnoreCase(tu.getRole()))
-                .map(tu -> tu.getUserId())
-                .distinct()
-                .count();
-        long activeLearnersPrev30d = tenantUserRepository.findAll().stream()
-                .filter(tu -> "LEARNER".equalsIgnoreCase(tu.getRole()))
-                .filter(tu -> tu.getJoinedAt() != null && tu.getJoinedAt().isBefore(Instant.now().minus(30, ChronoUnit.DAYS)))
-                .map(tu -> tu.getUserId())
-                .distinct()
-                .count();
+        long activeLearners = tenantUserRepository.countDistinctLearners();
+        long activeLearnersPrev30d = tenantUserRepository.countDistinctLearnersJoinedBefore(
+                Instant.now().minus(30, ChronoUnit.DAYS));
 
         long totalAssignments = tenantAggregates.stream().mapToLong(TenantAggregate::totalAssignments).sum();
         long completedAssignments = tenantAggregates.stream().mapToLong(TenantAggregate::completedAssignments).sum();
@@ -90,11 +81,7 @@ public class PlatformDashboardService {
 
         long certsIssued = tenantAggregates.stream().mapToLong(TenantAggregate::certsIssued).sum();
 
-        Set<java.util.UUID> mauUsers = auditLogRepository.findAll().stream()
-                .filter(log -> log.getCreatedAt() != null && log.getCreatedAt().isAfter(Instant.now().minus(30, ChronoUnit.DAYS)))
-                .map(log -> log.getUserId())
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toSet());
+        long mauCount = auditLogRepository.countDistinctActiveUsersSince(Instant.now().minus(30, ChronoUnit.DAYS));
 
         long newTenants = tenantRepository.countByCreatedAtAfter(Instant.now().minus(30, ChronoUnit.DAYS));
         int avgPassRate = totalAssignments > 0 ? percentage(completedAssignments, totalAssignments) : 0;
@@ -125,9 +112,9 @@ public class PlatformDashboardService {
                                 "neutral"
                         ),
                         new CrossTenantAnalyticsResponse.KpiMetric(
-                                mauUsers.size(),
-                                trendPercentLabel((long) mauUsers.size(), Math.max(1, activeLearners), null),
-                                mauUsers.isEmpty() ? "neutral" : "up"
+                                mauCount,
+                                trendPercentLabel(mauCount, Math.max(1, activeLearners), null),
+                                mauCount == 0 ? "neutral" : "up"
                         ),
                         new CrossTenantAnalyticsResponse.KpiMetric(
                                 avgPassRate,
@@ -454,13 +441,16 @@ public class PlatformDashboardService {
     }
 
     private Map<String, Integer> buildDepartmentCompletionMap() {
-        // Real data: group assignments by user's department via TenantUser
         List<com.icentric.Icentric.learning.entity.UserAssignment> assignments = userAssignmentRepository.findAll();
         if (assignments.isEmpty()) return Map.of();
 
-        // Get user→department mapping for current schema
+        // Get unique user IDs from assignments, then fetch only those memberships
+        java.util.Set<java.util.UUID> userIds = assignments.stream()
+                .map(com.icentric.Icentric.learning.entity.UserAssignment::getUserId)
+                .collect(Collectors.toSet());
+
         Map<java.util.UUID, String> userDeptMap = tenantUserRepository.findAll().stream()
-                .filter(tu -> tu.getDepartment() != null)
+                .filter(tu -> userIds.contains(tu.getUserId()) && tu.getDepartment() != null)
                 .collect(Collectors.toMap(
                         com.icentric.Icentric.identity.entity.TenantUser::getUserId,
                         tu -> tu.getDepartment().getDisplayName(),

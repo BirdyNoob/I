@@ -1,0 +1,217 @@
+{
+  "description": "AISafe Simulations — API Schema & Index",
+  "version": "1.0",
+  "endpoints": {
+    "GET /api/simulations": {
+      "description": "Returns list of available simulations (summary only)",
+      "response": "SimulationListResponse"
+    },
+    "GET /api/simulations/:id": {
+      "description": "Returns full simulation entity with all scenes, questions, feedback, and results config",
+      "response": "SimulationDetailResponse"
+    },
+    "POST /api/simulations/:id/submit": {
+      "description": "Submits user answers for a simulation, returns scored results",
+      "request": "SimulationSubmitRequest",
+      "response": "SimulationResultResponse"
+    }
+  },
+
+  "models": {
+
+    "SimulationListResponse": {
+      "simulations": [
+        {
+          "id": "string — unique slug",
+          "title": "string",
+          "accent_color": "string — amber | purple | teal",
+          "badge": { "icon": "string (emoji)", "label": "string", "color": "string" },
+          "total_decisions": "number",
+          "intro": {
+            "icon": "string (emoji)",
+            "tag_line": "string",
+            "heading": "string",
+            "meta": [{ "icon": "string", "label": "string" }]
+          }
+        }
+      ]
+    },
+
+    "SimulationDetailResponse": {
+      "id": "string",
+      "title": "string",
+      "accent_color": "string",
+      "badge": { "icon": "string", "label": "string", "color": "string" },
+      "total_decisions": "number",
+      "intro": "IntroEntity",
+      "scenes": ["SceneEntity"],
+      "results": "ResultsConfig"
+    },
+
+    "IntroEntity": {
+      "icon": "string (emoji)",
+      "tag_line": "string — e.g. 'Engineering Track · Scenario 2 of 5'",
+      "heading": "string",
+      "description": "string (HTML allowed for <strong>, <em>)",
+      "meta": [{ "icon": "string", "label": "string" }],
+      "cta_text": "string"
+    },
+
+    "SceneEntity": {
+      "id": "string",
+      "order": "number (1-indexed)",
+      "context_bar": {
+        "icon": "string (emoji)",
+        "label": "string — e.g. 'Scene 1 of 3 — The Shared Prompt'",
+        "narrative": "string (HTML)"
+      },
+      "mockup": "MockupEntity — varies by type",
+      "question": "QuestionEntity",
+      "feedback": "FeedbackEntity",
+      "next_button_text": "string"
+    },
+
+    "MockupEntity": {
+      "_note": "Discriminated union — render based on 'type' field",
+      "type": "string — chat_window | email | app_window | document",
+      "header|toolbar": "object — window chrome (dots, app name, subtitle)",
+      "messages|content": "object — varies by type (see mockup_types below)"
+    },
+
+    "mockup_types": {
+      "chat_window": {
+        "header": {
+          "status_color": "string — green | red",
+          "app_name": "string",
+          "subtitle": "string",
+          "subtitle_color": "string (optional)"
+        },
+        "messages": [{
+          "role": "string — user | ai",
+          "avatar": { "type": "initials", "value": "string", "style": "string — user | ai" },
+          "content_type": "string — code | rich | animated_response",
+          "content": "string",
+          "highlight": "string (optional) — red-bordered callout block",
+          "suffix": "string (optional) — muted trailing text",
+          "typing_text": "string (optional) — shown before animation completes",
+          "final_content": "string (optional) — replaces typing_text after delay",
+          "animation_delay_ms": "number (optional)"
+        }],
+        "input_placeholder": "string"
+      },
+      "email": {
+        "header": {
+          "status_color": "string",
+          "app_name": "string",
+          "subtitle": "string"
+        },
+        "messages": [{
+          "role": "sender",
+          "avatar": { "type": "initials", "value": "string", "style": "string" },
+          "subject": "string",
+          "body": "string (HTML)",
+          "highlight": "string (optional)"
+        }]
+      },
+      "app_window": {
+        "toolbar": {
+          "dots": ["string — hex colors for window dots"],
+          "label": "string"
+        },
+        "content": {
+          "sections": [{
+            "type": "string — draft_message | warning_banner | document | plain_text",
+            "header": "string (optional)",
+            "title": "string (optional)",
+            "subtitle": "string (optional)",
+            "text": "string (optional)",
+            "body_html": "string (optional) — supports <pii> tags for highlighting",
+            "color": "string (optional) — amber | red",
+            "ai_output": [{"leaked_name": "string", "text": "string", "placeholder": "string"}]
+          }]
+        }
+      },
+      "document": {
+        "toolbar": {
+          "dots": ["string"],
+          "label": "string"
+        },
+        "content": {
+          "title": "string",
+          "body_html": "string (optional) — supports <hallucination> tags",
+          "email_headers": { "to": "string", "subject": "string" },
+          "fact_checks": [{
+            "claim": "string",
+            "status": "string — unverified | false | true",
+            "badge_label": "string"
+          }],
+          "warning": { "title": "string", "text": "string" }
+        }
+      }
+    },
+
+    "QuestionEntity": {
+      "number_label": "string — e.g. 'Decision 1'",
+      "text": "string",
+      "correct_answer": "string — A|B|C|D",
+      "options": [{
+        "letter": "string",
+        "text": "string"
+      }]
+    },
+
+    "FeedbackEntity": {
+      "correct": {
+        "title": "string",
+        "text": "string (HTML)"
+      },
+      "wrong": {
+        "[letter]": {
+          "title": "string",
+          "text": "string (HTML)"
+        }
+      }
+    },
+
+    "ResultsConfig": {
+      "score_ring_circumference": "number — SVG circle circumference for animation",
+      "titles": { "[correct_count]": "string" },
+      "subtitles": { "[correct_count]": "string" },
+      "breakdown": [{ "label": "string", "scene_id": "string" }]
+    },
+
+    "SimulationSubmitRequest": {
+      "answers": { "[scene_id]": "string — A|B|C|D" }
+    },
+
+    "SimulationResultResponse": {
+      "total_correct": "number",
+      "total_questions": "number",
+      "percentage": "number",
+      "title": "string",
+      "subtitle": "string",
+      "breakdown": [{
+        "label": "string",
+        "scene_id": "string",
+        "user_answer": "string",
+        "correct_answer": "string",
+        "is_correct": "boolean"
+      }]
+    }
+  },
+
+  "color_tokens": {
+    "amber": { "primary": "#F59E0B", "muted": "rgba(245,158,11,0.12)", "border": "rgba(245,158,11,0.25)" },
+    "purple": { "primary": "#8B5CF6", "muted": "rgba(139,92,246,0.10)", "border": "rgba(139,92,246,0.25)" },
+    "teal": { "primary": "#14B8A6", "muted": "rgba(20,184,166,0.10)", "border": "rgba(20,184,166,0.25)" },
+    "blue": { "primary": "#3B82F6", "muted": "rgba(59,130,246,0.12)", "border": "rgba(59,130,246,0.20)" },
+    "green": { "primary": "#10B981", "muted": "rgba(16,185,129,0.10)", "border": "rgba(16,185,129,0.25)" },
+    "red": { "primary": "#EF4444", "muted": "rgba(239,68,68,0.10)", "border": "rgba(239,68,68,0.25)" }
+  },
+
+  "available_simulations": [
+    "sim_prompt_injection",
+    "sim_data_privacy",
+    "sim_ai_verification"
+  ]
+}

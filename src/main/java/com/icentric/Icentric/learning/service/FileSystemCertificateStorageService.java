@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Service
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.certificate-storage", havingValue = "filesystem", matchIfMissing = true)
 public class FileSystemCertificateStorageService implements CertificateStorageService {
 
     private final Path rootPath;

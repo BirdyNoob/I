@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -54,4 +55,16 @@ public interface AuditLogRepository
               AND a.tenantSlug <> ''
             """)
     long countActiveTenantsBetween(Instant from, Instant to);
+
+    @Query("""
+            SELECT COUNT(DISTINCT a.userId)
+            FROM AuditLog a
+            WHERE a.createdAt >= :since
+              AND a.userId IS NOT NULL
+            """)
+    long countDistinctActiveUsersSince(Instant since);
+
+    @Modifying
+    @Query("DELETE FROM AuditLog a WHERE a.createdAt < :cutoff")
+    int deleteByCreatedAtBefore(Instant cutoff);
 }

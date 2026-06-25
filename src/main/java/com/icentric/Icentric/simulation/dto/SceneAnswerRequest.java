@@ -1,6 +1,5 @@
 package com.icentric.Icentric.simulation.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data

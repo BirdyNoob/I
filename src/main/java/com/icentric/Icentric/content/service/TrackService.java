@@ -116,6 +116,7 @@ public class TrackService {
         track.setEstimatedMins(request.estimatedMins());
         track.setIsMandatory(request.isMandatory());
         track.setVersion(1);
+        track.setVersionLabel(generateVersionLabel());
         track.setPreviousVersionId(null);
         track.setIsPublished(false);
         track.setStatus("DRAFT");
@@ -133,6 +134,7 @@ public class TrackService {
         return repository.findAll();
     }
 
+    @org.springframework.cache.annotation.Cacheable("publishedTracks")
     public List<Track> getPublishedTracks() {
         return repository.findLatestPublishedTracks();
     }
@@ -269,6 +271,7 @@ public class TrackService {
     }
 
     @Transactional
+    @org.springframework.cache.annotation.CacheEvict(value = "publishedTracks", allEntries = true)
     public Track publishTrack(UUID trackId) {
         Track track = repository.findById(trackId)
                 .orElseThrow(() -> new NoSuchElementException("Track not found: " + trackId));
@@ -358,6 +361,7 @@ public class TrackService {
         cloned.setEstimatedMins(source.getEstimatedMins());
         cloned.setIsMandatory(source.getIsMandatory());
         cloned.setVersion(version);
+        cloned.setVersionLabel(generateVersionLabel());
         cloned.setPreviousVersionId(source.getId());
         cloned.setIsPublished(false);
         cloned.setStatus("DRAFT");
@@ -440,6 +444,11 @@ public class TrackService {
         return repository.findTopBySlugOrderByVersionDesc(slug)
                 .map(track -> track.getVersion() + 1)
                 .orElse(1);
+    }
+
+    private String generateVersionLabel() {
+        java.time.LocalDate now = java.time.LocalDate.now();
+        return now.getYear() + "." + now.getMonthValue();
     }
 
     private void archivePublishedVersions(Track track) {

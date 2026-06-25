@@ -65,6 +65,7 @@ public class CertificateRetryScheduler {
      * for the remaining tenants.
      */
     @Scheduled(fixedRate = 1_800_000, initialDelay = 300_000)
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(name = "retryStuckCertificates", lockAtLeastFor = "5m", lockAtMostFor = "20m")
     public void retryStuckCertificates() {
         List<Tenant> tenants = tenantRepository.findAll();
 

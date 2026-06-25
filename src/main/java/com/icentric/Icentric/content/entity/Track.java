@@ -33,6 +33,9 @@ public class Track {
 
     private Integer version;
 
+    @jakarta.persistence.Column(name = "version_label")
+    private String versionLabel;
+
     private UUID previousVersionId;
 
     private Boolean isPublished;

@@ -44,6 +44,7 @@ public class LearningAuditScheduler {
      * Scheduled to execute every Monday morning at 2:00 AM UTC.
      */
     @Scheduled(cron = "0 0 2 * * MON")
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(name = "weeklyLearningAudit", lockAtLeastFor = "10m", lockAtMostFor = "60m")
     public void runWeeklyCorporateAudits() {
         log.info("Starting scheduled weekly Corporate Learning Audit automated compiler runs");
         List<Tenant> tenants = tenantRepository.findAll();

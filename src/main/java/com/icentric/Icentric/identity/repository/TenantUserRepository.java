@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 
 public interface TenantUserRepository extends JpaRepository<TenantUser, UUID> {
 
@@ -32,4 +33,10 @@ public interface TenantUserRepository extends JpaRepository<TenantUser, UUID> {
 
     @Query("select tu.userId from TenantUser tu where tu.tenantId = :tenantId and tu.createdBy = :createdBy")
     List<UUID> findUserIdsByTenantIdAndCreatedBy(UUID tenantId, UUID createdBy);
+
+    @Query("SELECT COUNT(DISTINCT tu.userId) FROM TenantUser tu WHERE UPPER(tu.role) = 'LEARNER'")
+    long countDistinctLearners();
+
+    @Query("SELECT COUNT(DISTINCT tu.userId) FROM TenantUser tu WHERE UPPER(tu.role) = 'LEARNER' AND tu.joinedAt < :before")
+    long countDistinctLearnersJoinedBefore(Instant before);
 }

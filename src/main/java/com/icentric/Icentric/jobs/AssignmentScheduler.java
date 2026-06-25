@@ -51,6 +51,7 @@ public class AssignmentScheduler {
     }
 
     @Scheduled(fixedRate = 3600000) // every hour
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(name = "markOverdueAssignments", lockAtLeastFor = "5m", lockAtMostFor = "30m")
     public void markOverdueAssignments() {
         var tenants = tenantRepository.findAll();
 

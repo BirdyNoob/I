@@ -283,6 +283,7 @@ public class SimulationService {
 
     // ── Internal: full data (used by platform controller and internally) ─
 
+    @org.springframework.cache.annotation.Cacheable(value = "simulations", key = "#simId")
     public SimulationDetailResponse getFullSimulation(String simId) {
         Simulation sim = repository.findBySimId(simId)
                 .orElseThrow(() -> new NoSuchElementException("Simulation not found: " + simId));

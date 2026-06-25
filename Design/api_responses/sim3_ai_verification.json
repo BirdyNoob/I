@@ -1,0 +1,273 @@
+{
+  "id": "sim_ai_verification",
+  "title": "Verifying AI-Generated Content",
+  "accent_color": "teal",
+  "badge": {
+    "icon": "🔍",
+    "label": "Simulation",
+    "color": "teal"
+  },
+  "total_decisions": 3,
+  "intro": {
+    "icon": "🔍",
+    "tag_line": "Core Track · Scenario 4 of 5",
+    "heading": "AI said it — but is it true?",
+    "description": "You're a business analyst at Acme Corp. You regularly use AI tools to draft reports, research competitors, and summarise regulations. <strong>AI systems hallucinate — they generate plausible-sounding but factually incorrect information with full confidence.</strong> In this simulation, you'll encounter AI outputs that contain errors, fabricated citations, and misleading summaries. Your job: catch them before they cause damage.",
+    "meta": [
+      { "icon": "⏱", "label": "~5 min" },
+      { "icon": "🎯", "label": "3 decisions" },
+      { "icon": "🔍", "label": "Hallucinations · Citations · Verification" }
+    ],
+    "cta_text": "Begin simulation →"
+  },
+  "scenes": [
+    {
+      "id": "scene_1",
+      "order": 1,
+      "context_bar": {
+        "icon": "📄",
+        "label": "Scene 1 of 3 — The Regulatory Report",
+        "narrative": "<strong>You asked AI to summarise the EU AI Act requirements for high-risk AI systems.</strong> The AI produced a clean, well-structured summary with specific article numbers and compliance deadlines. Your manager wants it included in tomorrow's board presentation. You have 2 hours."
+      },
+      "mockup": {
+        "type": "document",
+        "toolbar": {
+          "dots": ["#FF5F57", "#FFBD2E", "#28C840"],
+          "label": "AI-Generated Summary — EU AI Act Compliance"
+        },
+        "content": {
+          "title": "EU AI Act — High Risk AI Systems: Key Requirements",
+          "body_html": "Under <hallucination>Article 9, Section 4(b)</hallucination> of the EU AI Act (in force since <hallucination>March 2024</hallucination>), organisations deploying high-risk AI systems must establish a risk management framework updated <hallucination>every 6 months</hallucination>. Failure to comply results in fines of up to <hallucination>€20 million or 4% global revenue</hallucination> (whichever is higher), under <hallucination>Article 71(3)</hallucination>.",
+          "warning": {
+            "title": "⚠ AI Confidence: High — but verify before presenting",
+            "text": "Specific article numbers, enforcement dates, and fine structures in regulatory summaries are a common hallucination vector. The AI sounds authoritative — that doesn't mean these figures are accurate."
+          }
+        }
+      },
+      "question": {
+        "number_label": "Decision 1",
+        "text": "The summary looks professional and cites specific articles. Your manager needs it for the board presentation tomorrow. What do you do?",
+        "correct_answer": "C",
+        "options": [
+          {
+            "letter": "A",
+            "text": "It cites specific articles with confidence — include it in the presentation as-is. The AI wouldn't fabricate official regulation numbers."
+          },
+          {
+            "letter": "B",
+            "text": "Add a small footnote: \"Source: AI-generated summary.\" That way the board knows it came from AI."
+          },
+          {
+            "letter": "C",
+            "text": "Verify every specific claim — article numbers, dates, and fine structures — against the official EU AI Act text before including anything in the presentation. AI regulatory summaries commonly hallucinate article numbers."
+          },
+          {
+            "letter": "D",
+            "text": "Ask the AI to regenerate the summary and only use the parts that appear in both versions."
+          }
+        ]
+      },
+      "feedback": {
+        "correct": {
+          "title": "✓ Correct — AI regulatory summaries must be verified line by line",
+          "text": "AI models are trained on legal text but don't have access to current legislation in real-time and commonly hallucinate specific article numbers, enforcement dates, and penalty thresholds. <strong>The EU AI Act figures the AI produced may be partially or entirely fabricated.</strong> For board-level material, every regulatory claim must be checked against the official EUR-Lex source. This takes 30 minutes — a failed presentation takes much longer to recover from."
+        },
+        "wrong": {
+          "A": {
+            "title": "✗ AI absolutely fabricates regulation details",
+            "text": "This is one of the most documented LLM failure modes. AI doesn't \"know\" specific article numbers — it generates statistically plausible text. Article numbers, subsections, and fine thresholds in AI-generated legal summaries are among the highest-risk hallucination categories."
+          },
+          "B": {
+            "title": "✗ \"AI-generated\" doesn't protect you from the content being wrong",
+            "text": "If your board presentation contains a false €20M fine figure, the source footnote doesn't prevent reputational or legal damage. You're responsible for what you present."
+          },
+          "D": {
+            "title": "✗ Two versions of hallucinated text are still hallucinated",
+            "text": "AI will confidently reproduce the same fabricated details across regenerations because they're based on pattern matching, not fact retrieval. Consistent doesn't mean correct."
+          }
+        }
+      },
+      "next_button_text": "Next scene →"
+    },
+    {
+      "id": "scene_2",
+      "order": 2,
+      "context_bar": {
+        "icon": "📊",
+        "label": "Scene 2 of 3 — The Market Research Report",
+        "narrative": "<strong>Your team used AI to produce a competitor analysis report</strong> comparing Acme Corp's product against three rivals. The AI generated market share percentages, revenue figures, and named \"sources\" (analyst reports and news articles). A colleague says <em>\"the AI even cited the Gartner report — that's legit.\"</em>"
+      },
+      "mockup": {
+        "type": "document",
+        "toolbar": {
+          "dots": ["#FF5F57", "#FFBD2E", "#28C840"],
+          "label": "AI Competitor Analysis — Q1 2026"
+        },
+        "content": {
+          "title": "Market Share Overview — AI Security Training Platforms",
+          "fact_checks": [
+            {
+              "claim": "KnowBe4 holds 34% of enterprise market share (source: Gartner Market Guide 2025, p.47)",
+              "status": "unverified",
+              "badge_label": "Unverified"
+            },
+            {
+              "claim": "Proofpoint Security Awareness revenue: $380M (source: IDC Report Jan 2026)",
+              "status": "unverified",
+              "badge_label": "Unverified"
+            },
+            {
+              "claim": "Average industry NPS score: 52 (source: \"G2 Crowd Benchmark, Feb 2026\")",
+              "status": "false",
+              "badge_label": "Citation likely fabricated"
+            },
+            {
+              "claim": "GDPR training mandated for all EU employees annually",
+              "status": "false",
+              "badge_label": "Misleading — not universally mandated"
+            }
+          ],
+          "warning": {
+            "title": "⚠ Fabricated citations are common:",
+            "text": "AI models generate plausible-sounding report names, page numbers, and publication dates that don't exist. Always retrieve and verify the actual source document."
+          }
+        }
+      },
+      "question": {
+        "number_label": "Decision 2",
+        "text": "Your colleague says the Gartner citation makes it credible. The report is going to the sales team to use in customer calls. What do you do?",
+        "correct_answer": "C",
+        "options": [
+          {
+            "letter": "A",
+            "text": "The Gartner reference is a well-known research firm. If AI cited it, the data is probably real — share the report with sales."
+          },
+          {
+            "letter": "B",
+            "text": "Remove the citations so no one can check them, then share the figures as internal estimates."
+          },
+          {
+            "letter": "C",
+            "text": "Do not share until you physically retrieve and verify every cited source. AI regularly generates plausible-looking but entirely fabricated citation details — page numbers, publication dates, and report names that don't exist. Using unverified figures in customer-facing materials is a legal and reputational risk."
+          },
+          {
+            "letter": "D",
+            "text": "Ask the AI to confirm the sources are real by asking it to regenerate the citations."
+          }
+        ]
+      },
+      "feedback": {
+        "correct": {
+          "title": "✓ Correct — Fabricated citations are a documented AI failure mode",
+          "text": "LLMs regularly generate citations that look exactly right — correct journal names, plausible page numbers, realistic publication dates — for sources that don't exist or say something completely different. <strong>The fact that \"Gartner\" is a real company doesn't mean the AI found a real Gartner report.</strong> Always go to the primary source and verify. Using fabricated competitive data in sales calls exposes the company to FTC/ASAI scrutiny."
+        },
+        "wrong": {
+          "A": {
+            "title": "✗ Recognising the source name is not the same as verifying the citation",
+            "text": "AI commonly attaches real company or publication names to fabricated statistics. The Gartner reference is likely invented. Retrieve the actual report before trusting the figure."
+          },
+          "B": {
+            "title": "✗ Removing citations and presenting as estimates is misleading",
+            "text": "If you present unverified AI-generated figures as your own estimates to the sales team, they'll use them with clients. This creates a longer chain of misinformation that's harder to correct."
+          },
+          "D": {
+            "title": "✗ You cannot ask AI to fact-check itself",
+            "text": "The AI has no mechanism to verify its own outputs against the real world. It will confirm its own fabrications with equal confidence."
+          }
+        }
+      },
+      "next_button_text": "Final scene →"
+    },
+    {
+      "id": "scene_3",
+      "order": 3,
+      "context_bar": {
+        "icon": "✉️",
+        "label": "Scene 3 of 3 — The Client Email",
+        "narrative": "<strong>A client has asked a technical question about your product's compliance with ISO 27001.</strong> A junior colleague used AI to draft the response email and sent it to you for review before it goes out. The email confidently states specific certification scope, audit dates, and control implementations. You notice some of the details sound unfamiliar."
+      },
+      "mockup": {
+        "type": "document",
+        "toolbar": {
+          "dots": ["#FF5F57", "#FFBD2E", "#28C840"],
+          "label": "Draft Email — awaiting your review before sending"
+        },
+        "content": {
+          "email_headers": {
+            "to": "procurement@globalclient.com",
+            "subject": "Re: ISO 27001 Compliance Confirmation"
+          },
+          "body_html": "Dear Mr. Nakamura,<br><br>Thank you for your inquiry. Acme Corp is <hallucination>fully ISO 27001:2022 certified</hallucination> across all service lines, with our certification scope covering <hallucination>customer data processing, cloud infrastructure, and third-party integrations</hallucination>. Our most recent audit was completed in <hallucination>October 2025</hallucination> and our certificate reference is <hallucination>ISO-27001-ACME-2025-4471</hallucination>.<br><br>We have implemented all Annex A controls relevant to your requirements, including <hallucination>A.8.12 (Data Leakage Prevention)</hallucination> and <hallucination>A.5.23 (Cloud Security)</hallucination>.",
+          "warning": {
+            "title": "⚠ Review before sending:",
+            "text": "Certification scope, audit dates, certificate reference numbers, and specific Annex A control details are AI-generated and may be incorrect. Sending false compliance claims to clients creates legal liability."
+          }
+        }
+      },
+      "question": {
+        "number_label": "Decision 3",
+        "text": "The email is well-written and the colleague says \"AI knows this stuff better than us.\" It's going to an important client. What do you do?",
+        "correct_answer": "C",
+        "options": [
+          {
+            "letter": "A",
+            "text": "The email reads well and the client needs a fast reply. Send it — if any details are wrong, you can correct them later."
+          },
+          {
+            "letter": "B",
+            "text": "Remove the specific details (certificate number, dates, control references) and send the general parts."
+          },
+          {
+            "letter": "C",
+            "text": "Do not send. Verify every specific claim — certification scope, audit date, certificate number, Annex A references — with your InfoSec or compliance team before the email goes out. Making false compliance statements to a client creates legal exposure and breaches trust. Delay the response, not the verification."
+          },
+          {
+            "letter": "D",
+            "text": "Ask the AI to confirm its own details are correct by asking it to fact-check the email."
+          }
+        ]
+      },
+      "feedback": {
+        "correct": {
+          "title": "✓ Correct — False compliance statements to clients carry serious legal risk",
+          "text": "Sending a client incorrect certification scope, audit dates, or control implementation details could constitute misrepresentation in a contractual context. If the client makes a procurement decision based on false compliance data, Acme Corp has real legal exposure. <strong>No AI-drafted compliance communication should be sent without InfoSec team verification.</strong> A short delay is always better than a formal client complaint or legal claim."
+        },
+        "wrong": {
+          "A": {
+            "title": "✗ \"Correct later\" is not an option with compliance misrepresentation",
+            "text": "Once sent, the client has a written record of Acme Corp's compliance claims. A correction email doesn't erase the original — it creates a paper trail showing you sent incorrect compliance information."
+          },
+          "B": {
+            "title": "✗ Partial sends still carry risk",
+            "text": "The general claim that you are \"fully ISO 27001:2022 certified across all service lines\" is itself a specific assertion — if Acme Corp's certification scope is narrower, even the general version is a misrepresentation."
+          },
+          "D": {
+            "title": "✗ AI cannot fact-check its own outputs against real-world records",
+            "text": "The AI generated the details from training data patterns. It has no access to Acme Corp's actual certification records, audit timelines, or Annex A control implementation status."
+          }
+        }
+      },
+      "next_button_text": "See results →"
+    }
+  ],
+  "results": {
+    "score_ring_circumference": 219.9,
+    "titles": {
+      "3": "Critical thinker. AI's hallucinations didn't get past you.",
+      "2": "Good instincts — one gap could still cause damage.",
+      "1": "Two scenarios would have led to real-world harm.",
+      "0": "All three decisions would have exposed your company to risk."
+    },
+    "subtitles": {
+      "3": "You correctly identified that all three AI outputs required verification before use. That habit — verify before you trust — is what separates safe AI users from risky ones.",
+      "2": "Most AI-generated content should be verified. The one you missed is exactly the type of scenario that causes reputational or legal damage.",
+      "1": "Two of your decisions would have sent unverified or fabricated information to clients or leadership. Review the hallucination and citation guidance carefully.",
+      "0": "None of the verification steps were applied. AI-generated content requires critical review — this simulation shows what happens when it doesn't get it."
+    },
+    "breakdown": [
+      { "label": "Scene 1 — AI Regulatory Summary", "scene_id": "scene_1" },
+      { "label": "Scene 2 — Fabricated Citations", "scene_id": "scene_2" },
+      { "label": "Scene 3 — Compliance Email", "scene_id": "scene_3" }
+    ]
+  }
+}

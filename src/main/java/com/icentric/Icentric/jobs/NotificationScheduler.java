@@ -19,6 +19,7 @@ public class NotificationScheduler {
     }
 
     @Scheduled(fixedRate = 60000) // every 1 min
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(name = "sendNotifications", lockAtLeastFor = "30s", lockAtMostFor = "5m")
     public void sendNotifications() {
         var tenants = tenantRepository.findAll();
 

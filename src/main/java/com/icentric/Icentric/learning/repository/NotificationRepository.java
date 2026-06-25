@@ -19,6 +19,7 @@ public interface NotificationRepository
         extends JpaRepository<NotificationEvent, UUID> {
 
     List<NotificationEvent> findBySentFalse();
+    List<NotificationEvent> findTop50BySentFalseOrderByCreatedAtAsc();
 
     boolean existsByUserIdAndTypeAndSentFalse(UUID userId, NotificationType type);
     boolean existsByEventKey(String eventKey);

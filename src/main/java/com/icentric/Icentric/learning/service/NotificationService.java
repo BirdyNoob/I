@@ -78,7 +78,7 @@ public class NotificationService {
     public void processNotifications() {
         tenantSchemaService.applyCurrentTenantSearchPath();
 
-        var events = repository.findBySentFalse();
+        var events = repository.findTop50BySentFalseOrderByCreatedAtAsc();
 
         for (var event : events) {
             try {

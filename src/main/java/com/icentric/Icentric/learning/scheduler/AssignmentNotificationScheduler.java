@@ -79,6 +79,7 @@ public class AssignmentNotificationScheduler {
     }
 
     @Scheduled(fixedRate = 60000) // every 1 min (for testing)
+    @net.javacrumbs.shedlock.spring.annotation.SchedulerLock(name = "processAssignmentNotifications", lockAtLeastFor = "30s", lockAtMostFor = "5m")
     public void processAssignments() {
         Instant now = Instant.now();
 

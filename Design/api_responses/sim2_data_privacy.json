@@ -1,0 +1,272 @@
+{
+  "id": "sim_data_privacy",
+  "title": "Data Privacy — AI Tool Misuse",
+  "accent_color": "purple",
+  "badge": {
+    "icon": "🔐",
+    "label": "Simulation",
+    "color": "purple"
+  },
+  "total_decisions": 3,
+  "intro": {
+    "icon": "📋",
+    "tag_line": "HR Track · Scenario 1 of 4",
+    "heading": "When HR data ends up in ChatGPT",
+    "description": "You're an HR Business Partner at Acme Corp. You're busy — performance reviews are due, a disciplinary case is pending, and your manager just asked for a summary report. A colleague suggests using ChatGPT to speed things up. <strong>Your decisions will determine whether employee data stays protected or gets leaked to an external AI system.</strong>",
+    "meta": [
+      { "icon": "⏱", "label": "~4 min" },
+      { "icon": "🎯", "label": "3 decisions" },
+      { "icon": "🔒", "label": "PII · GDPR · Data handling" }
+    ],
+    "cta_text": "Begin simulation →"
+  },
+  "scenes": [
+    {
+      "id": "scene_1",
+      "order": 1,
+      "context_bar": {
+        "icon": "📧",
+        "label": "Scene 1 of 3 — The Quick Summary Request",
+        "narrative": "<strong>Tuesday 3:45 PM.</strong> Your manager Priya messages you on Teams: \"Can you send me a quick summary of Rahul's performance issues and the disciplinary steps so far? CEO meeting in 30 mins.\" You have Rahul's full HR file open and you're tempted to paste it into ChatGPT to generate a fast summary."
+      },
+      "mockup": {
+        "type": "app_window",
+        "toolbar": {
+          "dots": ["#FF5F57", "#FFBD2E", "#28C840"],
+          "label": "ChatGPT — chat.openai.com"
+        },
+        "content": {
+          "sections": [
+            {
+              "type": "draft_message",
+              "header": "You (draft — not sent yet)",
+              "body_html": "\"Summarise this employee performance record:<br>Name: <pii>Rahul Mehta</pii><br>DOB: <pii>14 March 1989</pii><br>National ID: <pii>MH-4421938</pii><br>Salary: <pii>₹22L per annum</pii><br>Issue: Repeated absences, verbal warning issued 12/02/2026, written warning 28/02/2026…\""
+            },
+            {
+              "type": "warning_banner",
+              "color": "amber",
+              "text": "⚠ This data includes PII, salary, and disciplinary records. Once sent to ChatGPT, it may be used to train OpenAI's models and is outside Acme Corp's data boundary."
+            }
+          ]
+        }
+      },
+      "question": {
+        "number_label": "Decision 1",
+        "text": "Do you paste Rahul's data into ChatGPT to generate the summary?",
+        "correct_answer": "C",
+        "options": [
+          {
+            "letter": "A",
+            "text": "Yes — it's faster and the CEO meeting is in 30 minutes. You'll delete the chat afterwards."
+          },
+          {
+            "letter": "B",
+            "text": "Yes — but only paste the issues summary, not the national ID or salary figures."
+          },
+          {
+            "letter": "C",
+            "text": "No. Write the summary yourself from the file, or use Acme Corp's approved internal AI tool (if one exists). Never send employee PII to external AI systems."
+          },
+          {
+            "letter": "D",
+            "text": "Ask a colleague to do it from their account so it's not traceable to you."
+          }
+        ]
+      },
+      "feedback": {
+        "correct": {
+          "title": "✓ Correct — External AI tools are outside your data boundary",
+          "text": "ChatGPT, Gemini, and other external AI tools process data on third-party servers. Even if you delete the chat, the data may already have been processed or retained. <strong>Employee PII, especially disciplinary records and salary data, must never leave your company's data boundary without explicit DPA coverage.</strong> Always use approved internal tools or write summaries manually."
+        },
+        "wrong": {
+          "A": {
+            "title": "✗ Deleting the chat doesn't undo the breach",
+            "text": "Chat deletion removes it from your view — not from OpenAI's servers. The data was transmitted and processed the moment you sent it. Under GDPR, this could be a reportable breach."
+          },
+          "B": {
+            "title": "✗ Partial anonymisation isn't sufficient",
+            "text": "Performance issues and disciplinary details tied to a role and timeline are still identifiable in context. A partial name or job role can be enough to re-identify an individual."
+          },
+          "D": {
+            "title": "✗ Using someone else's account doesn't remove liability",
+            "text": "The breach is in the data being sent to an external system, not in whose account it came from. You would be involved in a data breach regardless."
+          }
+        }
+      },
+      "next_button_text": "Next scene →"
+    },
+    {
+      "id": "scene_2",
+      "order": 2,
+      "context_bar": {
+        "icon": "📨",
+        "label": "Scene 2 of 3 — The Shared Doc",
+        "narrative": "<strong>Next morning.</strong> A well-meaning colleague, Meera, shares a Google Doc she made to \"speed up performance reviews.\" It's a ChatGPT prompt template that reads: <em>\"Here are 5 employee reviews. Identify patterns and write individual feedback.\"</em> She's already pasted in performance ratings, manager comments, and employee names for 5 people in the Finance team — and ChatGPT has generated a detailed analysis."
+      },
+      "mockup": {
+        "type": "app_window",
+        "toolbar": {
+          "dots": ["#FF5F57", "#FFBD2E", "#28C840"],
+          "label": "Google Docs — Shared by Meera Iyer"
+        },
+        "content": {
+          "sections": [
+            {
+              "type": "document",
+              "title": "HR Review AI Helper — Q1 2026",
+              "subtitle": "Shared with: HR Team (edit access)",
+              "ai_output": [
+                { "leaked_name": "Employee: Priya K. (Finance)", "text": "— Rating 3.2/5 — \"Shows improvement but struggles with deadlines…\"" },
+                { "leaked_name": "Employee: Devraj N. (Finance)", "text": "— Rating 4.1/5 — \"Strong performer, recommended for promotion…\"" },
+                { "placeholder": "// 3 more records below…" }
+              ]
+            },
+            {
+              "type": "warning_banner",
+              "color": "red",
+              "text": "⚠ This document is shared with the entire HR team and contains AI-processed employee performance data sent to an external system."
+            }
+          ]
+        }
+      },
+      "question": {
+        "number_label": "Decision 2",
+        "text": "Meera asks if you want to use the template for your team's reviews too. What do you do?",
+        "correct_answer": "C",
+        "options": [
+          {
+            "letter": "A",
+            "text": "Use it — Meera already did it for Finance and nothing went wrong. It saves hours of work."
+          },
+          {
+            "letter": "B",
+            "text": "Use the template but anonymise the names before sending to ChatGPT."
+          },
+          {
+            "letter": "C",
+            "text": "Decline. Then speak to Meera privately about the GDPR risk and report the existing document to your data protection officer — the Finance team data may already be a reportable breach."
+          },
+          {
+            "letter": "D",
+            "text": "Remove yourself from the shared document and don't get involved — it's Meera's responsibility."
+          }
+        ]
+      },
+      "feedback": {
+        "correct": {
+          "title": "✓ Correct — This may already be a reportable breach",
+          "text": "Under GDPR Art. 33, a breach involving personal data sent to an unauthorised processor must be reported to the supervisory authority within 72 hours if it poses risk to individuals. Performance data identifying employees by name sent to ChatGPT without a DPA likely qualifies. <strong>You must report this, not ignore it.</strong> Meera may not have understood the risk — educate, don't prosecute."
+        },
+        "wrong": {
+          "A": {
+            "title": "✗ \"Nothing went wrong yet\" is not a standard",
+            "text": "A GDPR breach can occur even if there's no visible harm. The act of sending identifiable employee data to a non-contracted external processor is itself the breach event."
+          },
+          "B": {
+            "title": "✗ Anonymisation is harder than it looks",
+            "text": "Names alone don't make data identifiable — combination of role, team, rating, and written feedback can still identify individuals, especially in small teams."
+          },
+          "D": {
+            "title": "✗ Removing yourself doesn't stop the harm",
+            "text": "The document still exists and is shared. Other HR team members may use it. Your obligation as someone who knows about a breach is to report it — not to distance yourself."
+          }
+        }
+      },
+      "next_button_text": "Final scene →"
+    },
+    {
+      "id": "scene_3",
+      "order": 3,
+      "context_bar": {
+        "icon": "⚖️",
+        "label": "Scene 3 of 3 — The Disciplinary Letter Draft",
+        "narrative": "<strong>Two weeks later.</strong> You're drafting a formal disciplinary letter for another employee, Vikram T., regarding misconduct. It involves sensitive details about a workplace harassment complaint. Your manager says: \"Just use AI to draft it, it'll be faster.\" You open the company's internal AI writing tool — but notice it's actually a third-party API integration that sends data to an external server, and its data processing terms are unclear."
+      },
+      "mockup": {
+        "type": "app_window",
+        "toolbar": {
+          "dots": ["#FF5F57", "#FFBD2E", "#28C840"],
+          "label": "AcmeWrite AI — Internal Tool"
+        },
+        "content": {
+          "sections": [
+            {
+              "type": "warning_banner",
+              "color": "amber",
+              "title": "⚠ Data Processing Notice",
+              "text": "This tool sends your input to WriteAI Ltd (UK) servers for processing. Data may be retained for up to 90 days. <strong>Review our data processing agreement before using with sensitive employee data.</strong>"
+            },
+            {
+              "type": "plain_text",
+              "text": "You're about to paste: Vikram T.'s full name, the nature of the harassment complaint, names of complainants, investigation timeline, and planned disciplinary outcome."
+            }
+          ]
+        }
+      },
+      "question": {
+        "number_label": "Decision 3",
+        "text": "The tool shows a data processing notice. Your manager said to use it. What do you do?",
+        "correct_answer": "C",
+        "options": [
+          {
+            "letter": "A",
+            "text": "Your manager approved it, so proceed. The company is responsible if anything goes wrong, not you."
+          },
+          {
+            "letter": "B",
+            "text": "Anonymise Vikram's name and the complainants' names, then proceed."
+          },
+          {
+            "letter": "C",
+            "text": "Stop. Check whether a Data Processing Agreement (DPA) has been signed with WriteAI Ltd and whether this type of sensitive HR data is covered. If uncertain, escalate to your DPO before using the tool — no manager instruction overrides GDPR compliance."
+          },
+          {
+            "letter": "D",
+            "text": "Draft the letter manually this time and flag the DPA question to IT when you have time next week."
+          }
+        ]
+      },
+      "feedback": {
+        "correct": {
+          "title": "✓ Correct — GDPR compliance cannot be delegated to your manager",
+          "text": "A Data Processing Agreement must exist and cover the specific category of data (here: special category data under GDPR Art. 9 — employee misconduct/harassment). Manager approval doesn't substitute for legal compliance. <strong>Escalate to your DPO before using any tool of uncertain status with sensitive HR data.</strong> \"I was told to\" is not a GDPR defence."
+        },
+        "wrong": {
+          "A": {
+            "title": "✗ Manager instruction does not override GDPR",
+            "text": "Under GDPR, individuals responsible for data processing can be personally liable. \"My manager said it was fine\" is not a valid legal defence for a data protection violation."
+          },
+          "B": {
+            "title": "✗ Anonymising names doesn't remove the sensitivity",
+            "text": "Harassment complaint details, timelines, and outcomes remain special category data even without names — especially in small teams where context makes individuals identifiable."
+          },
+          "D": {
+            "title": "✗ \"Flagging later\" means the breach risk is active now",
+            "text": "If you draft the letter today using the tool, the data is sent today. The DPA question needed to be answered before any sensitive data touched the tool."
+          }
+        }
+      },
+      "next_button_text": "See results →"
+    }
+  ],
+  "results": {
+    "score_ring_circumference": 219.9,
+    "titles": {
+      "3": "Data protected. GDPR compliant.",
+      "2": "Mostly right — one exposure risk missed.",
+      "1": "Significant data risk in your decisions.",
+      "0": "All three scenarios would result in breaches."
+    },
+    "subtitles": {
+      "3": "You correctly refused to use external AI with employee PII, reported the potential breach, and escalated the DPA question. Your team's data is safe.",
+      "2": "Good instincts on most scenarios, but one decision would have exposed employee data. Review the scenario you missed.",
+      "1": "Two of your decisions would have exposed employee data. Review the GDPR and data-handling guidance in the lesson material.",
+      "0": "All decisions would have created data protection violations. Please review the lesson content and retake."
+    },
+    "breakdown": [
+      { "label": "Scene 1 — PII in ChatGPT", "scene_id": "scene_1" },
+      { "label": "Scene 2 — Shared performance data", "scene_id": "scene_2" },
+      { "label": "Scene 3 — Third-party tool DPA", "scene_id": "scene_3" }
+    ]
+  }
+}
