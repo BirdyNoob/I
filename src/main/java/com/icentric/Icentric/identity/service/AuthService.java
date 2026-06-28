@@ -16,6 +16,7 @@ import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.security.JwtService;
 import com.icentric.Icentric.security.RefreshToken;
 import com.icentric.Icentric.security.RefreshTokenService;
+import com.icentric.Icentric.security.TokenBlacklistService;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +48,8 @@ public class AuthService {
     private final com.icentric.Icentric.common.mail.EmailService emailService;
     private final com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository platformAdminRepository;
     private final OtpService otpService;
+    private final LoginAttemptService loginAttemptService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     public AuthService(
             UserRepository userRepository,
@@ -59,7 +62,9 @@ public class AuthService {
             RefreshTokenService refreshTokenService,
             com.icentric.Icentric.common.mail.EmailService emailService,
             com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository platformAdminRepository,
-            OtpService otpService
+            OtpService otpService,
+            LoginAttemptService loginAttemptService,
+            TokenBlacklistService tokenBlacklistService
     ) {
         this.userRepository = userRepository;
         this.tenantUserRepository = tenantUserRepository;
@@ -72,6 +77,8 @@ public class AuthService {
         this.emailService = emailService;
         this.platformAdminRepository = platformAdminRepository;
         this.otpService = otpService;
+        this.loginAttemptService = loginAttemptService;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     // ── Phase-1: login ──────────────────────────────────────────────────────
@@ -88,9 +95,18 @@ public class AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
 
+        // Brute-force protection
+        if (loginAttemptService.isLocked(request.email())) {
+            long remaining = loginAttemptService.getRemainingLockSeconds(request.email());
+            throw new BadCredentialsException("Account temporarily locked. Try again in " + (remaining / 60 + 1) + " minutes.");
+        }
+
         // Step 1: global user lookup
         User user = userRepository.findByEmailIgnoreCase(request.email())
-                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
+                .orElseThrow(() -> {
+                    loginAttemptService.loginFailed(request.email());
+                    return new BadCredentialsException("Invalid credentials");
+                });
 
         if (!Boolean.TRUE.equals(user.getIsActive())) {
             throw new BadCredentialsException("Account is deactivated");
@@ -98,8 +114,11 @@ public class AuthService {
 
         // Step 2: verify password
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            loginAttemptService.loginFailed(request.email());
             throw new BadCredentialsException("Invalid credentials");
         }
+
+        loginAttemptService.loginSucceeded(request.email());
 
         // Step 3: resolve tenant memberships
         List<TenantUser> memberships = tenantUserRepository.findByUserId(user.getId());
@@ -192,6 +211,15 @@ public class AuthService {
     }
 
     // ── Logout ──────────────────────────────────────────────────────────────
+
+    public void blacklistAccessToken(String accessToken) {
+        try {
+            var claims = jwtService.parse(accessToken);
+            tokenBlacklistService.blacklist(accessToken, claims.getExpiration().toInstant());
+        } catch (Exception e) {
+            // Token already expired or invalid — no need to blacklist
+        }
+    }
 
     /**
      * Revokes the given refresh token (logout).

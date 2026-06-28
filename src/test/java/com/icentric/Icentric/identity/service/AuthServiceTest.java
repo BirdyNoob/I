@@ -10,6 +10,7 @@ import com.icentric.Icentric.identity.entity.User;
 import com.icentric.Icentric.identity.repository.TenantUserRepository;
 import com.icentric.Icentric.identity.repository.UserRepository;
 import com.icentric.Icentric.identity.service.OtpService;
+import com.icentric.Icentric.identity.service.LoginAttemptService;
 import com.icentric.Icentric.platform.tenant.entity.Tenant;
 import com.icentric.Icentric.platform.tenant.repository.TenantRepository;
 import com.icentric.Icentric.security.JwtService;
@@ -49,6 +50,8 @@ class AuthServiceTest {
     @Mock com.icentric.Icentric.common.mail.EmailService emailService;
     @Mock com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository platformAdminRepository;
     @Mock OtpService otpService;
+    @Mock LoginAttemptService loginAttemptService;
+    @Mock com.icentric.Icentric.security.TokenBlacklistService tokenBlacklistService;
 
     @InjectMocks AuthService authService;
 

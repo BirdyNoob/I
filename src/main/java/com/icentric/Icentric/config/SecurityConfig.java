@@ -5,6 +5,7 @@ import com.icentric.Icentric.identity.service.OidcFailureHandler;
 import com.icentric.Icentric.identity.service.OidcSuccessHandler;
 import com.icentric.Icentric.security.JwtAuthenticationFilter;
 import com.icentric.Icentric.security.JwtService;
+import com.icentric.Icentric.security.TokenBlacklistService;
 import com.icentric.Icentric.tenant.TenantFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
@@ -23,8 +24,8 @@ import javax.sql.DataSource;
 public class SecurityConfig {
 
     @Bean
-    JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService) {
-        return new JwtAuthenticationFilter(jwtService);
+    JwtAuthenticationFilter jwtAuthenticationFilter(JwtService jwtService, TokenBlacklistService tokenBlacklistService) {
+        return new JwtAuthenticationFilter(jwtService, tokenBlacklistService);
     }
 
     @Bean
@@ -54,10 +55,8 @@ public class SecurityConfig {
                         "/api/v1/platform/auth/login",
                         "/api/v1/platform/auth/mfa/enroll",
                         "/api/v1/platform/auth/refresh",
-                        "/api/v1/platform/auth/logout",
                         "/api/v1/auth/login",
                         "/api/v1/auth/refresh",
-                        "/api/v1/auth/logout",
                         "/api/v1/auth/forgot-password",
                         "/api/v1/auth/reset-password",
                         "/api/v1/public/**",

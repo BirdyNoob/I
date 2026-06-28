@@ -24,9 +24,11 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, TokenBlacklistService tokenBlacklistService) {
         this.jwtService = jwtService;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Override
@@ -47,6 +49,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             Claims claims = jwtService.parse(token);
+
+            // Check if token was blacklisted (logout)
+            if (tokenBlacklistService.isBlacklisted(token)) {
+                writeUnauthorized(response, "Token revoked");
+                return;
+            }
 
             String tenant = claims.get("tenant", String.class);
             String role   = claims.get("role", String.class);

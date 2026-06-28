@@ -91,7 +91,13 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Invalid request format")
     })
     @PostMapping("/logout")
-    public Map<String, String> logout(@Valid @RequestBody RefreshTokenRequest request) {
+    public Map<String, String> logout(@Valid @RequestBody RefreshTokenRequest request,
+                                      jakarta.servlet.http.HttpServletRequest httpRequest) {
+        // Blacklist the access token
+        String authHeader = httpRequest.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            service.blacklistAccessToken(authHeader.substring(7));
+        }
         service.logout(request.refreshToken());
         return Map.of("status", "logged_out");
     }

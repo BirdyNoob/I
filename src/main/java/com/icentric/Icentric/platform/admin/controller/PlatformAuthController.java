@@ -5,6 +5,7 @@ import com.icentric.Icentric.platform.admin.dto.PlatformLoginResponse;
 import com.icentric.Icentric.platform.admin.entity.PlatformAdmin;
 import com.icentric.Icentric.platform.admin.repository.PlatformAdminRepository;
 import com.icentric.Icentric.platform.admin.service.PlatformAuthService;
+import com.icentric.Icentric.security.TokenBlacklistService;
 import com.icentric.Icentric.security.MfaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,12 +27,17 @@ public class PlatformAuthController {
     private final PlatformAuthService authService;
     private final PlatformAdminRepository repository;
     private final MfaService mfaService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final com.icentric.Icentric.security.JwtService jwtService;
 
     public PlatformAuthController(PlatformAuthService authService, PlatformAdminRepository repository,
-            MfaService mfaService) {
+            MfaService mfaService, TokenBlacklistService tokenBlacklistService,
+            com.icentric.Icentric.security.JwtService jwtService) {
         this.authService = authService;
         this.repository = repository;
         this.mfaService = mfaService;
+        this.tokenBlacklistService = tokenBlacklistService;
+        this.jwtService = jwtService;
     }
 
     @Operation(summary = "Platform admin login", description = "Authenticates a platform admin and returns access + refresh tokens.")
@@ -64,7 +70,18 @@ public class PlatformAuthController {
             @ApiResponse(responseCode = "204", description = "Successfully logged out")
     })
     @PostMapping("/logout")
-    public org.springframework.http.ResponseEntity<Void> logout(@RequestBody java.util.Map<String, String> body) {
+    public org.springframework.http.ResponseEntity<Void> logout(
+            @RequestBody java.util.Map<String, String> body,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        // Blacklist access token
+        String authHeader = httpRequest.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            try {
+                var claims = jwtService.parse(token);
+                tokenBlacklistService.blacklist(token, claims.getExpiration().toInstant());
+            } catch (Exception ignored) {}
+        }
         String refreshToken = body.get("refreshToken");
         if (refreshToken != null && !refreshToken.isBlank()) {
             authService.logout(refreshToken);

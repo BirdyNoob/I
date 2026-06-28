@@ -1,5 +1,6 @@
 package com.icentric.Icentric.security;
 
+import com.icentric.Icentric.security.TokenBlacklistService;
 import com.icentric.Icentric.tenant.TenantContext;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.*;
 class JwtAuthenticationFilterTest {
 
     @Mock JwtService jwtService;
+    @Mock TokenBlacklistService tokenBlacklistService;
     @Mock HttpServletRequest request;
     @Mock HttpServletResponse response;
     @Mock FilterChain filterChain;
@@ -38,7 +40,7 @@ class JwtAuthenticationFilterTest {
 
     @BeforeEach
     void setup() {
-        filter = new JwtAuthenticationFilter(jwtService);
+        filter = new JwtAuthenticationFilter(jwtService, tokenBlacklistService);
         SecurityContextHolder.clearContext();
         TenantContext.clear();
     }
